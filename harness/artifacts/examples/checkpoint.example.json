@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-001",
+  "run_id": "run-20260722-01",
+  "updated_at": "2026-07-22T14:20:05Z",
+  "completed_phases": ["discovery", "research"],
+  "current_phase": "implementation",
+  "next_phase": "verification",
+  "artifact_refs": {
+    "discovery": "runs/run-20260722-01/scope.json",
+    "research": "runs/run-20260722-01/findings.json"
+  },
+  "blockers": [],
+  "next_resume_action": "invoke engineer to produce implementation-report.json",
+  "status": "interrupted"
+}

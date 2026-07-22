@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-001",
+  "run_id": "run-20260722-01",
+  "created_at": "2026-07-22T14:00:00Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "Fix off-by-one in pagination helper"
+  },
+  "objective": "Fix off-by-one error in demo-repo pagination helper",
+  "in_scope": [
+    "demo-repo/src/pagination.py",
+    "demo-repo/tests/test_pagination.py"
+  ],
+  "out_of_scope": [
+    "demo-repo/src/auth/"
+  ],
+  "constraints": [
+    "No new dependencies without written justification"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "Existing pagination tests pass; new test covers the off-by-one case"
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-1",
+      "description": "Research pagination helper",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-2",
+      "description": "Fix off-by-one",
+      "phase": "implementation",
+      "depends_on": ["N-1"]
+    },
+    {
+      "id": "N-3",
+      "description": "Verify fix",
+      "phase": "verification",
+      "depends_on": ["N-2"]
+    }
+  ],
+  "status": "approved"
+}

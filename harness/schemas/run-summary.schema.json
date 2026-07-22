@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenticharness.local/schemas/run-summary.schema.json",
+  "title": "Run Summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "run_id",
+    "created_at",
+    "objective_summary",
+    "artifact_refs",
+    "final_verdict",
+    "phases_completed"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "objective_summary": { "type": "string", "minLength": 1 },
+    "artifact_refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope"],
+      "properties": {
+        "scope": { "type": "string", "minLength": 1 },
+        "findings": { "type": "string", "minLength": 1 },
+        "implementation_report": { "type": "string", "minLength": 1 },
+        "verification_report": { "type": "string", "minLength": 1 },
+        "checkpoint": { "type": "string", "minLength": 1 }
+      }
+    },
+    "final_verdict": { "enum": ["pass", "fail", "blocked", "inconclusive"] },
+    "phases_completed": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "enum": ["discovery", "research", "implementation", "verification"] }
+    },
+    "lessons_learned_appended": {
+      "type": "array",
+      "maxItems": 5,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "remaining_risks": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "follow_up_actions": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "duration_seconds": { "type": "number", "minimum": 0 }
+  },
+  "$comment": "Semantic rule not enforced here (deferred to the future Python validator): each path present in artifact_refs must resolve to a file that actually exists and whose own task_id/run_id match this document's."
+}

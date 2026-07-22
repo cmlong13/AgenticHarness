@@ -9,6 +9,7 @@ dependencies = []
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "jsonschema",
 ]
 
 [build-system]

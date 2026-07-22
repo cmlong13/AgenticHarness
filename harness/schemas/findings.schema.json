@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenticharness.local/schemas/findings.schema.json",
+  "title": "Findings",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "run_id", "created_at", "scope_ref", "findings"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "scope_ref": { "$ref": "#/$defs/artifactRef" },
+    "findings": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "open_questions": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 }
+      }
+    },
+    "evidenceEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "start_line", "end_line", "evidence_tier"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "start_line": { "type": "integer", "minimum": 1 },
+        "end_line": { "type": "integer", "minimum": 1 },
+        "evidence_tier": {
+          "enum": ["executable_code", "test_assertion", "runtime_config", "comment", "metadata"]
+        },
+        "excerpt": { "type": "string", "minLength": 1 }
+      }
+    },
+    "searchAttempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "query", "scope", "result"],
+      "properties": {
+        "method": { "enum": ["grep", "glob", "read", "other"] },
+        "query": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "minLength": 1 },
+        "result": { "type": "string", "minLength": 1 }
+      }
+    },
+    "foundFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "claim", "classification", "evidence"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "claim": { "type": "string", "minLength": 1 },
+        "classification": { "const": "found" },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidenceEntry" }
+        }
+      }
+    },
+    "notFoundFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "claim", "classification", "search_attempts"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "claim": { "type": "string", "minLength": 1 },
+        "classification": { "const": "not_found" },
+        "search_attempts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/searchAttempt" }
+        }
+      }
+    },
+    "inferredFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "claim", "classification", "supporting_finding_ids", "reasoning"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "claim": { "type": "string", "minLength": 1 },
+        "classification": { "const": "inferred" },
+        "supporting_finding_ids": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "reasoning": { "type": "string", "minLength": 1 }
+      }
+    },
+    "finding": {
+      "oneOf": [
+        { "$ref": "#/$defs/foundFinding" },
+        { "$ref": "#/$defs/notFoundFinding" },
+        { "$ref": "#/$defs/inferredFinding" }
+      ]
+    }
+  },
+  "$comment": "Semantic rules not enforced here (deferred to the future Python validator): (1) findings[].id must be unique within this array; (2) inferredFinding.supporting_finding_ids must resolve to ids of other entries in this same findings array whose classification is 'found'."
+}

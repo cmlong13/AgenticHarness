@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenticharness.local/schemas/verification-report.schema.json",
+  "title": "Verification Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "run_id",
+    "created_at",
+    "scope_ref",
+    "implementation_ref",
+    "attempts",
+    "acceptance_criteria_results",
+    "final_verdict"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "scope_ref": { "$ref": "#/$defs/artifactRef" },
+    "implementation_ref": { "$ref": "#/$defs/artifactRef" },
+    "attempts": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/attempt" }
+    },
+    "retry_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_retries"],
+      "properties": {
+        "max_retries": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["percent", "report_ref"],
+      "properties": {
+        "percent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "report_ref": { "type": "string", "minLength": 1 }
+      }
+    },
+    "acceptance_criteria_results": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/criterionResult" }
+    },
+    "final_verdict": { "enum": ["pass", "fail", "blocked", "inconclusive"] },
+    "routed_back_to_engineer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routed"],
+      "properties": {
+        "routed": { "type": "boolean" },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "if": {
+        "properties": { "routed": { "const": true } },
+        "required": ["routed"]
+      },
+      "then": {
+        "required": ["reason"]
+      }
+    }
+  },
+  "$defs": {
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 }
+      }
+    },
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "command", "exit_code", "classification", "retried"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "command": { "type": "string", "minLength": 1 },
+        "exit_code": { "type": "integer" },
+        "classification": { "enum": ["pass", "logic_bug", "infrastructure_flake", "environment"] },
+        "output_ref": { "type": "string", "minLength": 1 },
+        "output_summary": { "type": "string", "minLength": 1 },
+        "retried": { "type": "boolean" }
+      },
+      "oneOf": [
+        { "required": ["output_ref"], "not": { "required": ["output_summary"] } },
+        { "required": ["output_summary"], "not": { "required": ["output_ref"] } }
+      ]
+    },
+    "criterionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["criteria_id", "result", "attempt_refs", "evidence_summary"],
+      "properties": {
+        "criteria_id": { "type": "string", "minLength": 1 },
+        "result": { "enum": ["passed", "failed", "blocked", "not_run"] },
+        "attempt_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "evidence_summary": { "type": "string", "minLength": 1 }
+      },
+      "if": {
+        "properties": { "result": { "enum": ["passed", "failed", "blocked"] } },
+        "required": ["result"]
+      },
+      "then": {
+        "properties": {
+          "attempt_refs": { "minItems": 1 }
+        }
+      }
+    }
+  },
+  "$comment": "Semantic rules not enforced here (deferred to the future Python validator): (1) attempts[].id must be unique within this array; (2) acceptance_criteria_results[].criteria_id must resolve to an acceptance_criteria[].id in the scope.json at scope_ref.path; (3) acceptance_criteria_results[].attempt_refs must resolve to ids present in attempts[]."
+}

@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenticharness.local/schemas/checkpoint.schema.json",
+  "title": "Checkpoint",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "run_id",
+    "updated_at",
+    "completed_phases",
+    "current_phase",
+    "next_phase",
+    "artifact_refs",
+    "blockers",
+    "next_resume_action",
+    "status"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "task_id": { "type": "string", "minLength": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "completed_phases": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/phase" }
+    },
+    "current_phase": {
+      "oneOf": [
+        { "$ref": "#/$defs/phase" },
+        { "type": "null" }
+      ]
+    },
+    "next_phase": {
+      "oneOf": [
+        { "$ref": "#/$defs/phase" },
+        { "type": "null" }
+      ]
+    },
+    "artifact_refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "discovery": { "type": "string", "minLength": 1 },
+        "research": { "type": "string", "minLength": 1 },
+        "implementation": { "type": "string", "minLength": 1 },
+        "verification": { "type": "string", "minLength": 1 }
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/blocker" }
+    },
+    "next_resume_action": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "null" }
+      ]
+    },
+    "status": { "enum": ["in_progress", "interrupted", "complete", "failed"] }
+  },
+  "if": {
+    "properties": { "status": { "const": "complete" } },
+    "required": ["status"]
+  },
+  "then": {
+    "properties": {
+      "current_phase": { "type": "null" },
+      "next_phase": { "type": "null" },
+      "next_resume_action": { "type": "null" },
+      "completed_phases": { "minItems": 4, "uniqueItems": true }
+    }
+  },
+  "else": {
+    "properties": {
+      "current_phase": { "$ref": "#/$defs/phase" },
+      "next_resume_action": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "phase": { "enum": ["discovery", "research", "implementation", "verification"] },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "phase"],
+      "properties": {
+        "description": { "type": "string", "minLength": 1 },
+        "phase": { "$ref": "#/$defs/phase" }
+      }
+    }
+  },
+  "$comment": "Semantic rules not enforced here (deferred to the future Python validator): (1) current_phase must not appear in completed_phases; (2) artifact_refs must contain exactly one entry per phase name present in completed_phases, and no entry for current_phase or any phase after it; (3) next_phase, when non-null, must be the phase immediately following current_phase in the fixed order discovery -> research -> implementation -> verification."
+}
