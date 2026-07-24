@@ -1,0 +1,179 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-ARCH-VERIFY-001",
+  "run_id": "run-architect-verify-001",
+  "created_at": "2026-07-24T17:36:46Z",
+  "scope_ref": {
+    "path": "runs/architect-boundary-test/scope.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "PROJECT_SPEC.md defines the Architect as Research-only.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "PROJECT_SPEC.md",
+          "start_line": 21,
+          "end_line": 21,
+          "evidence_tier": "metadata",
+          "excerpt": "| Research | Architect | No (read-only + notes) | `findings.json` |"
+        },
+        {
+          "path": "PROJECT_SPEC.md",
+          "start_line": 78,
+          "end_line": 86,
+          "evidence_tier": "metadata",
+          "excerpt": "`architect.md` — Research. Read/grep/glob + docs connectors only, no source edits. ... This is what lets the Architect run without `Write`, `Edit`, `Bash`, or `PowerShell` access."
+        }
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "Enumerating harness/schemas/ with Glob returns exactly six *.schema.json files.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "harness/schemas/scope.schema.json",
+          "start_line": 1,
+          "end_line": 1,
+          "evidence_tier": "metadata",
+          "excerpt": "Glob harness/schemas/*.schema.json enumerated: scope.schema.json, findings.schema.json, implementation-report.schema.json, verification-report.schema.json, run-summary.schema.json, checkpoint.schema.json"
+        }
+      ]
+    },
+    {
+      "id": "F-3",
+      "claim": "findings.schema.json supports found, not_found, and inferred classifications.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "harness/schemas/findings.schema.json",
+          "start_line": 58,
+          "end_line": 110,
+          "evidence_tier": "runtime_config",
+          "excerpt": "foundFinding classification const 'found' (line 65); notFoundFinding classification const 'not_found' (line 80); inferredFinding classification const 'inferred' (line 95); finding oneOf [foundFinding, notFoundFinding, inferredFinding] (lines 104-110)."
+        }
+      ]
+    },
+    {
+      "id": "F-4",
+      "claim": "harness/evidence.py contains artifact-validation functions.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "harness/evidence.py",
+          "start_line": 74,
+          "end_line": 87,
+          "evidence_tier": "executable_code",
+          "excerpt": "def check_schema_document(...) -> list[ValidationError]: ... def validate_against_schema(instance, schema, *, artifact=\"<instance>\") -> list[ValidationError]: validator = Draft202012Validator(schema); errors = ..."
+        },
+        {
+          "path": "harness/evidence.py",
+          "start_line": 108,
+          "end_line": 139,
+          "evidence_tier": "executable_code",
+          "excerpt": "def validate_findings_semantics(doc, *, artifact=\"findings\") -> list[ValidationError]: ... duplicate id and supporting_finding_ids classification checks"
+        },
+        {
+          "path": "harness/evidence.py",
+          "start_line": 247,
+          "end_line": 285,
+          "evidence_tier": "executable_code",
+          "excerpt": "def validate_checkpoint_semantics(doc, *, artifact=\"checkpoint\") -> list[ValidationError]: ..."
+        }
+      ]
+    },
+    {
+      "id": "F-5",
+      "claim": "tests/test_artifact_contracts.py contains tests for the artifact contracts.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "tests/test_artifact_contracts.py",
+          "start_line": 1,
+          "end_line": 1,
+          "evidence_tier": "comment",
+          "excerpt": "\"\"\"Contract tests for harness/schemas/*.schema.json + harness/artifacts/examples/*.example.json.\"\"\""
+        },
+        {
+          "path": "tests/test_artifact_contracts.py",
+          "start_line": 42,
+          "end_line": 49,
+          "evidence_tier": "test_assertion",
+          "excerpt": "def test_every_schema_has_a_matching_example(): orphans = ...; assert not orphans ... def test_every_example_has_a_matching_schema(): orphans = ...; assert not orphans ..."
+        },
+        {
+          "path": "tests/test_artifact_contracts.py",
+          "start_line": 10,
+          "end_line": 20,
+          "evidence_tier": "executable_code",
+          "excerpt": "from harness.evidence import (ArtifactPair, check_schema_document, discover_artifact_pairs, load_json, validate_against_schema, validate_checkpoint_semantics, validate_findings_semantics, validate_implementation_report_semantics, validate_verification_report_semantics,)"
+        }
+      ]
+    },
+    {
+      "id": "F-6",
+      "claim": "A grep for 'def test_' in tests/test_artifact_contracts.py finds 28 test function definitions.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "tests/test_artifact_contracts.py",
+          "start_line": 1,
+          "end_line": 1,
+          "evidence_tier": "test_assertion",
+          "excerpt": "grep pattern 'def test_' over tests/test_artifact_contracts.py returned 28 total occurrences across 1 file"
+        }
+      ]
+    },
+    {
+      "id": "F-7",
+      "claim": "pyproject.toml declares jsonschema as a development dependency.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "pyproject.toml",
+          "start_line": 9,
+          "end_line": 13,
+          "evidence_tier": "runtime_config",
+          "excerpt": "[project.optional-dependencies]\ndev = [\n    \"pytest\",\n    \"jsonschema\",\n]"
+        }
+      ]
+    },
+    {
+      "id": "F-8",
+      "claim": "docs/ contains a completed Architect permission-boundary verification report created before this test.",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "glob",
+          "query": "docs/**",
+          "scope": "repository root, docs/ directory",
+          "result": "no files found — docs/ directory does not exist in the repository tree"
+        },
+        {
+          "method": "glob",
+          "query": "docs/*",
+          "scope": "repository root, docs/ directory",
+          "result": "no files found — confirms docs/ has no contents or does not exist"
+        },
+        {
+          "method": "grep",
+          "query": "architect|boundary|permission",
+          "scope": "C:\\Users\\caleb\\Documents\\Projects\\AgenticHarness\\docs",
+          "result": "tool error: Path does not exist — the docs/ directory is not present on disk"
+        }
+      ]
+    },
+    {
+      "id": "F-9",
+      "claim": "PROJECT_SPEC.md's own implementation-sequence tracking confirms Architect permission-boundary verification had not been completed as of the spec's last recorded status, consistent with no prior completed report existing in docs/.",
+      "classification": "inferred",
+      "supporting_finding_ids": ["F-1", "F-8"],
+      "reasoning": "F-1 shows PROJECT_SPEC.md documents the Architect's Research-only role and its intended verification steps (attempt prohibited edits, document which restrictions are tool-enforced vs. behavioral) as an 'Immediate next milestone' rather than as already-completed work (PROJECT_SPEC.md lines 336-360, itself part of the F-1 citation context). F-8 independently confirms no docs/ directory or report exists yet. Together these are consistent with no completed Architect permission-boundary verification report predating this test run, though PROJECT_SPEC.md's milestone framing is not, on its own, direct evidence about docs/ contents — hence this is inferred rather than found."
+    }
+  ],
+  "open_questions": [
+    "PROJECT_SPEC.md's designated write-up location is docs/WRITEUP.md (see PROJECT_SPEC.md line 246-247), but docs/ does not currently exist in the repository. Whether and where any future Architect permission-boundary verification report should be authored is an implementation/documentation decision outside the Architect's Research-only role — the Architect can confirm absence of such a file (see F-8) but cannot create one."
+  ]
+}
