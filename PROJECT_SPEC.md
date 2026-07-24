@@ -1,6 +1,6 @@
 # Project Spec: Agentic Coding Harness
 
-Status: **Approved understanding — no functionality implemented yet.**
+Status: **Implementation in progress — artifact contracts and validation complete; agent runtime not yet implemented.**
 
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
@@ -17,10 +17,13 @@ through four phases:
 
 | Phase | Agent role | May write code? | Output |
 |---|---|---|---|
-| Discovery | Orchestrator (main session) | No | Scoped task definition + task graph |
-| Research | Architect | No (read-only + notes) | Evidence-based findings doc, `file:line` citations |
-| Implementation | Engineer | Yes | Minimal diff extending existing patterns |
-| Verification | Quality Engineer | Tests only | Machine-readable pass/fail evidence |
+| Discovery | Orchestrator (main session) | No | `scope.json` |
+| Research | Architect | No (read-only + notes) | `findings.json` |
+| Implementation | Engineer | Yes | Minimal diff + `implementation-report.json` |
+| Verification | Quality Engineer | Tests only | `verification-report.json` |
+
+`checkpoint.json` supports cross-phase resume, and `run-summary.json` summarizes the final run
+once all phases complete.
 
 Cardinal rule: no phase consumes the previous phase's output on trust. The engineer verifies
 the architect's claims before coding. The orchestrator verifies the engineer's "done" claim
@@ -33,8 +36,10 @@ the architect's claims before coding. The orchestrator verifies the engineer's "
 **Claude Code–native.** The harness is implemented as a Claude Code project configuration, not
 a standalone Python orchestration engine:
 
-- Subagents are `.md` files with YAML frontmatter (`name`, `description`, `tools`, `model`)
-  under `.claude/agents/`.
+- Subagents are `.md` files with YAML frontmatter (`name`, `description`, `tools`) under
+  `.claude/agents/`. Claude Code does not require a `model` frontmatter field; for this project
+  the MVP convention is `model: inherit` for all subagents, unless a later measured reason
+  justifies changing it per-role.
 - Skills are `SKILL.md` + helper scripts under `.claude/skills/`.
 - Hooks are scripts registered in `.claude/settings.json`.
 - The entry point is a slash command (`/work`) under `.claude/commands/`.
@@ -50,6 +55,18 @@ reused rather than reimplemented.
 
 ## 3. Required Components
 
+### Artifact contracts (implemented)
+- The six schemas (`scope`, `findings`, `implementation-report`, `verification-report`,
+  `checkpoint`, `run-summary`) live under `harness/schemas/`, as JSON Schema Draft 2020-12.
+- Valid reference examples for each schema live under `harness/artifacts/examples/`.
+- `harness/evidence.py` validates schema conformance (via `jsonschema`) and the approved
+  semantic cross-reference rules that JSON Schema itself cannot express.
+- All six examples currently validate against their schemas.
+- The contract test suite (`tests/test_artifact_contracts.py`) currently contains 38 passing
+  tests.
+- `jsonschema` is a development dependency (`pyproject.toml` `[project.optional-dependencies].dev`),
+  not a runtime dependency of `harness/`.
+
 ### Orchestration
 - Orchestrator (main-session skill, Discovery phase): decomposes requests into a task graph,
   decides which phases are actually needed, reads `lessons-learned.md` before dispatch, runs a
@@ -62,6 +79,11 @@ reused rather than reimplemented.
   hierarchy: executable code > test assertions > runtime config > comments > metadata. Every
   claim has `file:line`. Labels findings as Found / Not Found / Inferred. Reads method bodies,
   not just signatures. Searches the whole repo; distinguishes current code from legacy.
+  Output boundary: the Architect is technically restricted to read/search tools, so it returns
+  structured findings compatible with `findings.schema.json` to the orchestrator rather than
+  writing `findings.json` directly — the orchestrator (or controlled support code it invokes)
+  validates and persists the artifact. This is what lets the Architect run without `Write`,
+  `Edit`, `Bash`, or `PowerShell` access.
 - `engineer.md` — Implementation. Full edit tools. Consumes architect findings, verifying cited
   patterns exist before building on them. Minimal-change ladder (stop at the first rung that
   holds): (1) does this need to exist at all — skip speculative work; (2) reuse an existing
@@ -162,6 +184,9 @@ MCP server in favor of curl-based skills for reliability/debuggability).
 
 ## 5. File/Directory Mapping
 
+Entries marked `[DONE]` exist in the repo today (see `git ls-files`). Everything else is planned
+and not yet created.
+
 ```
 AgenticHarness/
 ├── .claude/
@@ -189,14 +214,19 @@ AgenticHarness/
 │   │   ├── pre_dispatch_check.py
 │   │   ├── completion_guardrail.py
 │   │   └── post_agent_cost.py
-│   └── mcp.json                   # GitHub / Obsidian / Atlassian MCP server config
+│
+├── .mcp.json                      # GitHub / Obsidian / Atlassian MCP server config (repo root)
 │
 ├── harness/                       # Python glue code invoked BY hooks/skills, not a separate agent runtime
+│   ├── __init__.py                # [DONE]
 │   ├── checkpoint.py              # pipeline state save/resume
 │   ├── memory.py                  # lessons-learned.md + memory-dir read/append (cap enforcement)
 │   ├── task_graph.py              # Discovery output data model
-│   ├── evidence.py                # citation/verdict format validation
-│   └── cost.py                    # token/cost aggregation across a run
+│   ├── evidence.py                # [DONE] schema + semantic artifact validation
+│   ├── cost.py                    # token/cost aggregation across a run
+│   ├── schemas/                   # [DONE] the six *.schema.json artifact contracts
+│   └── artifacts/
+│       └── examples/              # [DONE] the six *.example.json reference artifacts
 │
 ├── memory/
 │   ├── lessons-learned.md
@@ -206,36 +236,37 @@ AgenticHarness/
 │
 ├── demo-repo/                     # target repo for live demos — real code + git history (≥50 files)
 │
-├── tests/                         # unit tests for harness/*, integration test driving one full pipeline run
+├── tests/
+│   ├── __init__.py                       # [DONE]
+│   ├── test_artifact_contracts.py        # [DONE] 38 passing tests
+│   └── ...                               # unit tests for harness/*, integration test driving
+│                                          # one full pipeline run
 │
 ├── docs/
 │   └── WRITEUP.md                 # assignment §5 deliverable (architecture diagram, MCP-vs-REST
 │                                   # decision, surprise + guardrail, what was deleted and why)
 │
-├── README.md
-├── .gitignore
-└── pyproject.toml
+├── README.md                      # [DONE]
+├── .gitignore                     # [DONE]
+└── pyproject.toml                 # [DONE]
 ```
 
 ---
 
-## 6. Dependency Order
+## 6. Implementation Sequence and Status
 
-1. Repo foundations — `git init` this project; populate/`git init` `demo-repo/` with real
-   content; finalize `.claude/settings.json` as the single canonical config.
-2. Subagent contracts — `architect.md`, `engineer.md`, `quality-engineer.md`.
-3. Skills the subagents depend on — code-craftsmanship, test-runner.
-4. Orchestrator + `/work` (prompt mode only).
-5. `harness/` support code — `checkpoint.py`, `memory.py`.
-6. Memory loop wiring — `lessons-learned.md` + facts dir, read-before/append-after behavior.
-7. Guardrail hooks — pre-dispatch check, completion-guardrail.
-8. GitHub verification path — `git`/`gh` CLI wrapper, used both as a skill and by the
-   orchestrator's independent-verification step.
-9. **Close the loop**: run one trivial free-form task through all four phases against
-   `demo-repo` with real evidence at each gate.
-10. Only after closure: Jira connector + ticket mode, Obsidian connector, skill-enforcement
-    hook, cost-tracking hook, full skill-pack breadth, MCP-vs-REST dual build, flaky/logic
-    classification refinement, planted-bug demo scenarios.
+1. Repository initialization, authoritative specification, and GitHub remote — **COMPLETE**.
+2. Artifact contracts, valid examples, schema validation, and semantic validation — **COMPLETE**.
+3. Architect agent definition and permission-boundary verification — **NEXT**.
+4. Engineer and Quality Engineer agent definitions.
+5. Code-craftsmanship and test-runner skills.
+6. Build or import the real ≥50-file demo repository.
+7. Orchestrator skill and `/work` prompt mode.
+8. Checkpoint, memory loop, pre-dispatch hook, and completion guardrail.
+9. GitHub independent push-verification path.
+10. Close one complete free-form prompt pipeline with real evidence.
+11. Only afterward add Jira, Obsidian, cost tracking, broader skill packs, MCP-vs-REST
+    comparison, and planted-defect demonstrations.
 
 ---
 
@@ -243,26 +274,35 @@ AgenticHarness/
 
 Resolved:
 - **Runtime approach**: Claude Code–native (see §2). Confirmed by user.
+- **Artifact contracts**: JSON Schema Draft 2020-12 for all six MVP artifacts (see §3).
+- **`jsonschema` dependency**: development-only, not a runtime dependency of `harness/`.
+- **Hooks on Windows**: implemented as Python scripts invoked by Claude Code's hook runner, for
+  portability (the assignment assumes POSIX shell-script hooks; this environment is
+  Windows/PowerShell).
+- **MVP subagent model convention**: `model: inherit` for all subagents unless a later measured
+  reason justifies changing it (see §2).
+- **GitHub remote**: the `AgenticHarness` repo has a GitHub remote with push access confirmed.
 
 Still open — defaults will be applied unless redirected before the relevant build step:
-1. **`demo-repo/` content** — currently empty; needs to become a real ≥50-file repo with git
-   history and intentionally planted defects (a flaky test, a logic bug) for the acceptance
-   criteria demos. No source repo specified yet — default plan is to generate a synthetic one.
-2. **External service access** — ticket mode needs live Jira credentials; the Obsidian
-   connector needs a real vault path; GitHub push-verification needs a real or realistic local
-   remote. None exist yet. MVP avoids this by using prompt mode + local git only.
-3. **Hooks on Windows** — the assignment assumes POSIX shell-script hooks; this environment is
-   Windows/PowerShell. Default: implement hooks as Python scripts invoked by Claude Code's hook
-   runner, for portability.
-4. **Model assignment per agent** — frontmatter requires a `model` field per subagent; no
-   per-role model choice has been made yet.
-5. **Cost/token tracking mechanics** — depends on what usage data is actually readable (Claude
+1. **`demo-repo/` content/source** — currently empty; needs to become a real ≥50-file repo with
+   git history. No source repo specified yet — default plan is to generate a synthetic one.
+   Planted defects (a flaky test, a logic bug) are deferred demonstrations for the later
+   acceptance-criteria pass, not required in the initial demo-repo population.
+2. **Jira credentials** — ticket mode needs live Jira credentials; none exist yet. MVP avoids
+   this by using prompt mode only.
+3. **Obsidian vault path** — the Obsidian connector needs a real vault path; none exists yet.
+4. **Cost/token extraction mechanism** — depends on what usage data is actually readable (Claude
    Code transcript JSONL vs. API response usage fields); not yet confirmed.
-6. **Write-up location** — assumed `docs/WRITEUP.md`; not explicitly specified.
+5. **Write-up location** — assumed `docs/WRITEUP.md`; not explicitly specified, unless the
+   assignment explicitly resolves it.
 
 ---
 
 ## 8. Acceptance Criteria (from assignment, verbatim intent)
+
+These are final assignment acceptance criteria. They are not all prerequisites for closing the
+core MVP loop. Jira, Obsidian, cost tracking, connector comparisons, and planted-defect
+demonstrations are implemented only after the first free-form prompt loop closes successfully.
 
 Demonstrated live, on a repo with ≥50 files:
 
@@ -293,10 +333,39 @@ Demonstrated live, on a repo with ≥50 files:
 
 ---
 
-## 10. Next Steps (not yet started)
+## 10. Current Status and Immediate Next Steps
 
-1. Repo foundations: `git init` this project; populate `demo-repo/` with a real ≥50-file
-   codebase and git history.
-2. Define the three subagents and their two prerequisite skills, plus `.claude/settings.json`.
-3. Close the smallest end-to-end loop (orchestrator + `/work` prompt mode, two hooks, one
-   trivial task) before adding Jira, Obsidian, MCP, or cost tracking.
+### Completed
+
+- Project repository initialized and connected to GitHub.
+- PROJECT_SPEC.md established as the authoritative specification.
+- Six MVP artifact schemas created.
+- Six valid example artifacts created.
+- JSON Schema Draft 2020-12 validation implemented.
+- Approved semantic artifact validation implemented.
+- 38 artifact-contract tests passing.
+- Artifact-contract milestone independently verified, committed, and pushed.
+
+### Immediate next milestone
+
+1. Design the Architect subagent.
+2. Restrict it to Read, Grep, and Glob.
+3. Use `model: inherit`.
+4. Have it return findings to the orchestrator rather than writing files directly.
+5. Verify that repository reading and searching work.
+6. Attempt prohibited source edits and confirm they are technically unavailable.
+7. Document which restrictions are enforced by tool configuration and which remain behavioral
+   instructions.
+8. Run the existing 38-test suite.
+9. Commit and push the Architect milestone separately.
+
+### Following milestones
+
+1. Engineer agent.
+2. Quality Engineer agent.
+3. Code-craftsmanship and test-runner skills.
+4. Demo repository.
+5. Orchestrator and `/work` prompt mode.
+6. Checkpoint, memory, and guardrail hooks.
+7. First complete evidence-backed pipeline run.
+8. Deferred integrations and final assignment demonstrations.
