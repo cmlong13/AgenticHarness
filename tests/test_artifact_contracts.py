@@ -238,6 +238,112 @@ def test_implementation_report_post_exit_code_must_be_zero():
 
 
 # ---------------------------------------------------------------------------
+# Schema validation -- implementation report, status-conditional requirements
+# ---------------------------------------------------------------------------
+
+# A minimal, honest "blocked" report reflecting zero implementation progress -- e.g. the
+# scope was refused, or an Architect citation failed re-verification before any file was
+# touched. It must be valid without fabricating changed_files, commands, tests, or
+# test_first_evidence.
+ZERO_PROGRESS_BLOCKED_REPORT = {
+    "schema_version": "1.0",
+    "task_id": "T-002",
+    "run_id": "run-block-01",
+    "created_at": "2026-07-27T00:00:00Z",
+    "scope_ref": {"path": "runs/run-block-01/scope.json"},
+    "status": "blocked",
+    "blocked_reason": "Scope status was 'refused'; no implementation work was performed.",
+    "dependency_changes": [],
+}
+
+
+def _implementation_report_schema() -> dict:
+    pair = next(p for p in COMPLETE_PAIRS if p.name == "implementation-report")
+    return load_json(pair.schema_path)
+
+
+def test_implementation_report_ready_for_verification_example_is_schema_valid():
+    schema = _implementation_report_schema()
+    instance = _load("implementation-report")  # example is a ready_for_verification report
+
+    errors = validate_against_schema(instance, schema, artifact="implementation-report.example.json")
+
+    assert not errors, "\n".join(str(e) for e in errors)
+
+
+def test_implementation_report_zero_progress_blocked_is_schema_valid():
+    schema = _implementation_report_schema()
+
+    errors = validate_against_schema(
+        ZERO_PROGRESS_BLOCKED_REPORT, schema, artifact="implementation-report (zero-progress blocked)"
+    )
+
+    assert not errors, "\n".join(str(e) for e in errors)
+
+
+def test_implementation_report_blocked_without_blocked_reason_fails():
+    schema = _implementation_report_schema()
+    doc = copy.deepcopy(ZERO_PROGRESS_BLOCKED_REPORT)
+    del doc["blocked_reason"]
+
+    errors = validate_against_schema(doc, schema, artifact="implementation-report (blocked, no reason)")
+
+    assert any("blocked_reason" in e.message for e in errors)
+
+
+def test_implementation_report_ready_for_verification_without_changed_files_fails():
+    schema = _implementation_report_schema()
+    doc = copy.deepcopy(_load("implementation-report"))
+    del doc["changed_files"]
+
+    errors = validate_against_schema(doc, schema, artifact="implementation-report (missing changed_files)")
+
+    assert any("changed_files" in e.message for e in errors)
+
+
+def test_implementation_report_ready_for_verification_without_commands_fails():
+    schema = _implementation_report_schema()
+    doc = copy.deepcopy(_load("implementation-report"))
+    del doc["commands"]
+
+    errors = validate_against_schema(doc, schema, artifact="implementation-report (missing commands)")
+
+    assert any("commands" in e.message for e in errors)
+
+
+def test_implementation_report_ready_for_verification_without_tests_fails():
+    schema = _implementation_report_schema()
+    doc = copy.deepcopy(_load("implementation-report"))
+    del doc["tests"]
+
+    errors = validate_against_schema(doc, schema, artifact="implementation-report (missing tests)")
+
+    assert any("tests" in e.message for e in errors)
+
+
+def test_implementation_report_ready_for_verification_without_test_first_evidence_fails():
+    schema = _implementation_report_schema()
+    doc = copy.deepcopy(_load("implementation-report"))
+    del doc["test_first_evidence"]
+
+    errors = validate_against_schema(doc, schema, artifact="implementation-report (missing test_first_evidence)")
+
+    assert any("test_first_evidence" in e.message for e in errors)
+
+
+def test_implementation_report_blocked_does_not_need_fabricated_test_first_evidence():
+    # Schema level: the zero-progress blocked report has no test_first_evidence/commands/
+    # tests/changed_files keys at all, and is still valid (covered above). Semantic level:
+    # the validator must not manufacture "missing" errors for fields that were never
+    # required in the first place.
+    errors = validate_implementation_report_semantics(
+        ZERO_PROGRESS_BLOCKED_REPORT, findings_doc={}, artifact="implementation-report (zero-progress blocked)"
+    )
+
+    assert not errors, "\n".join(str(e) for e in errors)
+
+
+# ---------------------------------------------------------------------------
 # Semantic validation -- verification report
 # ---------------------------------------------------------------------------
 

@@ -154,55 +154,63 @@ def validate_implementation_report_semantics(
 
     by_id = {c["id"]: c for c in commands if "id" in c}
 
-    found_ids = {f["id"] for f in findings_doc.get("findings", []) if f.get("classification") == "found"}
-    findings_ref = doc.get("findings_ref", {})
-    for idx, finding_id in enumerate(findings_ref.get("finding_ids", [])):
-        if finding_id not in found_ids:
-            errors.append(
-                ValidationError(
-                    artifact,
-                    f"$.findings_ref.finding_ids[{idx}]",
-                    f"finding id {finding_id!r} does not resolve to a 'found' finding in the referenced findings artifact",
+    # findings_ref is optional on a "blocked" report (e.g. a zero-progress block reported
+    # before any findings were consulted). Only cross-check it when it's actually present --
+    # its own field-level structure (path, finding_ids) is still enforced by the schema
+    # whenever the key exists, regardless of status.
+    if "findings_ref" in doc:
+        found_ids = {f["id"] for f in findings_doc.get("findings", []) if f.get("classification") == "found"}
+        findings_ref = doc.get("findings_ref", {})
+        for idx, finding_id in enumerate(findings_ref.get("finding_ids", [])):
+            if finding_id not in found_ids:
+                errors.append(
+                    ValidationError(
+                        artifact,
+                        f"$.findings_ref.finding_ids[{idx}]",
+                        f"finding id {finding_id!r} does not resolve to a 'found' finding in the referenced findings artifact",
+                    )
                 )
-            )
 
-    test_first_evidence = doc.get("test_first_evidence", {})
-    checks = [
-        ("pre_implementation_command_id", "pre_implementation"),
-        ("post_implementation_command_id", "post_implementation"),
-    ]
-    for field, expected_stage in checks:
-        command_id = test_first_evidence.get(field)
-        path = f"$.test_first_evidence.{field}"
-        command = by_id.get(command_id)
-        if command is None:
-            errors.append(
-                ValidationError(artifact, path, f"does not resolve to a command id in commands[] ({command_id!r})")
-            )
-            continue
-        if command.get("stage") != expected_stage:
-            errors.append(
-                ValidationError(
-                    artifact,
-                    path,
-                    f"referenced command {command_id!r} must have stage {expected_stage!r}, got {command.get('stage')!r}",
+    # test_first_evidence is likewise optional on a "blocked" report -- only resolve it against
+    # commands[] when the report actually includes it.
+    if "test_first_evidence" in doc:
+        test_first_evidence = doc.get("test_first_evidence", {})
+        checks = [
+            ("pre_implementation_command_id", "pre_implementation"),
+            ("post_implementation_command_id", "post_implementation"),
+        ]
+        for field, expected_stage in checks:
+            command_id = test_first_evidence.get(field)
+            path = f"$.test_first_evidence.{field}"
+            command = by_id.get(command_id)
+            if command is None:
+                errors.append(
+                    ValidationError(artifact, path, f"does not resolve to a command id in commands[] ({command_id!r})")
                 )
-            )
-        exit_code = command.get("exit_code")
-        if expected_stage == "pre_implementation" and exit_code == 0:
-            errors.append(
-                ValidationError(
-                    artifact, path, f"pre-implementation command {command_id!r} must have a nonzero exit code, got 0"
+                continue
+            if command.get("stage") != expected_stage:
+                errors.append(
+                    ValidationError(
+                        artifact,
+                        path,
+                        f"referenced command {command_id!r} must have stage {expected_stage!r}, got {command.get('stage')!r}",
+                    )
                 )
-            )
-        if expected_stage == "post_implementation" and exit_code != 0:
-            errors.append(
-                ValidationError(
-                    artifact,
-                    path,
-                    f"post-implementation command {command_id!r} must have exit code 0, got {exit_code!r}",
+            exit_code = command.get("exit_code")
+            if expected_stage == "pre_implementation" and exit_code == 0:
+                errors.append(
+                    ValidationError(
+                        artifact, path, f"pre-implementation command {command_id!r} must have a nonzero exit code, got 0"
+                    )
                 )
-            )
+            if expected_stage == "post_implementation" and exit_code != 0:
+                errors.append(
+                    ValidationError(
+                        artifact,
+                        path,
+                        f"post-implementation command {command_id!r} must have exit code 0, got {exit_code!r}",
+                    )
+                )
     return errors
 
 

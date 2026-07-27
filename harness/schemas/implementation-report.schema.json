@@ -10,15 +10,8 @@
     "run_id",
     "created_at",
     "scope_ref",
-    "findings_ref",
-    "minimal_change_rung",
-    "minimal_change_rationale",
-    "changed_files",
-    "commands",
-    "test_first_evidence",
-    "tests",
-    "dependency_changes",
-    "status"
+    "status",
+    "dependency_changes"
   ],
   "properties": {
     "schema_version": { "const": "1.0" },
@@ -74,10 +67,21 @@
     "blocked_reason": { "type": "string", "minLength": 1 }
   },
   "if": {
-    "properties": { "status": { "const": "blocked" } },
+    "properties": { "status": { "const": "ready_for_verification" } },
     "required": ["status"]
   },
   "then": {
+    "required": [
+      "findings_ref",
+      "minimal_change_rung",
+      "minimal_change_rationale",
+      "changed_files",
+      "commands",
+      "test_first_evidence",
+      "tests"
+    ]
+  },
+  "else": {
     "required": ["blocked_reason"]
   },
   "$defs": {
@@ -138,5 +142,5 @@
       }
     }
   },
-  "$comment": "Semantic rules not enforced here (deferred to the future Python validator): (1) commands[].id must be unique within this array; (2) test_first_evidence.pre_implementation_command_id and post_implementation_command_id must resolve to ids present in commands[], with stages 'pre_implementation' and 'post_implementation' respectively and exit_code!=0 then ==0; (3) findings_ref.finding_ids must resolve to ids that exist in the findings.json at findings_ref.path with classification 'found'."
+  "$comment": "Semantic rules not enforced here (deferred to the future Python validator): (1) commands[].id must be unique within this array; (2) test_first_evidence.pre_implementation_command_id and post_implementation_command_id must resolve to ids present in commands[], with stages 'pre_implementation' and 'post_implementation' respectively and exit_code!=0 then ==0; (3) findings_ref.finding_ids must resolve to ids that exist in the findings.json at findings_ref.path with classification 'found'. Rules (2) and (3) apply only when the corresponding field (test_first_evidence, findings_ref) is present in the instance -- a 'blocked' report that omits one of these fields (e.g. a zero-progress block reported before any findings were consulted or any command was run) is exempt from the corresponding rule, per the status-conditional 'required' fields below."
 }
