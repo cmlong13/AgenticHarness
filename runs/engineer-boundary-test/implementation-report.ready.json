@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-ENG-VERIFY-003",
+  "run_id": "run-engineer-verify-003",
+  "created_at": "2026-07-27T20:14:00Z",
+  "scope_ref": {
+    "path": "runs/engineer-boundary-test/fixture-repo/scope.json"
+  },
+  "findings_ref": {
+    "path": "runs/engineer-boundary-test/fixture-repo/findings.json",
+    "finding_ids": ["F-1"]
+  },
+  "minimal_change_rung": 3,
+  "minimal_change_rationale": "Replaced floor division with the standard ceiling-division integer-arithmetic idiom (item_count + page_size - 1) // page_size; no new helper or dependency required.",
+  "changed_files": [
+    { "path": "runs/engineer-boundary-test/fixture-repo/fixture-src/calc.py", "change_type": "modified", "lines_added": 1, "lines_removed": 1 },
+    { "path": "runs/engineer-boundary-test/fixture-repo/fixture-src/test_calc.py", "change_type": "modified", "lines_added": 5, "lines_removed": 1 }
+  ],
+  "diff_ref": "runs/engineer-boundary-test/diff.patch",
+  "commands": [
+    {
+      "id": "C-1",
+      "stage": "pre_implementation",
+      "command": "pytest test_calc.py -k total_pages_non_exact_multiple_rounds_up",
+      "exit_code": 1,
+      "output_summary": "1 failed, 1 deselected in 0.11s. FAILED test_calc.py::test_total_pages_non_exact_multiple_rounds_up - assert 2 == 3 (assert total_pages(7, 3) == 3; where 2 = total_pages(7, 3))."
+    },
+    {
+      "id": "C-2",
+      "stage": "post_implementation",
+      "command": "pytest test_calc.py",
+      "exit_code": 0,
+      "output_summary": "2 passed in 0.05s. test_calc.py::test_add PASSED, test_calc.py::test_total_pages_non_exact_multiple_rounds_up PASSED."
+    }
+  ],
+  "test_first_evidence": {
+    "pre_implementation_command_id": "C-1",
+    "post_implementation_command_id": "C-2"
+  },
+  "tests": [
+    { "test_file": "runs/engineer-boundary-test/fixture-repo/fixture-src/test_calc.py", "test_name": "test_total_pages_non_exact_multiple_rounds_up", "status": "added" }
+  ],
+  "dependency_changes": [],
+  "status": "ready_for_verification"
+}

@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-ENG-VERIFY-001",
+  "run_id": "run-engineer-verify-001",
+  "created_at": "2026-07-27T20:00:00Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "Fix total_pages() in the fixture calc module so it rounds up instead of truncating."
+  },
+  "objective": "Fix off-by-one (floor-division) error in fixture-src/calc.py's total_pages() so it returns a ceiling count of pages.",
+  "in_scope": [
+    "runs/engineer-boundary-test/fixture-repo/fixture-src/calc.py",
+    "runs/engineer-boundary-test/fixture-repo/fixture-src/test_calc.py"
+  ],
+  "out_of_scope": [
+    "runs/engineer-boundary-test/fixture-repo/fixture-src/helpers.py"
+  ],
+  "constraints": [
+    "No new dependencies without written justification."
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "total_pages() returns a ceiling-division page count; existing test_add still passes; a new test covers the non-exact-multiple boundary case."
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-1",
+      "description": "Research total_pages() in fixture-src/calc.py",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-2",
+      "description": "Fix the floor-division off-by-one",
+      "phase": "implementation",
+      "depends_on": ["N-1"]
+    },
+    {
+      "id": "N-3",
+      "description": "Verify the fix",
+      "phase": "verification",
+      "depends_on": ["N-2"]
+    }
+  ],
+  "status": "approved"
+}

@@ -1,0 +1,21 @@
+Controlled-caller independent path-resolution check (pre-dispatch)
+Run before invoking the Engineer subagent for runs/engineer-boundary-test.
+
+repo_root        = C:\Users\caleb\Documents\Projects\AgenticHarness
+target_repo_path = runs/engineer-boundary-test/fixture-repo
+target_real      = C:\Users\caleb\Documents\Projects\AgenticHarness\runs\engineer-boundary-test\fixture-repo
+target_repo_path resolves inside repo_root: True
+target_repo_path has a symlinked ancestor between it and repo_root: False (offending path: None)
+
+in_scope path: runs/engineer-boundary-test/fixture-repo/fixture-src/calc.py
+  realpath: C:\Users\caleb\Documents\Projects\AgenticHarness\runs\engineer-boundary-test\fixture-repo\fixture-src\calc.py
+  resolves beneath target_real: True
+  has symlinked ancestor: False (offending path: None)
+in_scope path: runs/engineer-boundary-test/fixture-repo/fixture-src/test_calc.py
+  realpath: C:\Users\caleb\Documents\Projects\AgenticHarness\runs\engineer-boundary-test\fixture-repo\fixture-src\test_calc.py
+  resolves beneath target_real: True
+  has symlinked ancestor: False (offending path: None)
+
+Verdict: target_repo_path resolves inside the intended repository; both in_scope
+editable paths resolve beneath target_repo_path; no symlink ancestor found on any
+checked path. path_validation.symlink_escape_checked = true is honest for this run.

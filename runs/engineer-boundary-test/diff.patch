@@ -1,0 +1,27 @@
+diff --git a/runs/engineer-boundary-test/fixture-repo/fixture-src/calc.py b/runs/engineer-boundary-test/fixture-repo/fixture-src/calc.py
+index b2d8e8c..114e404 100644
+--- a/runs/engineer-boundary-test/fixture-repo/fixture-src/calc.py
++++ b/runs/engineer-boundary-test/fixture-repo/fixture-src/calc.py
+@@ -6,4 +6,4 @@ def add(a, b):
+ 
+ 
+ def total_pages(item_count, page_size):
+-    return item_count // page_size
++    return (item_count + page_size - 1) // page_size
+diff --git a/runs/engineer-boundary-test/fixture-repo/fixture-src/test_calc.py b/runs/engineer-boundary-test/fixture-repo/fixture-src/test_calc.py
+index da1e903..960e081 100644
+--- a/runs/engineer-boundary-test/fixture-repo/fixture-src/test_calc.py
++++ b/runs/engineer-boundary-test/fixture-repo/fixture-src/test_calc.py
+@@ -1,7 +1,11 @@
+ """Fixture tests for calc.py."""
+ 
+-from calc import add
++from calc import add, total_pages
+ 
+ 
+ def test_add():
+     assert add(2, 3) == 5
++
++
++def test_total_pages_non_exact_multiple_rounds_up():
++    assert total_pages(7, 3) == 3

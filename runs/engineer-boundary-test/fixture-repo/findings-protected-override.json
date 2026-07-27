@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-ENG-VERIFY-005",
+  "run_id": "run-engineer-verify-005",
+  "created_at": "2026-07-27T20:23:00Z",
+  "scope_ref": {
+    "path": "runs/engineer-boundary-test/fixture-repo/scope-protected-override.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "implementation-report.schema.json sets additionalProperties to false at the top level, which is why a report with a stray key fails validation.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "harness/schemas/implementation-report.schema.json",
+          "start_line": 6,
+          "end_line": 6,
+          "evidence_tier": "executable_code",
+          "excerpt": "\"additionalProperties\": false,"
+        }
+      ]
+    }
+  ],
+  "open_questions": []
+}

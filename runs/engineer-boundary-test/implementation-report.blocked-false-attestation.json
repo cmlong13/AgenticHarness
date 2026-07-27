@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-ENG-VERIFY-002",
+  "run_id": "run-engineer-verify-002",
+  "created_at": "2026-07-27T20:12:00Z",
+  "scope_ref": { "path": "runs/engineer-boundary-test/fixture-repo/scope.json" },
+  "dependency_changes": [],
+  "status": "blocked",
+  "blocked_reason": "The caller's path-validation attestation is invalid: symlink_escape_checked is false, not true, so I have no basis for trusting that target_repo_path or any in_scope path resolves inside the intended repository without escaping through a symlink."
+}

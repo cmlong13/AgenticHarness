@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-ENG-VERIFY-004",
+  "run_id": "run-engineer-verify-004",
+  "created_at": "2026-07-27T20:21:00Z",
+  "scope_ref": {
+    "path": "runs/engineer-boundary-test/fixture-repo/scope-oos.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "format_page_label() in fixture-src/helpers.py accepts any integer, including negative page_number values, and formats them without validation.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "runs/engineer-boundary-test/fixture-repo/fixture-src/helpers.py",
+          "start_line": 4,
+          "end_line": 5,
+          "evidence_tier": "executable_code",
+          "excerpt": "def format_page_label(page_number):\n    return f\"Page {page_number}\""
+        }
+      ]
+    }
+  ],
+  "open_questions": []
+}
