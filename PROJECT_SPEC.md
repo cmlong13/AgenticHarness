@@ -1,6 +1,8 @@
 # Project Spec: Agentic Coding Harness
 
-Status: **Implementation in progress — artifact contracts and validation complete; agent runtime not yet implemented.**
+Status: **Implementation in progress — artifact contracts, validation, and the read-only Architect
+subagent (with independently verified permission boundary) are complete; Engineer and Quality
+Engineer subagents not yet implemented.**
 
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
@@ -257,16 +259,17 @@ AgenticHarness/
 
 1. Repository initialization, authoritative specification, and GitHub remote — **COMPLETE**.
 2. Artifact contracts, valid examples, schema validation, and semantic validation — **COMPLETE**.
-3. Architect agent definition and permission-boundary verification — **NEXT**.
-4. Engineer and Quality Engineer agent definitions.
+3. Architect subagent and permission-boundary verification — **COMPLETE**.
+4. Engineer and Quality Engineer subagent design, implementation, and permission
+   verification — **NEXT**.
 5. Code-craftsmanship and test-runner skills.
-6. Build or import the real ≥50-file demo repository.
-7. Orchestrator skill and `/work` prompt mode.
+6. Build or import the real target repository with at least 50 files.
+7. Orchestrator skill and `/work` free-form prompt mode.
 8. Checkpoint, memory loop, pre-dispatch hook, and completion guardrail.
-9. GitHub independent push-verification path.
+9. Independent GitHub push-verification path.
 10. Close one complete free-form prompt pipeline with real evidence.
-11. Only afterward add Jira, Obsidian, cost tracking, broader skill packs, MCP-vs-REST
-    comparison, and planted-defect demonstrations.
+11. Add Jira, Obsidian, cost tracking, connector comparison, broader skills, and
+    planted-defect demonstrations.
 
 ---
 
@@ -337,27 +340,106 @@ Demonstrated live, on a repo with ≥50 files:
 
 ### Completed
 
-- Project repository initialized and connected to GitHub.
-- PROJECT_SPEC.md established as the authoritative specification.
-- Six MVP artifact schemas created.
+- Repository initialized and connected to GitHub.
+- Artifact-contract foundation implemented.
+- Six JSON schemas created.
 - Six valid example artifacts created.
 - JSON Schema Draft 2020-12 validation implemented.
 - Approved semantic artifact validation implemented.
 - 38 artifact-contract tests passing.
-- Artifact-contract milestone independently verified, committed, and pushed.
+- Read-only Architect subagent implemented at `.claude/agents/architect.md`.
+- Architect restricted to Read, Grep, Glob.
+- Architect permission boundary independently verified.
+- File writes, source edits, shell execution, dependency installation, Git mutation, and
+  permission self-escalation were technically unavailable because the required tools were
+  absent.
+- Architect findings are returned to the caller rather than written directly.
+- The main session or future orchestrator validates and persists findings.
+- Permission-boundary verification is documented at
+  `docs/architect-permission-verification.md`.
+- The first Architect findings attempt passed schema validation but failed semantic validation
+  because an inferred finding referenced a `not_found` finding.
+- The invalid result was preserved unchanged as evidence.
+- The Architect instructions were strengthened with a semantic pre-output self-check.
+- The retry passed both JSON Schema validation and semantic validation.
+- The Architect milestone was committed and pushed.
+- The working tree is clean and local `main` matches `origin/main`.
 
 ### Immediate next milestone
 
-1. Design the Architect subagent.
-2. Restrict it to Read, Grep, and Glob.
-3. Use `model: inherit`.
-4. Have it return findings to the orchestrator rather than writing files directly.
-5. Verify that repository reading and searching work.
-6. Attempt prohibited source edits and confirm they are technically unavailable.
-7. Document which restrictions are enforced by tool configuration and which remain behavioral
-   instructions.
-8. Run the existing 38-test suite.
-9. Commit and push the Architect milestone separately.
+Design and implement:
+
+- `.claude/agents/engineer.md`
+- `.claude/agents/quality-engineer.md`
+
+This milestone is design-and-boundary work only in this step; implementation happens in a
+later, separate step.
+
+#### Engineer — intended boundaries
+
+- Performs only the Implementation phase.
+- Receives `scope.json` and validated `findings.json`.
+- Reopens and independently verifies Architect citations before relying on them.
+- May modify implementation source and tests.
+- Uses the minimal-change ladder.
+- Writes a failing test before implementation for each new or changed behavior when applicable.
+- Records pre-implementation failure evidence and post-implementation passing evidence.
+- Records changed files, commands, exit codes, test evidence, dependency changes, and findings
+  references in `implementation-report.json`.
+- May report `ready_for_verification` or `blocked`, but may not declare final completion.
+- Must not modify scope, research findings, verification evidence, Architect permissions,
+  Quality Engineer permissions, or orchestrator configuration.
+- Must not commit or push unless that capability is explicitly introduced and separately
+  justified later.
+
+#### Quality Engineer — intended boundaries
+
+- Performs only the Verification phase.
+- Receives `scope.json`, `findings.json`, `implementation-report.json`, and the implementation
+  diff.
+- Independently verifies acceptance criteria.
+- Runs the narrowest sufficient test commands.
+- Records exact commands, exit codes, output references, classifications, and criterion-level
+  results in `verification-report.json`.
+- May classify the final result as pass, fail, blocked, or inconclusive.
+- Must not modify application source code.
+- Must not modify implementation tests merely to make them pass.
+- Must not install dependencies.
+- Must not commit or push.
+- Must route implementation defects back to the Engineer.
+- Its ability to run tests may require a restricted shell or test-runner capability, so its
+  permission design must distinguish executable test access from general source-edit access.
+
+#### Permission-design requirement for the next design review
+
+Before implementation begins, the next design review must determine:
+
+- The exact tool allowlist for the Engineer.
+- The exact tool allowlist for the Quality Engineer.
+- Which restrictions are technically enforced.
+- Which restrictions remain behavioral.
+- Whether the Quality Engineer can receive a narrowly controlled testing capability rather than
+  unrestricted shell access.
+- How the Engineer can edit source while being prevented from changing protected harness
+  artifacts and agent definitions.
+- How implementation and verification outputs will be returned, validated, and persisted.
+
+Do not assume Claude Code supports path-specific write restrictions without verifying it.
+
+### Eight-day MVP planning target
+
+Planning target only, not a guarantee — goal is to close a working free-form-prompt MVP within
+approximately eight focused development days:
+
+- Day 1–2: Engineer and Quality Engineer.
+- Day 3: Code-craftsmanship and test-runner skills.
+- Day 4: Target/demo repository.
+- Day 5–6: Orchestrator and `/work` prompt mode.
+- Day 7: Checkpoint, memory, and guardrail hooks.
+- Day 8: First complete evidence-backed run and defect correction.
+
+Jira, Obsidian, cost tracking, connector comparisons, planted-defect demonstrations, and final
+documentation may require additional time after the working MVP closes.
 
 ### Following milestones
 
