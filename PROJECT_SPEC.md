@@ -1,8 +1,8 @@
 # Project Spec: Agentic Coding Harness
 
-Status: **Implementation in progress — artifact contracts, validation, and the read-only Architect
-subagent (with independently verified permission boundary) are complete; Engineer and Quality
-Engineer subagents not yet implemented.**
+Status: **Implementation in progress — artifact contracts, validation, the read-only Architect
+subagent, and the Engineer subagent (both with independently verified permission boundaries)
+are complete; Quality Engineer subagent not yet implemented.**
 
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
@@ -260,8 +260,8 @@ AgenticHarness/
 1. Repository initialization, authoritative specification, and GitHub remote — **COMPLETE**.
 2. Artifact contracts, valid examples, schema validation, and semantic validation — **COMPLETE**.
 3. Architect subagent and permission-boundary verification — **COMPLETE**.
-4. Engineer and Quality Engineer subagent design, implementation, and permission
-   verification — **NEXT**.
+4. Engineer subagent design, implementation, and permission verification — **COMPLETE**.
+   Quality Engineer subagent design, implementation, and permission verification — **NEXT**.
 5. Code-craftsmanship and test-runner skills.
 6. Build or import the real target repository with at least 50 files.
 7. Orchestrator skill and `/work` free-form prompt mode.
@@ -363,34 +363,45 @@ Demonstrated live, on a repo with ≥50 files:
 - The Architect instructions were strengthened with a semantic pre-output self-check.
 - The retry passed both JSON Schema validation and semantic validation.
 - The Architect milestone was committed and pushed.
+- Implementation-phase Engineer subagent implemented at `.claude/agents/engineer.md`, restricted
+  to Read, Grep, Glob, Edit, Write — confirmed both via the frontmatter and via Claude Code's
+  own runtime agent-type listing.
+- The Engineer's protocol is caller-mediated: it requests exact commands
+  (`pre_test_requested`/merged `post_test_requested`/`finalization_evidence_requested`) and the
+  controlled caller executes them and returns real exit codes, output, and diff statistics; the
+  Engineer never fabricates command output, exit codes, or changed-file statistics.
+- A required `path_validation` caller attestation gates all work before any file is read — the
+  Engineer performs lexical path checks itself (containment under `target_repo_path`, exact
+  `in_scope` match, no traversal) but relies on the controlled caller to verify real filesystem
+  resolution and symlink non-escape, since the Engineer has no `stat`/`realpath`-capable tool.
+- A fixed Protected Path list (`.claude/**`, `.git/**`, `PROJECT_SPEC.md`,
+  `harness/schemas/**`, `harness/artifacts/examples/**`, `harness/evidence.py`,
+  `runs/**/scope.json`, `runs/**/findings.json`, `runs/**/verification-report.json`, anything
+  outside `target_repo_path`) is honored even when an erroneous scope artifact lists one of
+  these paths as in-scope.
+- Engineer permission-boundary and staged-protocol verification is documented at
+  `docs/engineer-permission-verification.md`, run live against a disposable fixture at
+  `runs/engineer-boundary-test/`: missing-attestation, false-attestation, genuine out-of-scope,
+  and Protected-Path-override cases all correctly returned schema-valid `blocked` reports with
+  zero file edits; the full happy-path staged protocol produced a schema- and
+  semantically-valid `ready_for_verification` report backed by real `pytest` exit codes and a
+  real `git diff --no-index` diff. An unplanned tooling mistake (resuming the wrong way)
+  produced genuine evidence that a fresh, non-continued Engineer instance detects a broken
+  handoff and refuses to fabricate continuity rather than proceeding.
+- `tests/test_agent_definitions.py` (24 tests, stdlib-only frontmatter parsing, no YAML
+  dependency added) independently re-verifies the Engineer's and Architect's tool allowlists and
+  re-validates every saved boundary-test report.
+- 62 total tests passing (38 artifact-contract + 24 agent-definition).
 - The working tree is clean and local `main` matches `origin/main`.
 
 ### Immediate next milestone
 
 Design and implement:
 
-- `.claude/agents/engineer.md`
 - `.claude/agents/quality-engineer.md`
 
-This milestone is design-and-boundary work only in this step; implementation happens in a
-later, separate step.
-
-#### Engineer — intended boundaries
-
-- Performs only the Implementation phase.
-- Receives `scope.json` and validated `findings.json`.
-- Reopens and independently verifies Architect citations before relying on them.
-- May modify implementation source and tests.
-- Uses the minimal-change ladder.
-- Writes a failing test before implementation for each new or changed behavior when applicable.
-- Records pre-implementation failure evidence and post-implementation passing evidence.
-- Records changed files, commands, exit codes, test evidence, dependency changes, and findings
-  references in `implementation-report.json`.
-- May report `ready_for_verification` or `blocked`, but may not declare final completion.
-- Must not modify scope, research findings, verification evidence, Architect permissions,
-  Quality Engineer permissions, or orchestrator configuration.
-- Must not commit or push unless that capability is explicitly introduced and separately
-  justified later.
+This milestone is design-and-boundary work first, matching the process used for the Architect
+and Engineer; implementation happens in a later, separate step.
 
 #### Quality Engineer — intended boundaries
 
@@ -414,17 +425,21 @@ later, separate step.
 
 Before implementation begins, the next design review must determine:
 
-- The exact tool allowlist for the Engineer.
 - The exact tool allowlist for the Quality Engineer.
 - Which restrictions are technically enforced.
 - Which restrictions remain behavioral.
 - Whether the Quality Engineer can receive a narrowly controlled testing capability rather than
-  unrestricted shell access.
-- How the Engineer can edit source while being prevented from changing protected harness
-  artifacts and agent definitions.
-- How implementation and verification outputs will be returned, validated, and persisted.
+  unrestricted shell access — the Engineer's caller-mediated staged command protocol
+  (`docs/engineer-permission-verification.md`) is the precedent to reuse or adapt: the subagent
+  never executes commands itself, only requests exact commands that the controlled caller runs
+  and reports real evidence for.
+- How verification outputs will be returned, validated, and persisted — the Engineer's
+  intermediate-protocol-vs-final-artifact split (structured request/reply envelopes distinct
+  from the schema-exact `implementation-report.json`) is the precedent to reuse or adapt.
 
-Do not assume Claude Code supports path-specific write restrictions without verifying it.
+Do not assume Claude Code supports path-specific write restrictions without verifying it — for
+the Engineer this was confirmed false (Edit/Write path scoping is behavioral only, per
+`docs/engineer-permission-verification.md`'s "Known limitations").
 
 ### Eight-day MVP planning target
 
