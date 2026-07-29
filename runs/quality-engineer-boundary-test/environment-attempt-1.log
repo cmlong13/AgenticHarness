@@ -1,0 +1,25 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness
+configfile: pyproject.toml
+collecting ... collected 0 items / 1 error
+
+=================================== ERRORS ====================================
+_ ERROR collecting runs/quality-engineer-boundary-test/fixture-repo-environment/fixture-src/test_reporter.py _
+ImportError while importing test module 'C:\Users\caleb\Documents\Projects\AgenticHarness\runs\quality-engineer-boundary-test\fixture-repo-environment\fixture-src\test_reporter.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Users\caleb\AppData\Local\Python\pythoncore-3.14-64\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+test_reporter.py:3: in <module>
+    from reporter import report_value
+reporter.py:7: in <module>
+    import qe_fixture_nonexistent_external_dependency
+E   ModuleNotFoundError: No module named 'qe_fixture_nonexistent_external_dependency'
+=========================== short test summary info ===========================
+ERROR test_reporter.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+============================== 1 error in 0.14s ===============================
+EXIT:2

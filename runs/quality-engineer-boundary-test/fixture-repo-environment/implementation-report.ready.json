@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-QE-VERIFY-ENVIRONMENT",
+  "run_id": "run-qe-verify-environment",
+  "created_at": "2026-07-29T20:30:00Z",
+  "scope_ref": {
+    "path": "runs/quality-engineer-boundary-test/fixture-repo-environment/scope.json"
+  },
+  "findings_ref": {
+    "path": "runs/quality-engineer-boundary-test/fixture-repo-environment/findings.json",
+    "finding_ids": ["F-1"]
+  },
+  "minimal_change_rung": 4,
+  "minimal_change_rationale": "Used the already-declared qe-fixture-nonexistent-external-dependency package rather than writing a bespoke reader.",
+  "changed_files": [
+    { "path": "runs/quality-engineer-boundary-test/fixture-repo-environment/fixture-src/reporter.py", "change_type": "modified", "lines_added": 4, "lines_removed": 1 },
+    { "path": "runs/quality-engineer-boundary-test/fixture-repo-environment/fixture-src/test_reporter.py", "change_type": "modified", "lines_added": 4, "lines_removed": 0 }
+  ],
+  "commands": [
+    {
+      "id": "C-1",
+      "stage": "pre_implementation",
+      "command": "pytest test_reporter.py",
+      "exit_code": 1,
+      "output_summary": "1 failed. AttributeError: module 'reporter' has no attribute 'report_value' (function did not exist yet)."
+    },
+    {
+      "id": "C-2",
+      "stage": "post_implementation",
+      "command": "pytest test_reporter.py",
+      "exit_code": 0,
+      "output_summary": "1 passed on the Engineer's own machine, where qe_fixture_nonexistent_external_dependency was installed locally via `pip install --user` during development but never added to a lockfile or requirements file."
+    }
+  ],
+  "test_first_evidence": {
+    "pre_implementation_command_id": "C-1",
+    "post_implementation_command_id": "C-2"
+  },
+  "tests": [
+    { "test_file": "runs/quality-engineer-boundary-test/fixture-repo-environment/fixture-src/test_reporter.py", "test_name": "test_report_value_is_one", "status": "added" }
+  ],
+  "dependency_changes": [
+    {
+      "package": "qe-fixture-nonexistent-external-dependency",
+      "action": "added",
+      "justification": "report_value() reads its configured value from this package. Installed locally via pip install --user during development; not yet recorded in a lockfile or requirements file, so it is not guaranteed present in other environments."
+    }
+  ],
+  "status": "ready_for_verification"
+}

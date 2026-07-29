@@ -1,0 +1,11 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness
+configfile: pyproject.toml
+collecting ... collected 1 item
+
+test_connector.py::test_attempt_connection_succeeds_once_warm PASSED     [100%]
+
+============================== 1 passed in 0.01s ==============================
+EXIT:0

@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-QE-VERIFY-FLAKE",
+  "run_id": "run-qe-verify-flake",
+  "created_at": "2026-07-29T20:00:00Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "Add attempt_connection() to the fixture connector module so it reports a successful connection once the remote endpoint is warm."
+  },
+  "objective": "Implement attempt_connection() in fixture-src/connector.py so it returns \"connected\" once the simulated remote endpoint is warm.",
+  "in_scope": [
+    "runs/quality-engineer-boundary-test/fixture-repo-flake/fixture-src/connector.py",
+    "runs/quality-engineer-boundary-test/fixture-repo-flake/fixture-src/test_connector.py"
+  ],
+  "out_of_scope": [],
+  "constraints": [
+    "No new dependencies without written justification."
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "attempt_connection() returns \"connected\" once the remote endpoint is warm, covered by a real test."
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-1",
+      "description": "Research connector requirements",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-2",
+      "description": "Implement attempt_connection()",
+      "phase": "implementation",
+      "depends_on": ["N-1"]
+    },
+    {
+      "id": "N-3",
+      "description": "Verify attempt_connection()",
+      "phase": "verification",
+      "depends_on": ["N-2"]
+    }
+  ],
+  "status": "approved"
+}

@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-QE-VERIFY-FALSECLAIM",
+  "run_id": "run-qe-verify-falseclaim",
+  "created_at": "2026-07-29T18:05:00Z",
+  "scope_ref": {
+    "path": "runs/quality-engineer-boundary-test/fixture-repo-2/scope.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "fixture-src/strings.py exists as the target module for the new clamp() function, with a module-level docstring establishing it as a Quality Engineer boundary-verification fixture.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "runs/quality-engineer-boundary-test/fixture-repo-2/fixture-src/strings.py",
+          "start_line": 1,
+          "end_line": 1,
+          "evidence_tier": "metadata",
+          "excerpt": "\"\"\"Fixture module for Quality Engineer boundary verification.\"\"\""
+        }
+      ]
+    }
+  ],
+  "open_questions": []
+}

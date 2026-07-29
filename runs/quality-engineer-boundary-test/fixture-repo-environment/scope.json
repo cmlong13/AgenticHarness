@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-QE-VERIFY-ENVIRONMENT",
+  "run_id": "run-qe-verify-environment",
+  "created_at": "2026-07-29T20:20:00Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "Add report_value() to the fixture reporter module using the qe-fixture-nonexistent-external-dependency package the Engineer says it added."
+  },
+  "objective": "Implement report_value() in fixture-src/reporter.py so it returns the configured external value.",
+  "in_scope": [
+    "runs/quality-engineer-boundary-test/fixture-repo-environment/fixture-src/reporter.py",
+    "runs/quality-engineer-boundary-test/fixture-repo-environment/fixture-src/test_reporter.py"
+  ],
+  "out_of_scope": [],
+  "constraints": [
+    "Any new dependency must be justified in writing."
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "report_value() returns 1, covered by a real test."
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-1",
+      "description": "Research reporter requirements",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-2",
+      "description": "Implement report_value()",
+      "phase": "implementation",
+      "depends_on": ["N-1"]
+    },
+    {
+      "id": "N-3",
+      "description": "Verify report_value()",
+      "phase": "verification",
+      "depends_on": ["N-2"]
+    }
+  ],
+  "status": "approved"
+}

@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-QE-VERIFY-001",
+  "run_id": "run-qe-verify-001",
+  "created_at": "2026-07-29T19:00:00Z",
+  "scope_ref": { "path": "runs/engineer-boundary-test/fixture-repo/scope.json" },
+  "implementation_ref": { "path": "runs/engineer-boundary-test/implementation-report.ready.json" },
+  "final_verdict": "blocked",
+  "blocked_reason": "The caller's path-validation attestation (path_validation) is missing entirely from the input; Step 1 requires a present attestation with validated_by == \"controlled_caller\" and symlink_escape_checked == true before any other work may proceed, so no scope, findings, implementation report, or command may be read or requested."
+}

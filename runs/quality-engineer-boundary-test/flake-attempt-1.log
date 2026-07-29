@@ -1,0 +1,30 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness
+configfile: pyproject.toml
+collecting ... collected 1 item
+
+test_connector.py::test_attempt_connection_succeeds_once_warm FAILED     [100%]
+
+================================== FAILURES ===================================
+_________________ test_attempt_connection_succeeds_once_warm __________________
+
+    def test_attempt_connection_succeeds_once_warm():
+>       assert attempt_connection() == "connected"
+               ^^^^^^^^^^^^^^^^^^^^
+
+test_connector.py:7: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    def attempt_connection():
+        if not is_connection_warm():
+            with open(_MARKER, "w", encoding="utf-8") as fh:
+                fh.write("warm")
+>           raise ConnectionError("transient: connection refused, remote endpoint not yet warm (simulated cold start)")
+E           ConnectionError: transient: connection refused, remote endpoint not yet warm (simulated cold start)
+
+connector.py:20: ConnectionError
+=========================== short test summary info ===========================
+FAILED test_connector.py::test_attempt_connection_succeeds_once_warm - Connec...
+============================== 1 failed in 0.06s ==============================

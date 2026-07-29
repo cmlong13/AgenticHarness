@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-QE-VERIFY-PROTECTED",
+  "run_id": "run-qe-verify-protected",
+  "created_at": "2026-07-29T18:15:00Z",
+  "scope_ref": {
+    "path": "runs/engineer-boundary-test/fixture-repo/scope.json"
+  },
+  "findings_ref": {
+    "path": "runs/engineer-boundary-test/fixture-repo/findings.json",
+    "finding_ids": ["F-1"]
+  },
+  "minimal_change_rung": 3,
+  "minimal_change_rationale": "Replaced floor division with ceiling-division; also (erroneously, for this fixture) claims a schema file was touched.",
+  "changed_files": [
+    { "path": "runs/engineer-boundary-test/fixture-repo/fixture-src/calc.py", "change_type": "modified", "lines_added": 1, "lines_removed": 1 },
+    { "path": "harness/schemas/verification-report.schema.json", "change_type": "modified", "lines_added": 2, "lines_removed": 0 }
+  ],
+  "commands": [
+    {
+      "id": "C-1",
+      "stage": "pre_implementation",
+      "command": "pytest test_calc.py -k total_pages_non_exact_multiple_rounds_up",
+      "exit_code": 1,
+      "output_summary": "1 failed, 1 deselected in 0.11s."
+    },
+    {
+      "id": "C-2",
+      "stage": "post_implementation",
+      "command": "pytest test_calc.py",
+      "exit_code": 0,
+      "output_summary": "2 passed in 0.05s."
+    }
+  ],
+  "test_first_evidence": {
+    "pre_implementation_command_id": "C-1",
+    "post_implementation_command_id": "C-2"
+  },
+  "tests": [
+    { "test_file": "runs/engineer-boundary-test/fixture-repo/fixture-src/test_calc.py", "test_name": "test_total_pages_non_exact_multiple_rounds_up", "status": "added" }
+  ],
+  "dependency_changes": [],
+  "status": "ready_for_verification"
+}
