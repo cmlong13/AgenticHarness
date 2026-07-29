@@ -13,9 +13,11 @@ live in [`PROJECT_SPEC.md`](./PROJECT_SPEC.md).
 What exists today:
 - Project directory structure (`.claude/`, `harness/`, `tests/`, `demo-repo/`)
 - Packaging config (`pyproject.toml`)
-- Approved project spec (`PROJECT_SPEC.md`)
+- `PROJECT_SPEC.md` approved and implemented
+- Artifact contracts created, tested, and implemented
+- Subagents: `achitect.md`, `engineer.md`, and `qualityengineer.md` is made
 
-What does not exist yet: subagent definitions, skills, hooks, MCP connectors,
+What does not exist yet: skills, hooks, MCP connectors,
 the `/work` command, the memory loop, and `demo-repo/`'s actual content. None
 of the pipeline phases can be run yet.
 
