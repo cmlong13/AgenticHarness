@@ -476,6 +476,16 @@ def _verification_report_schema() -> dict:
     return load_json(pair.schema_path)
 
 
+def _two_criteria_scope() -> dict:
+    """The stock scope example, plus a second acceptance criterion (AC-2) -- needed to prove
+    coverage checks catch a criterion that a report silently drops."""
+    scope = copy.deepcopy(_load("scope"))
+    scope["acceptance_criteria"].append(
+        {"id": "AC-2", "description": "Second, independent acceptance criterion for coverage tests."}
+    )
+    return scope
+
+
 def test_verification_report_pass_example_still_conforms_to_schema():
     # Guards against a regression in the contract fix: the pre-existing "pass" example (now
     # carrying retry_policy/routed_back_to_engineer, newly required for non-"blocked" verdicts)
@@ -569,6 +579,69 @@ def test_verification_report_inconclusive_without_real_attempts_fails():
 
 
 # ---------------------------------------------------------------------------
+# Schema validation -- criterionResult.attempt_refs conditional requirement
+# (contract fix: 'passed'/'failed'/'blocked' still require a real attempt_ref; 'not_run' may
+# omit the field entirely rather than being forced to carry a fabricated one.)
+# ---------------------------------------------------------------------------
+
+
+def test_verification_report_criterion_result_passed_requires_attempt_refs():
+    schema = _verification_report_schema()
+    doc = copy.deepcopy(_load("verification-report"))
+    del doc["acceptance_criteria_results"][0]["attempt_refs"]
+
+    errors = validate_against_schema(doc, schema, artifact="verification-report (passed, missing attempt_refs)")
+
+    assert any("attempt_refs" in e.message for e in errors)
+
+
+def test_verification_report_criterion_result_passed_rejects_empty_attempt_refs():
+    schema = _verification_report_schema()
+    doc = copy.deepcopy(_load("verification-report"))
+    doc["acceptance_criteria_results"][0]["attempt_refs"] = []
+
+    errors = validate_against_schema(doc, schema, artifact="verification-report (passed, empty attempt_refs)")
+
+    assert errors
+
+
+def test_verification_report_criterion_result_failed_requires_attempt_refs():
+    schema = _verification_report_schema()
+    doc = copy.deepcopy(VERIFICATION_REPORT_FAIL)
+    del doc["acceptance_criteria_results"][0]["attempt_refs"]
+
+    errors = validate_against_schema(doc, schema, artifact="verification-report (failed, missing attempt_refs)")
+
+    assert any("attempt_refs" in e.message for e in errors)
+
+
+def test_verification_report_criterion_result_not_run_may_omit_attempt_refs():
+    schema = _verification_report_schema()
+    doc = copy.deepcopy(VERIFICATION_REPORT_INCONCLUSIVE)
+    doc["acceptance_criteria_results"].append(
+        {
+            "criteria_id": "AC-2",
+            "result": "not_run",
+            "evidence_summary": "Verification stopped once the retry budget on AC-1 was exhausted; AC-2 was never attempted.",
+        }
+    )
+
+    errors = validate_against_schema(doc, schema, artifact="verification-report (not_run, no attempt_refs)")
+
+    assert not errors, "\n".join(str(e) for e in errors)
+
+
+def test_verification_report_criterion_result_not_run_requires_evidence_summary():
+    schema = _verification_report_schema()
+    doc = copy.deepcopy(VERIFICATION_REPORT_INCONCLUSIVE)
+    doc["acceptance_criteria_results"].append({"criteria_id": "AC-2", "result": "not_run"})
+
+    errors = validate_against_schema(doc, schema, artifact="verification-report (not_run, missing evidence_summary)")
+
+    assert any("evidence_summary" in e.message for e in errors)
+
+
+# ---------------------------------------------------------------------------
 # Semantic validation -- verification report (contract fix additions)
 # ---------------------------------------------------------------------------
 
@@ -631,6 +704,112 @@ def test_verification_report_logic_bug_requires_routed_back():
     errors = validate_verification_report_semantics(verification, scope, artifact="verification-report")
 
     assert any("'logic_bug' is present but routed_back_to_engineer.routed is false" in e.message for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# Semantic validation -- verification report, acceptance-criterion coverage
+# (contract fix: acceptance_criteria_results must be a complete, duplicate-free, one-to-one
+# mapping onto scope.json's acceptance_criteria whenever final_verdict isn't a genuine
+# zero-progress 'blocked'.)
+# ---------------------------------------------------------------------------
+
+
+def test_verification_report_duplicate_criteria_id_is_caught():
+    verification = copy.deepcopy(_load("verification-report"))
+    scope = _load("scope")
+    verification["acceptance_criteria_results"].append(copy.deepcopy(verification["acceptance_criteria_results"][0]))
+
+    errors = validate_verification_report_semantics(verification, scope, artifact="verification-report")
+
+    assert any("duplicate criteria_id" in e.message for e in errors)
+
+
+def test_verification_report_pass_omitting_scope_criterion_is_rejected():
+    # The report only covers AC-1 (the stock example); the scope now also has AC-2.
+    verification = copy.deepcopy(_load("verification-report"))
+    scope = _two_criteria_scope()
+
+    errors = validate_verification_report_semantics(verification, scope, artifact="verification-report")
+
+    assert any("scope criterion 'AC-2' is not represented" in e.message for e in errors)
+
+
+def test_verification_report_pass_covering_all_scope_criteria_has_no_errors():
+    verification = copy.deepcopy(_load("verification-report"))
+    scope = _two_criteria_scope()
+    verification["attempts"].append(
+        {
+            "id": "V-2",
+            "command": "pytest demo-repo/tests/test_pagination_extra.py",
+            "exit_code": 0,
+            "classification": "pass",
+            "output_ref": "runs/run-20260722-01/verify-2.log",
+            "retried": False,
+        }
+    )
+    verification["acceptance_criteria_results"].append(
+        {
+            "criteria_id": "AC-2",
+            "result": "passed",
+            "attempt_refs": ["V-2"],
+            "evidence_summary": "Second, independent criterion verified via its own targeted test.",
+        }
+    )
+
+    errors = validate_verification_report_semantics(verification, scope, artifact="verification-report")
+
+    assert not errors, "\n".join(str(e) for e in errors)
+
+
+def test_verification_report_fail_omitting_untested_criterion_is_rejected():
+    verification = copy.deepcopy(VERIFICATION_REPORT_FAIL)
+    scope = _two_criteria_scope()  # AC-2 silently dropped even though verification stopped early
+
+    errors = validate_verification_report_semantics(verification, scope, artifact="verification-report")
+
+    assert any("scope criterion 'AC-2' is not represented" in e.message for e in errors)
+
+
+def test_verification_report_fail_with_honest_not_run_criterion_has_no_coverage_errors():
+    verification = copy.deepcopy(VERIFICATION_REPORT_FAIL)
+    scope = _two_criteria_scope()
+    verification["acceptance_criteria_results"].append(
+        {
+            "criteria_id": "AC-2",
+            "result": "not_run",
+            "evidence_summary": "Verification stopped once AC-1 failed with a deterministic logic_bug; AC-2 was never attempted.",
+        }
+    )
+
+    errors = validate_verification_report_semantics(verification, scope, artifact="verification-report")
+
+    assert not errors, "\n".join(str(e) for e in errors)
+
+
+def test_verification_report_inconclusive_omitting_unresolved_criterion_is_rejected():
+    verification = copy.deepcopy(VERIFICATION_REPORT_INCONCLUSIVE)
+    scope = _two_criteria_scope()  # AC-2 never appears, not even as 'blocked'/'not_run'
+
+    errors = validate_verification_report_semantics(verification, scope, artifact="verification-report")
+
+    assert any("scope criterion 'AC-2' is not represented" in e.message for e in errors)
+
+
+def test_verification_report_not_run_criterion_has_no_semantic_errors():
+    # Honest "not_run" needs no attempt_refs and no fabricated attempt to point at.
+    verification = copy.deepcopy(VERIFICATION_REPORT_INCONCLUSIVE)
+    scope = _two_criteria_scope()
+    verification["acceptance_criteria_results"].append(
+        {
+            "criteria_id": "AC-2",
+            "result": "not_run",
+            "evidence_summary": "Verification stopped after the retry budget on AC-1 was exhausted; AC-2 was never attempted.",
+        }
+    )
+
+    errors = validate_verification_report_semantics(verification, scope, artifact="verification-report")
+
+    assert not errors, "\n".join(str(e) for e in errors)
 
 
 # ---------------------------------------------------------------------------

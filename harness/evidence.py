@@ -237,6 +237,35 @@ def validate_verification_report_semantics(
     attempt_ids = {a["id"] for a in attempts if "id" in a}
     criteria_ids = {c["id"] for c in scope_doc.get("acceptance_criteria", []) if "id" in c}
 
+    # A criterion covered twice is exactly as dishonest as one silently dropped -- both hide the
+    # true one-to-one mapping to scope.json's acceptance_criteria.
+    criterion_dupes = _duplicate_ids(criterion_results, id_key="criteria_id")
+    for idx, result in enumerate(criterion_results):
+        if result.get("criteria_id") in criterion_dupes:
+            errors.append(
+                ValidationError(
+                    artifact,
+                    f"$.acceptance_criteria_results[{idx}].criteria_id",
+                    f"duplicate criteria_id {result.get('criteria_id')!r} in acceptance_criteria_results",
+                )
+            )
+
+    # A non-"blocked" verdict (schema-required to carry acceptance_criteria_results at all) must
+    # still represent every scope criterion exactly once -- a criterion the verification never
+    # reached must appear honestly as 'blocked'/'not_run', not be silently omitted. Only
+    # meaningful when criterion_results is actually present, so a genuine zero-progress
+    # "blocked" report (which omits the field entirely) is naturally exempt.
+    if final_verdict in ("pass", "fail", "inconclusive") and criterion_results:
+        covered_ids = {r.get("criteria_id") for r in criterion_results}
+        for missing_id in sorted(criteria_ids - covered_ids):
+            errors.append(
+                ValidationError(
+                    artifact,
+                    "$.acceptance_criteria_results",
+                    f"final_verdict {final_verdict!r} but scope criterion {missing_id!r} is not represented in acceptance_criteria_results",
+                )
+            )
+
     for idx, result in enumerate(criterion_results):
         criteria_id = result.get("criteria_id")
         if criteria_id not in criteria_ids:
