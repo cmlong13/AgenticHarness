@@ -1,8 +1,8 @@
 # Project Spec: Agentic Coding Harness
 
-Status: **Implementation in progress — artifact contracts, validation, the read-only Architect
-subagent, and the Engineer subagent (both with independently verified permission boundaries)
-are complete; Quality Engineer subagent not yet implemented.**
+Status: **Implementation in progress — artifact contracts, validation, and all three phase
+subagents (Architect, Engineer, Quality Engineer, each with independently verified permission
+boundaries) are complete.**
 
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
@@ -93,12 +93,21 @@ reused rather than reimplemented.
   (5) only then write the minimum new code, without cutting input validation, data-loss-safety,
   or security checks. Writes one failing test first per new/changed behavior (TDD). Extends
   rather than replaces working code.
-- `quality-engineer.md` — Verification. Test tools only; cannot modify source (fixes route back
-  to the engineer). Runs the narrowest test command that validates the change. Classifies every
-  failure as logic bug / infrastructure flake / environment before reporting. Retries
-  infrastructure failures with backoff (max 3); never retries logic failures. Every verdict is
-  backed by evidence (exit codes, report paths, coverage numbers) — "tests pass" alone is not a
-  verdict.
+- `quality-engineer.md` — Verification. `Read, Grep, Glob` only — no `Edit`/`Write`/`Bash`, so it
+  cannot modify source at the tool layer at all (fixes route back to the Engineer). Reuses the
+  Engineer's caller-mediated staged-command precedent: it never executes anything itself, only
+  requests exact commands (`attempt_requested`) that the controlled caller runs and reports real
+  exit codes/output for. Independently cross-checks the implementation report's own
+  `findings_ref.path` against the caller-supplied one before trusting it, and checks
+  `changed_files` against the Protected Path list before verifying anything, both returning a
+  schema-valid `blocked` report on failure. Runs the narrowest test command that validates the
+  change. Classifies every failure as logic bug / infrastructure flake / environment before
+  reporting. Retries only evidence-supported infrastructure flakes (`max_retries: 2`); never
+  retries logic or environment failures. Every verdict is backed by evidence (exit codes, output
+  refs) — "tests pass" alone is not a verdict. Independently verified live: it caught a
+  deliberately false "tests pass" claim in a crafted implementation report by re-running the
+  command for real, diagnosed the actual root cause from source, and routed it back
+  (`docs/quality-engineer-permission-verification.md`).
 
 ### Skills (≥4 packs)
 - `github/` — small single-purpose skills: `pr-create`, `read-file`, `search-code`,
@@ -261,8 +270,8 @@ AgenticHarness/
 2. Artifact contracts, valid examples, schema validation, and semantic validation — **COMPLETE**.
 3. Architect subagent and permission-boundary verification — **COMPLETE**.
 4. Engineer subagent design, implementation, and permission verification — **COMPLETE**.
-   Quality Engineer subagent design, implementation, and permission verification — **NEXT**.
-5. Code-craftsmanship and test-runner skills.
+   Quality Engineer subagent design, implementation, and permission verification — **COMPLETE**.
+5. Code-craftsmanship and test-runner skills — **NEXT**.
 6. Build or import the real target repository with at least 50 files.
 7. Orchestrator skill and `/work` free-form prompt mode.
 8. Checkpoint, memory loop, pre-dispatch hook, and completion guardrail.
@@ -388,58 +397,71 @@ Demonstrated live, on a repo with ≥50 files:
   real `git diff --no-index` diff. An unplanned tooling mistake (resuming the wrong way)
   produced genuine evidence that a fresh, non-continued Engineer instance detects a broken
   handoff and refuses to fabricate continuity rather than proceeding.
-- `tests/test_agent_definitions.py` (24 tests, stdlib-only frontmatter parsing, no YAML
-  dependency added) independently re-verifies the Engineer's and Architect's tool allowlists and
-  re-validates every saved boundary-test report.
-- 62 total tests passing (38 artifact-contract + 24 agent-definition).
-- The working tree is clean and local `main` matches `origin/main`.
+- `tests/test_agent_definitions.py` independently re-verifies the Architect's, Engineer's, and
+  Quality Engineer's tool allowlists and re-validates every saved boundary-test report.
+- Verification-phase Quality Engineer subagent implemented at
+  `.claude/agents/quality-engineer.md`, restricted to `Read, Grep, Glob` — confirmed both via the
+  frontmatter and via Claude Code's own runtime agent-type listing, resolving the
+  permission-design question below in favor of the narrowest option: no shell/test-runner tool
+  at all, full reuse of the Engineer's caller-mediated staged-command protocol
+  (`attempt_requested` / `command_result`), adapted for verification instead of implementation.
+- The Quality Engineer never trusts the implementation report on faith: it independently
+  cross-checks the implementation report's own `findings_ref.path` against the caller-supplied
+  `findings_ref.path` before reading anything else, and checks every `changed_files` entry
+  against the same fixed Protected Path list the Engineer is bound to — both return a
+  schema-valid `blocked` report on failure, before any command is requested.
+- A command-safety denylist (`>`, `>>`, `;`, `&&`, `||`, backticks, `$(`) blocks the Quality
+  Engineer from ever requesting a mutating or shell-composed command; live-tested by suggesting
+  an unsafe redirected command and confirming it declined and requested the safe equivalent
+  instead.
+- `retry_policy.max_retries` is fixed at `2`, reserved exclusively for evidence-supported
+  `infrastructure_flake` classifications — never for `logic_bug` or `environment` failures.
+- Quality Engineer permission-boundary and staged-protocol verification is documented at
+  `docs/quality-engineer-permission-verification.md`, run live against retained fixtures at
+  `runs/quality-engineer-boundary-test/`: missing-attestation, false-attestation, findings_ref
+  mismatch, blocked-implementation-input, and Protected-Path-claim cases all correctly returned
+  schema-valid `blocked` reports with zero tool calls or zero command requests; a real happy-path
+  run produced a genuine `pass` verdict from a real `pytest` exit code; a command-safety test
+  confirmed it declines an unsafe caller-suggested command. Most notably, a deliberately
+  dishonest implementation report (claiming a test passed when it did not) was independently
+  re-executed for real, found to genuinely fail, root-caused by reading the actual source code
+  unprompted, and correctly routed back to the Engineer with an accurate reason — direct evidence
+  the design fulfills the "no phase consumes the previous phase's output on trust" cardinal rule.
+  A real gap (the final report wasn't required to be raw, unfenced JSON) was found and fixed
+  mid-verification; every test after the fix returned clean raw JSON.
+- Infrastructure-flake retry and environment-failure cases were also independently verified live,
+  against a genuine reproducible transient failure (a marker-file-backed cold connection that
+  fails once with real `ConnectionError` evidence and passes on a real, unmodified-source retry)
+  and a genuine deterministic missing-dependency failure (`ModuleNotFoundError` at collection
+  time). The Quality Engineer classified the first `infrastructure_flake`, retried the identical
+  command once (within `max_retries: 2`), marked only the retry `retried: true`, and produced a
+  schema-valid `pass` report once the retry genuinely passed. It classified the second
+  `environment`, never retried it, never routed it back as a `logic_bug`, and produced a
+  schema-valid `inconclusive` report. Verifying this live surfaced and fixed a real design bug in
+  `quality-engineer.md`: its original wording would have required *every* attempt targeting a
+  criterion to be `"pass"`, which would have wrongly kept a resolved flake from ever reading as
+  `passed`; Step 11 now judges a criterion by its most recent attempt instead.
+- pytest is now configured with `testpaths = ["tests"]` in `pyproject.toml`, so the default
+  `python -m pytest` command collects only the real project suite and does not sweep in the
+  retained boundary fixtures under `runs/` (including the fixture that is intentionally left
+  failing — `runs/quality-engineer-boundary-test/fixture-repo-2/fixture-src/test_strings.py` —
+  which remains available for explicit targeted execution, e.g.
+  `pytest runs/quality-engineer-boundary-test/fixture-repo-2/fixture-src/test_strings.py`).
+- 116 total tests passing (73 artifact-contract + 43 agent-definition; the artifact-contract
+  count grew from 38 via two unrelated, already-committed contract fixes that predate the Quality
+  Engineer work).
+- **None of this is committed yet.** The Quality Engineer implementation is approved in
+  direction but was explicitly held back from commit pending this final verification and cleanup
+  pass. Do not assume the working tree is clean or that local `main` matches `origin/main` from
+  this document alone — check `git status` for the current state.
 
 ### Immediate next milestone
 
-Design and implement:
-
-- `.claude/agents/quality-engineer.md`
-
-This milestone is design-and-boundary work first, matching the process used for the Architect
-and Engineer; implementation happens in a later, separate step.
-
-#### Quality Engineer — intended boundaries
-
-- Performs only the Verification phase.
-- Receives `scope.json`, `findings.json`, `implementation-report.json`, and the implementation
-  diff.
-- Independently verifies acceptance criteria.
-- Runs the narrowest sufficient test commands.
-- Records exact commands, exit codes, output references, classifications, and criterion-level
-  results in `verification-report.json`.
-- May classify the final result as pass, fail, blocked, or inconclusive.
-- Must not modify application source code.
-- Must not modify implementation tests merely to make them pass.
-- Must not install dependencies.
-- Must not commit or push.
-- Must route implementation defects back to the Engineer.
-- Its ability to run tests may require a restricted shell or test-runner capability, so its
-  permission design must distinguish executable test access from general source-edit access.
-
-#### Permission-design requirement for the next design review
-
-Before implementation begins, the next design review must determine:
-
-- The exact tool allowlist for the Quality Engineer.
-- Which restrictions are technically enforced.
-- Which restrictions remain behavioral.
-- Whether the Quality Engineer can receive a narrowly controlled testing capability rather than
-  unrestricted shell access — the Engineer's caller-mediated staged command protocol
-  (`docs/engineer-permission-verification.md`) is the precedent to reuse or adapt: the subagent
-  never executes commands itself, only requests exact commands that the controlled caller runs
-  and reports real evidence for.
-- How verification outputs will be returned, validated, and persisted — the Engineer's
-  intermediate-protocol-vs-final-artifact split (structured request/reply envelopes distinct
-  from the schema-exact `implementation-report.json`) is the precedent to reuse or adapt.
-
-Do not assume Claude Code supports path-specific write restrictions without verifying it — for
-the Engineer this was confirmed false (Edit/Write path scoping is behavioral only, per
-`docs/engineer-permission-verification.md`'s "Known limitations").
+Build the code-craftsmanship and test-runner skills (`.claude/skills/code-craftsmanship/`,
+`.claude/skills/test-runner/`), per the eight-day plan's Day 3 target below. All three phase
+subagents (Architect, Engineer, Quality Engineer) are now implemented and independently
+permission-verified — orchestration (the `/work` command and the Discovery-phase orchestrator
+skill) is the next major milestone after skills and the demo repository.
 
 ### Eight-day MVP planning target
 
@@ -458,9 +480,9 @@ documentation may require additional time after the working MVP closes.
 
 ### Following milestones
 
-1. Engineer agent.
-2. Quality Engineer agent.
-3. Code-craftsmanship and test-runner skills.
+1. ~~Engineer agent.~~ **COMPLETE**
+2. ~~Quality Engineer agent.~~ **COMPLETE**
+3. Code-craftsmanship and test-runner skills. **NEXT**
 4. Demo repository.
 5. Orchestrator and `/work` prompt mode.
 6. Checkpoint, memory, and guardrail hooks.
