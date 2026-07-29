@@ -19,6 +19,7 @@
       "retried": false
     }
   ],
+  "retry_policy": { "max_retries": 2 },
   "acceptance_criteria_results": [
     {
       "criteria_id": "AC-1",
@@ -27,5 +28,6 @@
       "evidence_summary": "All pagination tests pass, including the new boundary test added for AC-1."
     }
   ],
-  "final_verdict": "pass"
+  "final_verdict": "pass",
+  "routed_back_to_engineer": { "routed": false }
 }

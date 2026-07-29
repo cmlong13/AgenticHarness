@@ -11,8 +11,6 @@
     "created_at",
     "scope_ref",
     "implementation_ref",
-    "attempts",
-    "acceptance_criteria_results",
     "final_verdict"
   ],
   "properties": {
@@ -50,6 +48,7 @@
       "items": { "$ref": "#/$defs/criterionResult" }
     },
     "final_verdict": { "enum": ["pass", "fail", "blocked", "inconclusive"] },
+    "blocked_reason": { "type": "string", "minLength": 1 },
     "routed_back_to_engineer": {
       "type": "object",
       "additionalProperties": false,
@@ -66,6 +65,16 @@
         "required": ["reason"]
       }
     }
+  },
+  "if": {
+    "properties": { "final_verdict": { "const": "blocked" } },
+    "required": ["final_verdict"]
+  },
+  "then": {
+    "required": ["blocked_reason"]
+  },
+  "else": {
+    "required": ["attempts", "acceptance_criteria_results", "retry_policy", "routed_back_to_engineer"]
   },
   "$defs": {
     "artifactRef": {
@@ -118,5 +127,5 @@
       }
     }
   },
-  "$comment": "Semantic rules not enforced here (deferred to the future Python validator): (1) attempts[].id must be unique within this array; (2) acceptance_criteria_results[].criteria_id must resolve to an acceptance_criteria[].id in the scope.json at scope_ref.path; (3) acceptance_criteria_results[].attempt_refs must resolve to ids present in attempts[]."
+  "$comment": "Semantic rules not enforced here (deferred to the future Python validator): (1) attempts[].id must be unique within this array; (2) acceptance_criteria_results[].criteria_id must resolve to an acceptance_criteria[].id in the scope.json at scope_ref.path; (3) acceptance_criteria_results[].attempt_refs must resolve to ids present in attempts[]; (4) when final_verdict is 'pass', every acceptance_criteria_results[].result must be 'passed'; (5) when final_verdict is 'fail', at least one acceptance_criteria_results[].result must be 'failed'; (6) an attempts[] entry classified 'logic_bug' must not have retried == true, since logic bugs are never retried; (7) routed_back_to_engineer.routed must be true if and only if at least one attempts[] entry is classified 'logic_bug'. Rules (1)-(3) and (6)-(7) apply only when the corresponding array/object is actually present in the instance -- a 'blocked' report that omits attempts/acceptance_criteria_results/routed_back_to_engineer, per the status-conditional 'required' fields above, is exempt from all of these, matching the same zero-progress 'blocked' pattern already used in implementation-report.schema.json."
 }

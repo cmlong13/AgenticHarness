@@ -386,6 +386,254 @@ def test_verification_report_attempt_refs_must_resolve():
 
 
 # ---------------------------------------------------------------------------
+# Schema validation -- verification report, status-conditional requirements
+# (verification-report.schema.json contract fix: a genuine zero-progress "blocked" report
+# must not be forced to fabricate attempts/acceptance_criteria_results it never produced.)
+# ---------------------------------------------------------------------------
+
+# An honest "blocked" report reflecting zero real progress -- e.g. the caller's path_validation
+# attestation was missing/false, or the implementation report itself never reached
+# ready_for_verification, so no test command was ever requested. Must be valid without
+# fabricating attempts, acceptance_criteria_results, retry_policy, or routed_back_to_engineer.
+VERIFICATION_REPORT_ZERO_PROGRESS_BLOCKED = {
+    "schema_version": "1.0",
+    "task_id": "T-003",
+    "run_id": "run-block-02",
+    "created_at": "2026-07-28T00:00:00Z",
+    "scope_ref": {"path": "runs/run-block-02/scope.json"},
+    "implementation_ref": {"path": "runs/run-block-02/implementation-report.json"},
+    "final_verdict": "blocked",
+    "blocked_reason": "path_validation attestation was missing; no test command was ever requested.",
+}
+
+# A "fail" report backed by real, evidence-shaped logic_bug evidence -- reused across several
+# tests below rather than re-declared per test.
+VERIFICATION_REPORT_FAIL = {
+    "schema_version": "1.0",
+    "task_id": "T-004",
+    "run_id": "run-fail-01",
+    "created_at": "2026-07-28T01:00:00Z",
+    "scope_ref": {"path": "runs/run-fail-01/scope.json"},
+    "implementation_ref": {"path": "runs/run-fail-01/implementation-report.json"},
+    "attempts": [
+        {
+            "id": "V-1",
+            "command": "pytest demo-repo/tests/test_pagination.py",
+            "exit_code": 1,
+            "classification": "logic_bug",
+            "output_ref": "runs/run-fail-01/verify-1.log",
+            "retried": False,
+        }
+    ],
+    "retry_policy": {"max_retries": 2},
+    "acceptance_criteria_results": [
+        {
+            "criteria_id": "AC-1",
+            "result": "failed",
+            "attempt_refs": ["V-1"],
+            "evidence_summary": "total_pages() undercounts for non-exact multiples; AssertionError comparing 2 == 3.",
+        }
+    ],
+    "final_verdict": "fail",
+    "routed_back_to_engineer": {"routed": True, "reason": "total_pages() has a floor-division logic defect."},
+}
+
+# A schema-valid "inconclusive" report -- used only to prove attempts/acceptance_criteria_results
+# remain required (unlike "blocked") for this final_verdict too.
+VERIFICATION_REPORT_INCONCLUSIVE = {
+    "schema_version": "1.0",
+    "task_id": "T-005",
+    "run_id": "run-inconclusive-01",
+    "created_at": "2026-07-28T02:00:00Z",
+    "scope_ref": {"path": "runs/run-inconclusive-01/scope.json"},
+    "implementation_ref": {"path": "runs/run-inconclusive-01/implementation-report.json"},
+    "attempts": [
+        {
+            "id": "V-1",
+            "command": "pytest demo-repo/tests/test_pagination.py",
+            "exit_code": 1,
+            "classification": "infrastructure_flake",
+            "output_ref": "runs/run-inconclusive-01/verify-1.log",
+            "retried": False,
+        }
+    ],
+    "retry_policy": {"max_retries": 2},
+    "acceptance_criteria_results": [
+        {
+            "criteria_id": "AC-1",
+            "result": "blocked",
+            "attempt_refs": ["V-1"],
+            "evidence_summary": "Retry budget exhausted on a suspected flake without a clean pass or reproducible failure.",
+        }
+    ],
+    "final_verdict": "inconclusive",
+    "routed_back_to_engineer": {"routed": False},
+}
+
+
+def _verification_report_schema() -> dict:
+    pair = next(p for p in COMPLETE_PAIRS if p.name == "verification-report")
+    return load_json(pair.schema_path)
+
+
+def test_verification_report_pass_example_still_conforms_to_schema():
+    # Guards against a regression in the contract fix: the pre-existing "pass" example (now
+    # carrying retry_policy/routed_back_to_engineer, newly required for non-"blocked" verdicts)
+    # must still validate cleanly.
+    schema = _verification_report_schema()
+    instance = _load("verification-report")
+
+    errors = validate_against_schema(instance, schema, artifact="verification-report.example.json")
+
+    assert not errors, "\n".join(str(e) for e in errors)
+
+
+def test_verification_report_zero_progress_blocked_is_schema_valid():
+    schema = _verification_report_schema()
+
+    errors = validate_against_schema(
+        VERIFICATION_REPORT_ZERO_PROGRESS_BLOCKED, schema, artifact="verification-report (zero-progress blocked)"
+    )
+
+    assert not errors, "\n".join(str(e) for e in errors)
+
+
+def test_verification_report_blocked_without_blocked_reason_fails():
+    schema = _verification_report_schema()
+    doc = copy.deepcopy(VERIFICATION_REPORT_ZERO_PROGRESS_BLOCKED)
+    del doc["blocked_reason"]
+
+    errors = validate_against_schema(doc, schema, artifact="verification-report (blocked, no reason)")
+
+    assert any("blocked_reason" in e.message for e in errors)
+
+
+def test_verification_report_blocked_does_not_require_attempts():
+    schema = _verification_report_schema()
+    doc = copy.deepcopy(VERIFICATION_REPORT_ZERO_PROGRESS_BLOCKED)
+    assert "attempts" not in doc
+
+    errors = validate_against_schema(doc, schema, artifact="verification-report (blocked, no attempts)")
+
+    assert not errors, "\n".join(str(e) for e in errors)
+
+
+def test_verification_report_blocked_does_not_require_acceptance_criteria_results():
+    schema = _verification_report_schema()
+    doc = copy.deepcopy(VERIFICATION_REPORT_ZERO_PROGRESS_BLOCKED)
+    assert "acceptance_criteria_results" not in doc
+
+    errors = validate_against_schema(doc, schema, artifact="verification-report (blocked, no criteria results)")
+
+    assert not errors, "\n".join(str(e) for e in errors)
+
+
+def test_verification_report_pass_without_attempts_fails():
+    schema = _verification_report_schema()
+    doc = copy.deepcopy(_load("verification-report"))
+    del doc["attempts"]
+
+    errors = validate_against_schema(doc, schema, artifact="verification-report (pass, missing attempts)")
+
+    assert any("attempts" in e.message for e in errors)
+
+
+def test_verification_report_pass_without_acceptance_criteria_results_fails():
+    schema = _verification_report_schema()
+    doc = copy.deepcopy(_load("verification-report"))
+    del doc["acceptance_criteria_results"]
+
+    errors = validate_against_schema(doc, schema, artifact="verification-report (pass, missing criteria results)")
+
+    assert any("acceptance_criteria_results" in e.message for e in errors)
+
+
+def test_verification_report_fail_without_attempts_fails():
+    schema = _verification_report_schema()
+    doc = copy.deepcopy(VERIFICATION_REPORT_FAIL)
+    del doc["attempts"]
+
+    errors = validate_against_schema(doc, schema, artifact="verification-report (fail, missing attempts)")
+
+    assert any("attempts" in e.message for e in errors)
+
+
+def test_verification_report_inconclusive_without_real_attempts_fails():
+    schema = _verification_report_schema()
+    doc = copy.deepcopy(VERIFICATION_REPORT_INCONCLUSIVE)
+    del doc["attempts"]
+
+    errors = validate_against_schema(doc, schema, artifact="verification-report (inconclusive, missing attempts)")
+
+    assert any("attempts" in e.message for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# Semantic validation -- verification report (contract fix additions)
+# ---------------------------------------------------------------------------
+
+
+def test_verification_report_blocked_report_has_no_semantic_errors():
+    # The core "no false missing-attempt errors" guarantee: a genuine zero-progress blocked
+    # report, run through the semantic validator with no scope doc available, produces nothing.
+    errors = validate_verification_report_semantics(
+        VERIFICATION_REPORT_ZERO_PROGRESS_BLOCKED, scope_doc={}, artifact="verification-report (zero-progress blocked)"
+    )
+
+    assert not errors, "\n".join(str(e) for e in errors)
+
+
+def test_verification_report_pass_with_failed_criterion_is_rejected():
+    verification = copy.deepcopy(_load("verification-report"))
+    scope = _load("scope")
+    verification["acceptance_criteria_results"][0]["result"] = "failed"
+
+    errors = validate_verification_report_semantics(verification, scope, artifact="verification-report")
+
+    assert any("final_verdict is 'pass'" in e.message and "not 'passed'" in e.message for e in errors)
+
+
+def test_verification_report_fail_without_any_failed_criterion_is_rejected():
+    verification = copy.deepcopy(VERIFICATION_REPORT_FAIL)
+    scope = _load("scope")
+    verification["acceptance_criteria_results"][0]["result"] = "passed"
+
+    errors = validate_verification_report_semantics(verification, scope, artifact="verification-report")
+
+    assert any("final_verdict is 'fail'" in e.message and "no acceptance_criteria_results entry has result 'failed'" in e.message for e in errors)
+
+
+def test_verification_report_logic_bug_must_not_be_retried():
+    verification = copy.deepcopy(VERIFICATION_REPORT_FAIL)
+    scope = _load("scope")
+    verification["attempts"][0]["retried"] = True
+
+    errors = validate_verification_report_semantics(verification, scope, artifact="verification-report")
+
+    assert any("logic_bug' must not be marked retried" in e.message for e in errors)
+
+
+def test_verification_report_routed_back_requires_logic_bug_evidence():
+    verification = copy.deepcopy(_load("verification-report"))  # a "pass" report, no logic_bug attempts
+    scope = _load("scope")
+    verification["routed_back_to_engineer"] = {"routed": True, "reason": "fabricated"}
+
+    errors = validate_verification_report_semantics(verification, scope, artifact="verification-report")
+
+    assert any("routed_back_to_engineer.routed is true but no attempt has classification 'logic_bug'" in e.message for e in errors)
+
+
+def test_verification_report_logic_bug_requires_routed_back():
+    verification = copy.deepcopy(VERIFICATION_REPORT_FAIL)
+    scope = _load("scope")
+    verification["routed_back_to_engineer"] = {"routed": False}
+
+    errors = validate_verification_report_semantics(verification, scope, artifact="verification-report")
+
+    assert any("'logic_bug' is present but routed_back_to_engineer.routed is false" in e.message for e in errors)
+
+
+# ---------------------------------------------------------------------------
 # Semantic validation -- checkpoint
 # ---------------------------------------------------------------------------
 

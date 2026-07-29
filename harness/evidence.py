@@ -218,7 +218,14 @@ def validate_verification_report_semantics(
     doc: dict, scope_doc: dict, *, artifact: str = "verification-report"
 ) -> list[ValidationError]:
     errors: list[ValidationError] = []
+
+    # attempts and acceptance_criteria_results are both optional on a "blocked" report with no
+    # real progress (per the schema's status-conditional "required" fields) -- defaulting to []
+    # here means every check below naturally no-ops for a genuine zero-progress block instead of
+    # manufacturing "missing" errors for fields that were never required in the first place.
     attempts = doc.get("attempts", [])
+    criterion_results = doc.get("acceptance_criteria_results", [])
+    final_verdict = doc.get("final_verdict")
 
     dupes = _duplicate_ids(attempts)
     for idx, attempt in enumerate(attempts):
@@ -230,7 +237,7 @@ def validate_verification_report_semantics(
     attempt_ids = {a["id"] for a in attempts if "id" in a}
     criteria_ids = {c["id"] for c in scope_doc.get("acceptance_criteria", []) if "id" in c}
 
-    for idx, result in enumerate(doc.get("acceptance_criteria_results", [])):
+    for idx, result in enumerate(criterion_results):
         criteria_id = result.get("criteria_id")
         if criteria_id not in criteria_ids:
             errors.append(
@@ -249,6 +256,69 @@ def validate_verification_report_semantics(
                         f"attempt_refs entry {attempt_ref!r} does not resolve to an existing attempt",
                     )
                 )
+
+    # final_verdict "pass" requires every included criterion result to genuinely be "passed" --
+    # only meaningful when criterion_results is actually present (never on a zero-progress block).
+    if final_verdict == "pass":
+        for idx, result in enumerate(criterion_results):
+            if result.get("result") != "passed":
+                errors.append(
+                    ValidationError(
+                        artifact,
+                        f"$.acceptance_criteria_results[{idx}].result",
+                        f"final_verdict is 'pass' but this criterion result is {result.get('result')!r}, not 'passed'",
+                    )
+                )
+
+    # final_verdict "fail" requires at least one criterion result to genuinely be "failed" -- a
+    # "fail" verdict with no failed criterion anywhere is not evidence-backed.
+    if final_verdict == "fail" and criterion_results:
+        if not any(r.get("result") == "failed" for r in criterion_results):
+            errors.append(
+                ValidationError(
+                    artifact,
+                    "$.final_verdict",
+                    "final_verdict is 'fail' but no acceptance_criteria_results entry has result 'failed'",
+                )
+            )
+
+    # A logic_bug is deterministic by definition -- retrying it is never appropriate, so an
+    # attempt classified logic_bug must never itself be the product of a retry.
+    for idx, attempt in enumerate(attempts):
+        if attempt.get("classification") == "logic_bug" and attempt.get("retried") is True:
+            errors.append(
+                ValidationError(
+                    artifact,
+                    f"$.attempts[{idx}].retried",
+                    "an attempt classified 'logic_bug' must not be marked retried -- logic bugs are never retried",
+                )
+            )
+
+    # routed_back_to_engineer must be evidence-backed in both directions: claiming a route-back
+    # with no logic_bug attempt is fabricated, and finding a logic_bug without routing back
+    # contradicts the requirement to hand implementation defects back to the Engineer rather than
+    # fix them directly. Only checked when the field is actually present (optional on "blocked").
+    routed_info = doc.get("routed_back_to_engineer")
+    if routed_info is not None:
+        has_logic_bug = any(a.get("classification") == "logic_bug" for a in attempts)
+        routed = routed_info.get("routed")
+        if routed is True and not has_logic_bug:
+            errors.append(
+                ValidationError(
+                    artifact,
+                    "$.routed_back_to_engineer.routed",
+                    "routed_back_to_engineer.routed is true but no attempt has classification 'logic_bug' to justify it",
+                )
+            )
+        if routed is False and has_logic_bug:
+            errors.append(
+                ValidationError(
+                    artifact,
+                    "$.routed_back_to_engineer.routed",
+                    "an attempt classified 'logic_bug' is present but routed_back_to_engineer.routed is false",
+                )
+            )
+
     return errors
 
 
