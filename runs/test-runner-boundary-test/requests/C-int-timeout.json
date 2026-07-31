@@ -1,0 +1,8 @@
+{
+  "task_id": "T-BOUNDARY", "run_id": "test-runner-boundary-test", "command_id": "C-int-timeout",
+  "command": "python -m pytest test_sleep.py -v",
+  "working_directory": "runs/test-runner-boundary-test/fixture-repo/fixture-src",
+  "target_repo_path": "runs/test-runner-boundary-test/fixture-repo",
+  "purpose": "boundary evidence: real timeout -> 124",
+  "timeout_seconds": 2
+}

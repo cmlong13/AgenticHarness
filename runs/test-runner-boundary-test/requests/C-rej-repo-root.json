@@ -1,0 +1,7 @@
+{
+  "task_id": "T-BOUNDARY", "run_id": "test-runner-boundary-test", "command_id": "C-rej-repo-root",
+  "command": "python -m pytest .",
+  "working_directory": "runs/test-runner-boundary-test/fixture-repo",
+  "target_repo_path": "runs/test-runner-boundary-test/fixture-repo",
+  "purpose": "boundary evidence: positional resolving to target_repo_path itself via '.' rejected"
+}

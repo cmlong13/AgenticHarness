@@ -1,0 +1,7 @@
+{
+  "task_id": "T-BOUNDARY", "run_id": "test-runner-boundary-test", "command_id": "C-int-mutate",
+  "command": "python -m pytest test_mutates_but_passes.py -v",
+  "working_directory": "runs/test-runner-boundary-test/fixture-repo/fixture-src",
+  "target_repo_path": "runs/test-runner-boundary-test/fixture-repo",
+  "purpose": "boundary evidence: passing pytest run that persistently mutates a sibling file -> 125"
+}

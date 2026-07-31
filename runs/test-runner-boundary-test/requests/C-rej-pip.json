@@ -1,0 +1,7 @@
+{
+  "task_id": "T-BOUNDARY", "run_id": "test-runner-boundary-test", "command_id": "C-rej-pip",
+  "command": "python -m pip install requests",
+  "working_directory": "runs/test-runner-boundary-test/fixture-repo/fixture-src",
+  "target_repo_path": "runs/test-runner-boundary-test/fixture-repo",
+  "purpose": "boundary evidence: pip module rejected"
+}

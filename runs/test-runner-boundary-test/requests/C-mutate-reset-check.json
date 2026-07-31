@@ -1,0 +1,7 @@
+{
+  "task_id": "T-BOUNDARY", "run_id": "test-runner-boundary-test", "command_id": "C-mutate-reset-check",
+  "command": "python -m pytest test_mutates_but_passes.py -v",
+  "working_directory": "runs/test-runner-boundary-test/fixture-repo/fixture-src",
+  "target_repo_path": "runs/test-runner-boundary-test/fixture-repo",
+  "purpose": "post-restart fixture-reproducibility check: confirm mutation is deterministically re-detected from a reset baseline"
+}

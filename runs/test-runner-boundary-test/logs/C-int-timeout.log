@@ -1,0 +1,21 @@
+command: python -m pytest test_sleep.py -v
+executed_as: C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe -m pytest test_sleep.py -v
+working_directory: runs/test-runner-boundary-test/fixture-repo/fixture-src
+timeout_seconds: 2
+real_pytest_exit_code: unknown
+reported_exit_code: 124
+[wrapper] terminated after exceeding timeout_seconds; exit_code 124 is a wrapper-assigned sentinel (matching the conventional timeout(1) exit code), not the child process's own exit status.
+
+--- STDOUT ---
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness
+configfile: pyproject.toml
+collecting ... collected 1 item
+
+test_sleep.py::test_sleeps_past_timeout 
+--- STDERR ---
+
+--- MUTATION CHECK ---
+no persistent non-cache file addition, deletion, or modification detected

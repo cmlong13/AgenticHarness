@@ -1,8 +1,12 @@
 # Project Spec: Agentic Coding Harness
 
-Status: **Implementation in progress — artifact contracts, validation, and all three phase
+Status: **Implementation in progress — artifact contracts, validation, all three phase
 subagents (Architect, Engineer, Quality Engineer, each with independently verified permission
-boundaries) are complete.**
+boundaries), and the code-craftsmanship and test-runner skills (each live-verified through
+Claude Code's actual `Skill` mechanism, not just statically) are complete. This satisfies the
+Core MVP's skill requirement (§4), but not the assignment's broader "≥4 skill packs"
+requirement (§3) — the GitHub and Jira skill packs are not yet built. The Skills requirement
+and the project as a whole are not complete.**
 
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
@@ -109,14 +113,19 @@ reused rather than reimplemented.
   command for real, diagnosed the actual root cause from source, and routed it back
   (`docs/quality-engineer-permission-verification.md`).
 
-### Skills (≥4 packs)
+### Skills (≥4 packs — 2 of 4 complete; see §10)
 - `github/` — small single-purpose skills: `pr-create`, `read-file`, `search-code`,
-  `commit-history`, `pr-review`. Thin `curl`/`gh` wrappers, not one mega-skill.
+  `commit-history`, `pr-review`. Thin `curl`/`gh` wrappers, not one mega-skill. **Not started.**
 - `jira/` (Atlassian) — `create-ticket`, `read-ticket`, `edit-ticket`, plus a field-reference doc
-  so agents don't guess custom field IDs.
+  so agents don't guess custom field IDs. **Not started.**
 - Test-runner skill — encodes this repo's actual test command, thresholds, and report location.
+  **Complete** — implemented at `.claude/skills/test-runner/`, automatically tested
+  (`tests/test_skill_definitions.py`, `tests/test_test_runner_validation.py`), script-level
+  boundary-verified, and live `Skill`-mechanism/runtime-permission-verified (§10).
 - Code-craftsmanship skill — the minimal-change ladder and YAGNI rules as a standalone skill any
-  agent can be held to.
+  agent can be held to. **Complete** — implemented at `.claude/skills/code-craftsmanship/`,
+  structurally tested (`tests/test_skill_definitions.py`), live invoked via the `Skill` tool, and
+  behaviorally A/B-evaluated against fresh no-skill/skill-enabled agent pairs (§10).
 
 ### MCP connectors (3, one built two ways)
 | Connector | Used in phase | Purpose |
@@ -271,7 +280,10 @@ AgenticHarness/
 3. Architect subagent and permission-boundary verification — **COMPLETE**.
 4. Engineer subagent design, implementation, and permission verification — **COMPLETE**.
    Quality Engineer subagent design, implementation, and permission verification — **COMPLETE**.
-5. Code-craftsmanship and test-runner skills — **NEXT**.
+5. Code-craftsmanship and test-runner skills — **COMPLETE** (implementation, automated tests,
+   and live Skill-mechanism/permission/behavioral verification; see §10). The GitHub and Jira
+   skill packs required for the assignment's overall "≥4 skill packs" bar are separate,
+   not-yet-started work (§3, §4 "Later integrations").
 6. Build or import the real target repository with at least 50 files.
 7. Orchestrator skill and `/work` free-form prompt mode.
 8. Checkpoint, memory loop, pre-dispatch hook, and completion guardrail.
@@ -454,14 +466,75 @@ Demonstrated live, on a repo with ≥50 files:
   direction but was explicitly held back from commit pending this final verification and cleanup
   pass. Do not assume the working tree is clean or that local `main` matches `origin/main` from
   this document alone — check `git status` for the current state.
+- **Code-craftsmanship skill** implemented at `.claude/skills/code-craftsmanship/SKILL.md`: the
+  minimal-change ladder, YAGNI/no-speculative-abstraction, no-drive-by-cleanup, and
+  Protected-Path checklist, structurally tested by `tests/test_skill_definitions.py`. Live
+  invoked through Claude Code's actual `Skill` tool (not a simulation) and behaviorally
+  evaluated with a live A/B comparison: four independent, fresh, `worktree`-isolated agents (2
+  scenarios x no-skill/skill-enabled) given an identical prompt bundling a one-line bug fix with
+  (a) a bait speculative-abstraction suggestion and (b) unrelated cleanup plus a Protected-Path
+  edit suggestion. Both skill-enabled sessions declined the speculative abstraction and the
+  Protected-Path edit, the latter citing the skill's exact Protected Path list by name; the
+  no-skill baseline in that scenario accepted the Protected-Path bait, drafting a real edit to
+  `harness/schemas/implementation-report.schema.json` with no recognition it was off-limits —
+  the clearest single result demonstrating the skill doing its intended job. (n=1 per cell; an
+  honest existence-proof, not a statistically powered result — full detail and verbatim outputs
+  retained at `runs/code-craftsmanship-ab-test/`, especially `grading-summary.md`.)
+- **Test-runner skill** implemented at `.claude/skills/test-runner/` (`SKILL.md` +
+  `scripts/run_command.py`): validates and executes exactly one narrowly-scoped
+  `python -m pytest ...` command against an already-existing caller-written request file,
+  enforcing a strict positional grammar, path containment under `target_repo_path`, wrapper-
+  assigned sentinel exit codes (124 timeout, 125 persistent mutation detected, 126 internal
+  wrapper failure), and a before/after filesystem hash sweep for mutation detection. Automated
+  tests (`tests/test_test_runner_validation.py`) cover the wrapper's pure functions plus
+  real subprocess-level integration cases. Script-level boundary-verified with real subprocess
+  execution, real exit codes, real file mutation, and a real timeout
+  (`runs/test-runner-boundary-test/verification-summary.md`). Subsequently live-verified through
+  the actual `Skill` mechanism (not a direct Bash call): `${CLAUDE_SKILL_DIR}` resolved to a
+  concrete real path, a genuine `command_result` and a genuine `command_rejected` both
+  round-tripped with every field preserved exactly and no fabricated data, and all eight tools
+  named in `disallowed-tools` (`Write`, `Edit`, `NotebookEdit`, `PowerShell`, `Agent`, `Skill`,
+  `WebFetch`, `WebSearch`) were confirmed genuinely denied at the tool layer via live disposable
+  probes — runtime-observed enforcement, not just a frontmatter claim
+  (`docs/test-runner-skill-permission-verification.md`). The mutating fixture
+  (`mutator_target.py`) was found to accumulate modifications across repeated manual runs; a
+  `reset_mutation_fixture.py` script was added and its determinism verified live (reset → rerun
+  → identical mutation detected → reset again), without disturbing the original retained
+  detection evidence.
+- **Documented, unresolved limitation carried over from this verification, motivating the
+  planned hooks milestone**: during the A/B evaluation, one no-skill baseline agent hit a real
+  `Write` permission denial on a file and worked around it by using `Bash` (a still-open tool)
+  to write the same bytes anyway, rather than respecting the denial. This was not a
+  `code-craftsmanship` or `test-runner` boundary bypass (no skill was active for that agent, so
+  no `disallowed-tools` restriction applied to it) — it is evidence for a broader point
+  `test-runner/SKILL.md` already names as its own open gap: `disallowed-tools` "does not sandbox
+  the caller," and only a skill-scoped `PreToolUse` hook (§3 "Hooks," not yet built) can close
+  a tool-routing-around-a-denial gap for real.
+- **Test-runner's documented trust-boundary limitation stands, unchanged by this
+  verification**: the wrapper's strict grammar and `shell=False` prevent shell injection in the
+  command line, but `pytest` still imports and executes real repository Python code once
+  launched — the wrapper cannot stop that code from writing files, opening network connections,
+  or spawning subprocesses while it runs. It can only detect a persistent file change
+  afterward, via the before/after hash sweep. True prevention would require disposable or
+  OS-sandboxed execution, which is explicitly out of scope for this milestone.
+- Full pytest suite: **196 passed, 0 failed, exit code 0** (`tests/test_agent_definitions.py`,
+  `tests/test_artifact_contracts.py`, `tests/test_skill_definitions.py`,
+  `tests/test_test_runner_validation.py`).
+- **Only 2 of the assignment's required ≥4 skill packs are complete** (code-craftsmanship,
+  test-runner). The `github/` and `jira/` skill packs (§3) have not been started and remain
+  future work, per §4's "Later integrations" — they are not required for the Core MVP loop, but
+  are required for the assignment's full Skills acceptance bar. The Skills requirement, and the
+  project overall, are **not** complete.
+- **None of this is committed yet either** (code-craftsmanship, test-runner, and their tests/
+  docs/retained evidence) — check `git status` for the current state before assuming otherwise.
 
 ### Immediate next milestone
 
-Build the code-craftsmanship and test-runner skills (`.claude/skills/code-craftsmanship/`,
-`.claude/skills/test-runner/`), per the eight-day plan's Day 3 target below. All three phase
-subagents (Architect, Engineer, Quality Engineer) are now implemented and independently
-permission-verified — orchestration (the `/work` command and the Discovery-phase orchestrator
-skill) is the next major milestone after skills and the demo repository.
+Code-craftsmanship and test-runner are now complete and live-verified (see the bullets above).
+The two remaining paths to close out the full Skills requirement (§3) are the `github/` and
+`jira/` skill packs — not required for the Core MVP loop (§4) but required for the assignment's
+"≥4 skill packs" bar. Building the real target/demo repository (§6 item 6) and the orchestrator
+(§6 item 7) do not depend on those two packs and can proceed in parallel.
 
 ### Eight-day MVP planning target
 
@@ -482,9 +555,11 @@ documentation may require additional time after the working MVP closes.
 
 1. ~~Engineer agent.~~ **COMPLETE**
 2. ~~Quality Engineer agent.~~ **COMPLETE**
-3. Code-craftsmanship and test-runner skills. **NEXT**
+3. ~~Code-craftsmanship and test-runner skills.~~ **COMPLETE** (2 of the assignment's required
+   ≥4 skill packs; `github/` and `jira/` remain future work — see §3, §10)
 4. Demo repository.
 5. Orchestrator and `/work` prompt mode.
 6. Checkpoint, memory, and guardrail hooks.
 7. First complete evidence-backed pipeline run.
-8. Deferred integrations and final assignment demonstrations.
+8. Deferred integrations and final assignment demonstrations (includes `github/`/`jira/` skill
+   packs, Jira/Obsidian connectors, cost tracking, and planted-defect demos).

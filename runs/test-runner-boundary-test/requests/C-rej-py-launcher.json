@@ -1,0 +1,7 @@
+{
+  "task_id": "T-BOUNDARY", "run_id": "test-runner-boundary-test", "command_id": "C-rej-py-launcher",
+  "command": "py -m pytest test_sample.py::test_pass",
+  "working_directory": "runs/test-runner-boundary-test/fixture-repo/fixture-src",
+  "target_repo_path": "runs/test-runner-boundary-test/fixture-repo",
+  "purpose": "boundary evidence: py launcher rejected"
+}

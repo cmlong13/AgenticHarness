@@ -1,0 +1,24 @@
+command: python -m pytest test_mutates_but_passes.py -v
+executed_as: C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe -m pytest test_mutates_but_passes.py -v
+working_directory: runs/test-runner-boundary-test/fixture-repo/fixture-src
+timeout_seconds: 300
+real_pytest_exit_code: 0
+reported_exit_code: 125
+[wrapper] the underlying pytest run's real exit code was 0, but a persistent non-cache file change was detected under target_repo_path, so exit_code 125 (a wrapper policy-violation sentinel, not pytest's own exit status) is reported instead. 125 must never be treated as a normal test result.
+
+--- STDOUT ---
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness
+configfile: pyproject.toml
+collecting ... collected 1 item
+
+test_mutates_but_passes.py::test_appends_to_sibling_but_passes PASSED    [100%]
+
+============================== 1 passed in 0.05s ==============================
+
+--- STDERR ---
+
+--- MUTATION CHECK ---
+[MUTATION DETECTED] non-cache file addition/deletion/modification under target_repo_path: fixture-src\mutator_target.py
