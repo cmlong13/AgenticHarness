@@ -1,0 +1,974 @@
+"""End-to-end tests for harness/orchestrator/core.py using scripted fakes only.
+
+No live Claude Code agent is ever launched here -- every AgentAdapter/TestRunnerAdapter/
+DiscoveryAdapter is the deterministic double from tests/fakes/agent_adapter.py.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+
+from harness.evidence import load_json, validate_against_schema
+from harness.orchestrator import core, evidence_io
+from harness.orchestrator.adapters import UnresumableHandleError
+from harness.orchestrator.state import State
+
+from tests.fakes.agent_adapter import UNRESUMABLE, ScriptedAgentAdapter, ScriptedDiscoveryAdapter, ScriptedTestRunnerAdapter
+
+SCHEMA_DIR = Path(__file__).resolve().parent.parent / "harness" / "schemas"
+
+TASK_ID = "T-1"
+RUN_ID = "run-1"
+CREATED_AT = "2026-08-03T00:00:00Z"
+TARGET_REPO_PATH = "fixture-repo"
+SCOPE_REF = f"runs/{RUN_ID}/scope.json"
+FINDINGS_REF = f"runs/{RUN_ID}/findings.json"
+IMPLEMENTATION_REF = f"runs/{RUN_ID}/implementation-report.json"
+
+
+# ---------------------------------------------------------------------------
+# Fixture builders -- one small, composable helper per artifact/protocol turn.
+# ---------------------------------------------------------------------------
+
+
+def _make_fixture_repo(root: Path) -> None:
+    fixture = root / TARGET_REPO_PATH
+    (fixture / "src").mkdir(parents=True)
+    (fixture / "tests").mkdir(parents=True)
+    (fixture / "src" / "pagination.py").write_text("def paginate():\n    pass\n", encoding="utf-8")
+    (fixture / "tests" / "test_pagination.py").write_text("def test_x():\n    assert True\n", encoding="utf-8")
+
+
+def _scope_dict(*, status="approved", refusal_reason=None, acceptance_criteria=None, in_scope=None) -> dict:
+    doc = {
+        "schema_version": "1.0",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "created_at": CREATED_AT,
+        "source": {"type": "prompt", "raw_prompt": "Fix off-by-one in pagination helper"},
+        "objective": "Fix off-by-one in pagination helper",
+        "in_scope": in_scope
+        or [f"{TARGET_REPO_PATH}/src/pagination.py", f"{TARGET_REPO_PATH}/tests/test_pagination.py"],
+        "out_of_scope": [],
+        "constraints": [],
+        "acceptance_criteria": acceptance_criteria
+        or [{"id": "AC-1", "description": "Existing pagination tests pass; new test covers the off-by-one case"}],
+        "task_graph": [
+            {"id": "N-1", "description": "Research pagination helper", "phase": "research", "depends_on": []},
+            {"id": "N-2", "description": "Fix off-by-one", "phase": "implementation", "depends_on": ["N-1"]},
+            {"id": "N-3", "description": "Verify fix", "phase": "verification", "depends_on": ["N-2"]},
+        ],
+        "status": status,
+    }
+    if refusal_reason is not None:
+        doc["refusal_reason"] = refusal_reason
+    return doc
+
+
+def _findings_dict(*, finding_id="F-1") -> dict:
+    return {
+        "schema_version": "1.0",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "created_at": CREATED_AT,
+        "scope_ref": {"path": SCOPE_REF},
+        "findings": [
+            {
+                "id": finding_id,
+                "claim": "paginate() has an off-by-one boundary bug",
+                "classification": "found",
+                "evidence": [
+                    {
+                        "path": f"{TARGET_REPO_PATH}/src/pagination.py",
+                        "start_line": 1,
+                        "end_line": 2,
+                        "evidence_tier": "executable_code",
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def _engineer_changed_files(*, protected_extra: str | None = None) -> list[dict]:
+    files = [
+        {"path": f"{TARGET_REPO_PATH}/src/pagination.py", "change_type": "modified"},
+        {"path": f"{TARGET_REPO_PATH}/tests/test_pagination.py", "change_type": "modified"},
+    ]
+    if protected_extra:
+        files.append({"path": protected_extra, "change_type": "modified"})
+    return files
+
+
+def _engineer_sequence(
+    *, finding_id="F-1", reused_command_id_bug=False, protected_extra: str | None = None
+) -> list[str]:
+    pre = {
+        "response_type": "pre_test_requested",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "test_created": {
+            "test_file": f"{TARGET_REPO_PATH}/tests/test_pagination.py",
+            "test_name": "test_last_page_boundary",
+            "status": "added",
+        },
+        "requested_command": {
+            "id": "C-1",
+            "command": "python -m pytest tests/test_pagination.py -k boundary",
+            "working_directory": TARGET_REPO_PATH,
+            "expected_outcome": "fail",
+            "expected_failure_reason": "boundary case not yet handled",
+        },
+        "findings_relied_on": [finding_id],
+        "minimal_change_rung_plan": 2,
+    }
+    post = {
+        "response_type": "post_test_requested",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "pre_test_confirmation": {
+            "command_id": "C-1",
+            "reported_exit_code": 1,
+            "failure_reason_confirmed": True,
+            "confirmation_rationale": "matches expected boundary failure",
+        },
+        "changed_files": _engineer_changed_files(protected_extra=protected_extra),
+        "minimal_change_rung": 2,
+        "minimal_change_rationale": "Reused existing paginate() function and fixed boundary arithmetic.",
+        "tests": [
+            {"test_file": f"{TARGET_REPO_PATH}/tests/test_pagination.py", "test_name": "test_last_page_boundary", "status": "added"}
+        ],
+        "dependency_changes": [],
+        "requested_command": {
+            "id": "C-1" if reused_command_id_bug else "C-2",
+            "command": "python -m pytest tests/test_pagination.py",
+            "working_directory": TARGET_REPO_PATH,
+            "expected_outcome": "pass",
+        },
+    }
+    finalization = {
+        "response_type": "finalization_evidence_requested",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "changed_files_known": _engineer_changed_files(protected_extra=protected_extra),
+        "note": "Supply real lines_added/lines_removed.",
+    }
+    changed_files_final = [
+        {"path": f"{TARGET_REPO_PATH}/src/pagination.py", "change_type": "modified", "lines_added": 1, "lines_removed": 1},
+        {"path": f"{TARGET_REPO_PATH}/tests/test_pagination.py", "change_type": "modified", "lines_added": 8, "lines_removed": 0},
+    ]
+    if protected_extra:
+        changed_files_final.append(
+            {"path": protected_extra, "change_type": "modified", "lines_added": 1, "lines_removed": 1}
+        )
+    final = {
+        "schema_version": "1.0",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "created_at": CREATED_AT,
+        "scope_ref": {"path": SCOPE_REF},
+        "findings_ref": {"path": FINDINGS_REF, "finding_ids": [finding_id]},
+        "minimal_change_rung": 2,
+        "minimal_change_rationale": "Reused existing paginate() function and fixed boundary arithmetic.",
+        "changed_files": changed_files_final,
+        "diff_ref": f"runs/{RUN_ID}/diff.patch",
+        "commands": [
+            {
+                "id": "C-1",
+                "stage": "pre_implementation",
+                "command": "python -m pytest tests/test_pagination.py -k boundary",
+                "exit_code": 1,
+                "output_ref": f"runs/{RUN_ID}/logs/C-1.log",
+            },
+            {
+                "id": "C-1" if reused_command_id_bug else "C-2",
+                "stage": "post_implementation",
+                "command": "python -m pytest tests/test_pagination.py",
+                "exit_code": 0,
+                "output_ref": f"runs/{RUN_ID}/logs/C-2.log",
+            },
+        ],
+        "test_first_evidence": {
+            "pre_implementation_command_id": "C-1",
+            "post_implementation_command_id": "C-1" if reused_command_id_bug else "C-2",
+        },
+        "tests": [
+            {"test_file": f"{TARGET_REPO_PATH}/tests/test_pagination.py", "test_name": "test_last_page_boundary", "status": "added"}
+        ],
+        "dependency_changes": [],
+        "status": "ready_for_verification",
+    }
+    return [json.dumps(pre), json.dumps(post), json.dumps(finalization), json.dumps(final)]
+
+
+def _qe_sequence(*, verdict="pass", criteria_ids=("AC-1",)) -> list[str]:
+    attempt = {
+        "response_type": "attempt_requested",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "requested_command": {
+            "id": "V-1",
+            "command": "python -m pytest tests/test_pagination.py",
+            "working_directory": TARGET_REPO_PATH,
+            "criteria_ids_targeted": list(criteria_ids),
+            "rationale": "run pagination tests to verify acceptance criteria",
+        },
+    }
+    if verdict == "pass":
+        exit_code, classification, result = 0, "pass", "passed"
+    elif verdict == "fail":
+        exit_code, classification, result = 1, "logic_bug", "failed"
+    else:  # inconclusive -- an unresolved environment failure, never retried, never "logic_bug"
+        exit_code, classification, result = 1, "environment", "blocked"
+
+    acceptance_criteria_results = [
+        {
+            "criteria_id": cid,
+            "result": result,
+            "attempt_refs": ["V-1"],
+            "evidence_summary": "pagination tests exercised via V-1",
+        }
+        for cid in criteria_ids
+    ]
+    final = {
+        "schema_version": "1.0",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "created_at": CREATED_AT,
+        "scope_ref": {"path": SCOPE_REF},
+        "implementation_ref": {"path": IMPLEMENTATION_REF},
+        "attempts": [
+            {
+                "id": "V-1",
+                "command": "python -m pytest tests/test_pagination.py",
+                "exit_code": exit_code,
+                "classification": classification,
+                "output_ref": f"runs/{RUN_ID}/logs/V-1.log",
+                "retried": False,
+            }
+        ],
+        "retry_policy": {"max_retries": 2},
+        "acceptance_criteria_results": acceptance_criteria_results,
+        "final_verdict": verdict,
+        "routed_back_to_engineer": (
+            {"routed": True, "reason": "AC-1 failed: logic_bug on V-1"} if verdict == "fail" else {"routed": False}
+        ),
+    }
+    return [json.dumps(attempt), json.dumps(final)]
+
+
+def _command_result(command_id, command, working_directory, exit_code) -> dict:
+    return {
+        "message_type": "command_result",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "command_id": command_id,
+        "command": command,
+        "working_directory": working_directory,
+        "exit_code": exit_code,
+        "output_ref": f"runs/{RUN_ID}/logs/{command_id}.log",
+    }
+
+
+DIFF_STATS = [
+    {"path": f"{TARGET_REPO_PATH}/src/pagination.py", "change_type": "modified", "lines_added": 1, "lines_removed": 1},
+    {"path": f"{TARGET_REPO_PATH}/tests/test_pagination.py", "change_type": "modified", "lines_added": 8, "lines_removed": 0},
+]
+
+
+def _happy_command_results() -> dict:
+    return {
+        "C-1": _command_result("C-1", "python -m pytest tests/test_pagination.py -k boundary", TARGET_REPO_PATH, 1),
+        "C-2": _command_result("C-2", "python -m pytest tests/test_pagination.py", TARGET_REPO_PATH, 0),
+        "V-1": _command_result("V-1", "python -m pytest tests/test_pagination.py", TARGET_REPO_PATH, 0),
+    }
+
+
+def _run(root, discovery_adapter, agent_adapter, test_runner_adapter, **overrides):
+    kwargs = dict(
+        raw_prompt="Fix off-by-one in pagination helper",
+        target_repo_path=TARGET_REPO_PATH,
+        task_id=TASK_ID,
+        run_id=RUN_ID,
+        created_at=CREATED_AT,
+        discovery_adapter=discovery_adapter,
+        agent_adapter=agent_adapter,
+        test_runner_adapter=test_runner_adapter,
+        repo_root=root,
+    )
+    kwargs.update(overrides)
+    return core.run(**kwargs)
+
+
+def _assert_valid_run_summary(result) -> dict:
+    summary_path = result.run_dir / "run-summary.json"
+    assert summary_path.exists(), "every terminal outcome must produce run-summary.json"
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    schema = load_json(SCHEMA_DIR / "run-summary.schema.json")
+    errors = validate_against_schema(summary, schema, artifact="run-summary.json")
+    assert not errors, "\n".join(str(e) for e in errors)
+    assert summary["task_id"] == TASK_ID
+    assert summary["run_id"] == RUN_ID
+    return summary
+
+
+def _hash_tree(root: Path) -> dict[str, str]:
+    return {
+        str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest() for p in root.rglob("*") if p.is_file()
+    }
+
+
+def _read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+# ---------------------------------------------------------------------------
+# Happy path
+# ---------------------------------------------------------------------------
+
+
+def test_happy_path_reaches_completed(tmp_path):
+    _make_fixture_repo(tmp_path)
+    before = _hash_tree(tmp_path / TARGET_REPO_PATH)
+
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(),
+            "quality_engineer": _qe_sequence(verdict="pass"),
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.COMPLETED
+    assert result.final_verdict == "pass"
+    for name in (
+        "scope.json",
+        "findings.json",
+        "implementation-report.json",
+        "verification-report.json",
+        "run-summary.json",
+    ):
+        assert (result.run_dir / name).exists(), name
+
+    summary = _assert_valid_run_summary(result)
+    assert summary["phases_completed"] == ["discovery", "research", "implementation", "verification"]
+    assert summary["final_verdict"] == "pass"
+
+    # Discovery must never touch the target repository.
+    assert _hash_tree(tmp_path / TARGET_REPO_PATH) == before
+
+    # Continuity: exactly one start() per staged agent, never re-dispatched.
+    assert agent_adapter.start_count("architect") == 1
+    assert agent_adapter.start_count("engineer") == 1
+    assert agent_adapter.start_count("quality_engineer") == 1
+
+
+# ---------------------------------------------------------------------------
+# Discovery
+# ---------------------------------------------------------------------------
+
+
+def test_refused_scope_blocks_research_and_produces_run_summary(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict(status="refused", refusal_reason="ambiguous request"))
+    agent_adapter = ScriptedAgentAdapter({"architect": []})
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results={})
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.DISCOVERY_REFUSED
+    assert result.final_verdict == "blocked"
+    assert agent_adapter.start_count("architect") == 0
+    summary = _assert_valid_run_summary(result)
+    assert summary["phases_completed"] == ["discovery"]
+
+    # A refusal is itself a legitimate, schema-valid Discovery outcome -- status: "refused" is a
+    # first-class value in scope.schema.json, unlike an invalid draft. It IS promoted to the
+    # real canonical scope.json, and artifact_refs.scope must point to exactly that real file,
+    # not a placeholder -- this is the opposite case from an invalid draft (see below).
+    canonical_scope_path = result.run_dir / "scope.json"
+    assert canonical_scope_path.exists()
+    assert result.artifact_refs["scope"] == f"runs/{RUN_ID}/scope.json"
+    scope_on_disk = _read_json(canonical_scope_path)
+    assert scope_on_disk["status"] == "refused"
+    assert scope_on_disk["refusal_reason"] == "ambiguous request"
+
+    # The summary must not read as a completed, working implementation.
+    assert summary["final_verdict"] != "pass"
+    assert "Verification passed" not in summary["objective_summary"]
+    assert "discovery_refused" in summary["objective_summary"]
+
+
+def test_schema_invalid_scope_blocks_research(tmp_path):
+    _make_fixture_repo(tmp_path)
+    broken = _scope_dict()
+    del broken["objective"]
+    discovery_adapter = ScriptedDiscoveryAdapter(broken)
+    agent_adapter = ScriptedAgentAdapter({"architect": []})
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results={})
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.DISCOVERY_INVALID
+    assert agent_adapter.start_count("architect") == 0
+
+    # No valid scope draft was ever produced, so no canonical scope.json can honestly exist.
+    # artifact_refs.scope must reference retained candidate/error evidence instead -- a real,
+    # existing file, but never the canonical scope.json path, and never described as accepted.
+    assert not (result.run_dir / "scope.json").exists()
+    scope_ref = result.artifact_refs["scope"]
+    assert scope_ref != f"runs/{RUN_ID}/scope.json"
+    assert "attempts/" in scope_ref
+    referenced_path = tmp_path / scope_ref
+    assert referenced_path.exists()
+    assert "no scope draft was ever produced or promoted" in referenced_path.read_text(encoding="utf-8")
+
+    summary = _assert_valid_run_summary(result)
+    assert summary["final_verdict"] != "pass"
+    assert "discovery_invalid" in summary["objective_summary"]
+
+
+def test_semantically_invalid_scope_blocks_research(tmp_path):
+    _make_fixture_repo(tmp_path)
+    broken = _scope_dict()
+    broken["task_graph"][1]["depends_on"] = ["N-99"]
+    discovery_adapter = ScriptedDiscoveryAdapter(broken)
+    agent_adapter = ScriptedAgentAdapter({"architect": []})
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results={})
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.DISCOVERY_INVALID
+    assert agent_adapter.start_count("architect") == 0
+
+    assert not (result.run_dir / "scope.json").exists()
+    scope_ref = result.artifact_refs["scope"]
+    assert scope_ref != f"runs/{RUN_ID}/scope.json"
+    assert "attempts/" in scope_ref
+    referenced_path = tmp_path / scope_ref
+    assert referenced_path.exists()
+    assert "no scope draft was ever produced or promoted" in referenced_path.read_text(encoding="utf-8")
+
+    summary = _assert_valid_run_summary(result)
+    assert summary["final_verdict"] != "pass"
+    assert "discovery_invalid" in summary["objective_summary"]
+
+
+def test_protected_in_scope_path_is_rejected_at_core_level(tmp_path):
+    # in_scope entries are target-repo-root-relative, like target_repo_path itself, so a path
+    # can be both genuinely contained under target_repo_path AND match a Protected Path pattern
+    # -- constructed here via the "runs/**/scope.json" pattern against target_repo_path="runs".
+    (tmp_path / "runs").mkdir()
+    broken = _scope_dict(in_scope=["runs/some-run/scope.json"])
+    broken["task_id"] = TASK_ID
+    discovery_adapter = ScriptedDiscoveryAdapter(broken)
+    agent_adapter = ScriptedAgentAdapter({"architect": []})
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results={})
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter, target_repo_path="runs")
+
+    assert result.state == State.DISCOVERY_INVALID
+    assert "protected pattern" in result.reason
+    assert agent_adapter.start_count("architect") == 0
+
+
+# ---------------------------------------------------------------------------
+# Internal orchestration failure
+# ---------------------------------------------------------------------------
+
+
+def test_internal_failure_after_run_identity_exists_produces_failed_summary(tmp_path, monkeypatch):
+    """Simulates a genuinely unexpected internal defect (not an agent/validation failure) in an
+    evidence operation, occurring after task_id/run_id and the run directory already exist. This
+    must land in State.FAILED via run()'s top-level safety net, never propagate as an unhandled
+    exception, and never be silently swallowed into a false success."""
+    _make_fixture_repo(tmp_path)
+
+    real_promote_canonical = evidence_io.promote_canonical
+
+    def _boom(run_directory, filename, doc):
+        if filename == "scope.json":
+            raise RuntimeError("simulated internal defect in evidence persistence")
+        return real_promote_canonical(run_directory, filename, doc)
+
+    monkeypatch.setattr(evidence_io, "promote_canonical", _boom)
+
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter({"architect": []})
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results={})
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.FAILED
+    assert result.final_verdict == "blocked"
+    assert "internal orchestration error" in result.reason
+    assert "simulated internal defect" in result.reason
+
+    # No later phase was ever reached.
+    assert agent_adapter.start_count("architect") == 0
+
+    # The raw Discovery candidate (retained before the crash) and the fallback error-evidence
+    # placeholder (retained by _finalize's safety net) must both survive as real evidence.
+    assert (result.run_dir / "attempts" / "discovery-1.raw.txt").exists()
+    assert (result.run_dir / "attempts" / "discovery-error-1.raw.txt").exists()
+    assert not (result.run_dir / "scope.json").exists()
+
+    summary = _assert_valid_run_summary(result)
+    assert summary["final_verdict"] != "pass"
+    assert summary["final_verdict"] == "blocked"
+    assert "internal orchestration error" in summary["objective_summary"]
+    assert summary["phases_completed"] == []
+
+
+# ---------------------------------------------------------------------------
+# Research (Architect)
+# ---------------------------------------------------------------------------
+
+
+def test_blocked_architect_output_stops_research_cleanly(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter({"architect": ["I cannot comply with this request."]})
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results={})
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.RESEARCH_BLOCKED
+    raw_path = result.run_dir / "attempts" / "research-1.raw.txt"
+    assert raw_path.read_text(encoding="utf-8") == "I cannot comply with this request."
+    assert not (result.run_dir / "findings.json").exists()
+    _assert_valid_run_summary(result)
+
+
+def test_invalid_findings_block_implementation(tmp_path):
+    _make_fixture_repo(tmp_path)
+    broken_findings = _findings_dict()
+    broken_findings["findings"].append(dict(broken_findings["findings"][0]))  # duplicate id F-1
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {"architect": [json.dumps(broken_findings)], "engineer": []}
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results={})
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.RESEARCH_BLOCKED
+    assert not (result.run_dir / "findings.json").exists()
+    assert agent_adapter.start_count("engineer") == 0
+    _assert_valid_run_summary(result)
+
+
+# ---------------------------------------------------------------------------
+# Implementation (Engineer)
+# ---------------------------------------------------------------------------
+
+
+def test_blocked_engineer_output_before_any_test_request_stops_cleanly(tmp_path):
+    _make_fixture_repo(tmp_path)
+    blocked_report = {
+        "schema_version": "1.0",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "created_at": CREATED_AT,
+        "scope_ref": {"path": SCOPE_REF},
+        "dependency_changes": [],
+        "status": "blocked",
+        "blocked_reason": "path_validation attestation missing",
+    }
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": [json.dumps(blocked_report)],
+            "quality_engineer": [],
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results={})
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.IMPLEMENTATION_BLOCKED
+    assert test_runner_adapter.invoked_requests == []
+    assert agent_adapter.start_count("quality_engineer") == 0
+    assert (result.run_dir / "implementation-report.json").exists()  # a valid `blocked` report IS retained
+    _assert_valid_run_summary(result)
+
+
+def test_invalid_implementation_report_blocks_verification(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            # findings_ref references a finding id that was never classified 'found'.
+            "engineer": _engineer_sequence(finding_id="F-DOES-NOT-EXIST"),
+            "quality_engineer": [],
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.IMPLEMENTATION_BLOCKED
+    assert not (result.run_dir / "implementation-report.json").exists()
+    assert agent_adapter.start_count("quality_engineer") == 0
+    _assert_valid_run_summary(result)
+
+
+def test_protected_changed_files_block_before_verification(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(protected_extra="harness/evidence.py"),
+            "quality_engineer": [],
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.IMPLEMENTATION_BLOCKED
+    assert "protected path" in result.reason
+    assert (result.run_dir / "implementation-report.json").exists()  # the report itself was valid, just refused
+    assert agent_adapter.start_count("quality_engineer") == 0
+    _assert_valid_run_summary(result)
+
+
+def test_evidence_collision_from_reused_command_id_is_rejected(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(reused_command_id_bug=True),
+        }
+    )
+    command_results = {
+        "C-1": _command_result("C-1", "python -m pytest tests/test_pagination.py -k boundary", TARGET_REPO_PATH, 1),
+    }
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=command_results, diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.IMPLEMENTATION_BLOCKED
+    assert "refusing to overwrite" in result.reason
+    _assert_valid_run_summary(result)
+
+
+def test_command_rejected_blocks_implementation(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {"architect": [json.dumps(_findings_dict())], "engineer": _engineer_sequence()}
+    )
+    rejection = {
+        "message_type": "command_rejected",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "command_id": "C-1",
+        "command": "python -m pytest tests/test_pagination.py -k boundary",
+        "working_directory": TARGET_REPO_PATH,
+        "rejection_reason": "grammar did not match the accepted form",
+        "rejection_category": "grammar_no_match",
+    }
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results={"C-1": rejection})
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.IMPLEMENTATION_BLOCKED
+    assert "command rejected" in result.reason
+    assert (result.run_dir / "logs" / "C-1.rejected.json").exists()
+    _assert_valid_run_summary(result)
+
+
+def test_command_result_identity_mismatch_blocks(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {"architect": [json.dumps(_findings_dict())], "engineer": _engineer_sequence()}
+    )
+    mismatched = _command_result("C-1", "a completely different command", TARGET_REPO_PATH, 1)
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results={"C-1": mismatched})
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.IMPLEMENTATION_BLOCKED
+    assert "does not match the request" in result.reason
+    _assert_valid_run_summary(result)
+
+
+def test_exit_code_124_is_forwarded_unchanged(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    blocked_after_timeout = {
+        "schema_version": "1.0", "task_id": TASK_ID, "run_id": RUN_ID, "created_at": CREATED_AT,
+        "scope_ref": {"path": SCOPE_REF}, "dependency_changes": [], "status": "blocked",
+        "blocked_reason": "pre-implementation command timed out",
+    }
+    engineer_turns = [_engineer_sequence()[0], json.dumps(blocked_after_timeout)]
+    agent_adapter = ScriptedAgentAdapter(
+        {"architect": [json.dumps(_findings_dict())], "engineer": engineer_turns}
+    )
+    timeout_result = _command_result("C-1", "python -m pytest tests/test_pagination.py -k boundary", TARGET_REPO_PATH, 124)
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results={"C-1": timeout_result})
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.IMPLEMENTATION_BLOCKED
+    resume_calls = [c for c in agent_adapter.calls if c[0] == "resume" and c[1] == "engineer"]
+    assert len(resume_calls) == 1
+    forwarded_message = resume_calls[0][3]
+    assert forwarded_message["exit_code"] == 124
+    _assert_valid_run_summary(result)
+
+
+def test_exit_code_125_is_forwarded_unchanged_and_retained_as_policy_event(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    blocked_after_mutation = {
+        "schema_version": "1.0", "task_id": TASK_ID, "run_id": RUN_ID, "created_at": CREATED_AT,
+        "scope_ref": {"path": SCOPE_REF}, "dependency_changes": [], "status": "blocked",
+        "blocked_reason": "post-implementation command reported a persistent mutation",
+    }
+    engineer_turns = _engineer_sequence()[:2] + [json.dumps(blocked_after_mutation)]
+    agent_adapter = ScriptedAgentAdapter(
+        {"architect": [json.dumps(_findings_dict())], "engineer": engineer_turns}
+    )
+    mutated_result = _command_result("C-2", "python -m pytest tests/test_pagination.py", TARGET_REPO_PATH, 125)
+    command_results = {
+        "C-1": _command_result("C-1", "python -m pytest tests/test_pagination.py -k boundary", TARGET_REPO_PATH, 1),
+        "C-2": mutated_result,
+    }
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=command_results)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.IMPLEMENTATION_BLOCKED
+    resume_calls = [c for c in agent_adapter.calls if c[0] == "resume" and c[1] == "engineer"]
+    forwarded_exit_code = resume_calls[-1][3]["exit_code"]
+    assert forwarded_exit_code == 125
+    policy_log = (result.run_dir / "logs" / "policy-events.jsonl").read_text(encoding="utf-8")
+    assert "mutation_detected" in policy_log
+    assert "C-2" in policy_log
+    _assert_valid_run_summary(result)
+
+
+def test_missing_handle_blocks_rather_than_restarting(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    engineer_turns = [_engineer_sequence()[0], UNRESUMABLE]
+    agent_adapter = ScriptedAgentAdapter(
+        {"architect": [json.dumps(_findings_dict())], "engineer": engineer_turns}
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(
+        command_results={"C-1": _command_result("C-1", "python -m pytest tests/test_pagination.py -k boundary", TARGET_REPO_PATH, 1)}
+    )
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.IMPLEMENTATION_BLOCKED
+    assert "lost continuity" in result.reason
+    assert agent_adapter.start_count("engineer") == 1  # never restarted with a fresh instance
+    _assert_valid_run_summary(result)
+
+
+def test_engineer_uses_the_same_handle_across_every_staged_exchange(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(),
+            "quality_engineer": _qe_sequence(verdict="pass"),
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.COMPLETED
+    handles = agent_adapter.handles_used("engineer")
+    assert len(handles) == 4  # 1 start + 3 resume turns (pre, post, finalization)
+    assert len(set(handles)) == 1, f"engineer used more than one handle: {handles}"
+
+
+def test_quality_engineer_uses_the_same_handle_across_every_staged_exchange(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(),
+            "quality_engineer": _qe_sequence(verdict="pass"),
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.COMPLETED
+    handles = agent_adapter.handles_used("quality_engineer")
+    assert len(handles) == 2  # 1 start + 1 resume turn
+    assert len(set(handles)) == 1, f"quality_engineer used more than one handle: {handles}"
+
+
+# ---------------------------------------------------------------------------
+# Verification (Quality Engineer)
+# ---------------------------------------------------------------------------
+
+
+def test_blocked_quality_engineer_output_before_an_attempt_stops_cleanly(tmp_path):
+    _make_fixture_repo(tmp_path)
+    blocked_report = {
+        "schema_version": "1.0", "task_id": TASK_ID, "run_id": RUN_ID, "created_at": CREATED_AT,
+        "scope_ref": {"path": SCOPE_REF}, "implementation_ref": {"path": IMPLEMENTATION_REF},
+        "final_verdict": "blocked", "blocked_reason": "findings_ref mismatch",
+    }
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(),
+            "quality_engineer": [json.dumps(blocked_report)],
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.VERIFICATION_BLOCKED
+    assert not any(r["command_id"].startswith("V-") for r in test_runner_adapter.invoked_requests)
+    _assert_valid_run_summary(result)
+
+
+def test_verification_pass_permits_completion(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(),
+            "quality_engineer": _qe_sequence(verdict="pass"),
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.COMPLETED
+    assert result.final_verdict == "pass"
+
+
+def test_verification_fail_is_terminal_and_does_not_permit_completion(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(),
+            "quality_engineer": _qe_sequence(verdict="fail"),
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.VERIFICATION_FAILED
+    assert result.final_verdict == "fail"
+    assert result.state != State.COMPLETED
+    # One-pass MVP: no automatic route-back, so the Engineer is never dispatched a second time.
+    assert agent_adapter.start_count("engineer") == 1
+    _assert_valid_run_summary(result)
+
+
+def test_verification_blocked_is_terminal(tmp_path):
+    _make_fixture_repo(tmp_path)
+    blocked_report = {
+        "schema_version": "1.0", "task_id": TASK_ID, "run_id": RUN_ID, "created_at": CREATED_AT,
+        "scope_ref": {"path": SCOPE_REF}, "implementation_ref": {"path": IMPLEMENTATION_REF},
+        "final_verdict": "blocked", "blocked_reason": "command safety denylist violation requested by caller",
+    }
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(),
+            "quality_engineer": [_qe_sequence()[0], json.dumps(blocked_report)],
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.VERIFICATION_BLOCKED
+    assert result.final_verdict == "blocked"
+    _assert_valid_run_summary(result)
+
+
+def test_verification_inconclusive_is_terminal_and_does_not_permit_completion(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(),
+            "quality_engineer": _qe_sequence(verdict="inconclusive"),
+        }
+    )
+    command_results = dict(_happy_command_results())
+    command_results["V-1"] = _command_result("V-1", "python -m pytest tests/test_pagination.py", TARGET_REPO_PATH, 1)
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=command_results, diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.VERIFICATION_INCONCLUSIVE
+    assert result.state != State.COMPLETED
+    assert result.final_verdict == "inconclusive"
+    assert (result.run_dir / "verification-report.json").exists()
+    verification_on_disk = _read_json(result.run_dir / "verification-report.json")
+    assert verification_on_disk["final_verdict"] == "inconclusive"
+
+    # One-pass MVP: an inconclusive verdict never triggers a second Engineer dispatch either.
+    assert agent_adapter.start_count("engineer") == 1
+    assert agent_adapter.start_count("quality_engineer") == 1
+
+    summary = _assert_valid_run_summary(result)
+    assert summary["final_verdict"] == "inconclusive"
+    assert summary["final_verdict"] != "pass"
+    assert "inconclusive" in summary["objective_summary"].lower()
+    assert summary["phases_completed"] == ["discovery", "research", "implementation", "verification"]
+
+
+def test_incomplete_acceptance_criterion_coverage_prevents_completion(tmp_path):
+    _make_fixture_repo(tmp_path)
+    two_criteria_scope = _scope_dict(
+        acceptance_criteria=[
+            {"id": "AC-1", "description": "Existing pagination tests pass"},
+            {"id": "AC-2", "description": "New boundary test covers the off-by-one case"},
+        ]
+    )
+    discovery_adapter = ScriptedDiscoveryAdapter(two_criteria_scope)
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(),
+            # Reports "pass" but only ever covers AC-1 -- AC-2 is silently missing, which
+            # validate_verification_report_semantics must catch as a coverage violation.
+            "quality_engineer": _qe_sequence(verdict="pass", criteria_ids=("AC-1",)),
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.VERIFICATION_BLOCKED
+    assert result.state != State.COMPLETED
+    assert not (result.run_dir / "verification-report.json").exists()
+    _assert_valid_run_summary(result)

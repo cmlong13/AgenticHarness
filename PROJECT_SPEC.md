@@ -2,11 +2,15 @@
 
 Status: **Implementation in progress — artifact contracts, validation, all three phase
 subagents (Architect, Engineer, Quality Engineer, each with independently verified permission
-boundaries), and the code-craftsmanship and test-runner skills (each live-verified through
-Claude Code's actual `Skill` mechanism, not just statically) are complete. This satisfies the
-Core MVP's skill requirement (§4), but not the assignment's broader "≥4 skill packs"
-requirement (§3) — the GitHub and Jira skill packs are not yet built. The Skills requirement
-and the project as a whole are not complete.**
+boundaries), the code-craftsmanship and test-runner skills (each live-verified through
+Claude Code's actual `Skill` mechanism, not just statically), and the deterministic orchestrator
+core (`harness/orchestrator/` — a one-pass Discovery → Research → Implementation → Verification
+state machine, automatically tested end-to-end against scripted fake adapters only) are
+complete. This satisfies the Core MVP's skill requirement (§4), but not the assignment's
+broader "≥4 skill packs" requirement (§3) — the GitHub and Jira skill packs are not yet built.
+The orchestrator core has no live Claude Code adapter, no real test-runner adapter, no
+reasoning-backed Discovery adapter, and has never run an end-to-end pipeline — see §10. The
+Skills requirement, the orchestrator milestone, and the project as a whole are not complete.**
 
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
@@ -78,7 +82,22 @@ reused rather than reimplemented.
   decides which phases are actually needed, reads `lessons-learned.md` before dispatch, runs a
   pre-dispatch checklist, may refuse work with reasons, independently verifies all downstream
   completion claims.
-- `/work` slash command — two modes: `TICKET-ID repo` (Jira) and free-form prompt.
+- `/work` slash command — two modes: `TICKET-ID repo` (Jira) and free-form prompt. **Not started.**
+- Deterministic orchestrator core — **complete** at `harness/orchestrator/` (`core.py`,
+  `state.py`, `paths.py`, `discovery.py`, `evidence_io.py`, `adapters.py`): a one-pass
+  Discovery → Research → Implementation → Verification state machine that dispatches Architect,
+  Engineer, and Quality Engineer through an `AgentAdapter.start()`/`resume()` contract, mediates
+  every staged command through a `TestRunnerAdapter`, validates every artifact against
+  `harness/schemas/` and `harness/evidence.py` before promoting it, and produces a schema-valid
+  `run-summary.json` for every terminal outcome. Automatically tested end-to-end against
+  scripted fake adapters only (246 tests passing; full detail in §10) — no live `Agent`/
+  `SendMessage` call, no real test-runner invocation, and no reasoning-backed Discovery adapter
+  exist yet, so no real pipeline has ever been run. `DiscoveryAdapter` is an explicit boundary:
+  it receives `raw_prompt`/`task_id`/`run_id`/`created_at`/`target_repo_path` and returns a
+  proposed scope document with no persistence of its own — the orchestrator alone validates
+  (schema, `validate_scope_semantics`, real path safety) and promotes it. The real,
+  reasoning-backed `DiscoveryAdapter` is the live Claude Code main session (or a future `/work`
+  skill), not yet implemented.
 
 ### Subagents (≥3)
 - `architect.md` — Research. Read/grep/glob + docs connectors only, no source edits. Evidence
@@ -239,14 +258,21 @@ AgenticHarness/
 │
 ├── harness/                       # Python glue code invoked BY hooks/skills, not a separate agent runtime
 │   ├── __init__.py                # [DONE]
-│   ├── checkpoint.py              # pipeline state save/resume
+│   ├── checkpoint.py              # pipeline state save/resume -- not yet built (§10 "Remaining work")
 │   ├── memory.py                  # lessons-learned.md + memory-dir read/append (cap enforcement)
-│   ├── task_graph.py              # Discovery output data model
-│   ├── evidence.py                # [DONE] schema + semantic artifact validation
+│   ├── evidence.py                # [DONE] schema + semantic artifact validation, incl. validate_scope_semantics
 │   ├── cost.py                    # token/cost aggregation across a run
 │   ├── schemas/                   # [DONE] the six *.schema.json artifact contracts
-│   └── artifacts/
-│       └── examples/              # [DONE] the six *.example.json reference artifacts
+│   ├── artifacts/
+│   │   └── examples/              # [DONE] the six *.example.json reference artifacts
+│   └── orchestrator/              # [DONE] deterministic one-pass orchestration core -- no live agent wiring yet
+│       ├── __init__.py            # [DONE]
+│       ├── core.py                # [DONE] state machine, phase dispatch, staged-command mediation, run-summary
+│       ├── state.py               # [DONE] State enum, terminal/verdict/phase projections
+│       ├── paths.py               # [DONE] real path containment + Protected Path checks, path_validation attestation
+│       ├── discovery.py           # [DONE] scope-draft validation gate (schema + semantics + path safety)
+│       ├── evidence_io.py         # [DONE] raw-candidate retention, collision-guarded canonical writes
+│       └── adapters.py            # [DONE] AgentAdapter / TestRunnerAdapter / DiscoveryAdapter interfaces only
 │
 ├── memory/
 │   ├── lessons-learned.md
@@ -258,9 +284,17 @@ AgenticHarness/
 │
 ├── tests/
 │   ├── __init__.py                       # [DONE]
-│   ├── test_artifact_contracts.py        # [DONE] 38 passing tests
-│   └── ...                               # unit tests for harness/*, integration test driving
-│                                          # one full pipeline run
+│   ├── test_artifact_contracts.py        # [DONE] incl. validate_scope_semantics coverage
+│   ├── test_agent_definitions.py         # [DONE]
+│   ├── test_skill_definitions.py         # [DONE]
+│   ├── test_test_runner_validation.py    # [DONE]
+│   ├── test_orchestrator_discovery.py    # [DONE]
+│   ├── test_orchestrator_evidence_io.py  # [DONE]
+│   ├── test_orchestrator_core.py         # [DONE] deterministic end-to-end coverage, fake adapters only
+│   ├── fakes/
+│   │   └── agent_adapter.py              # [DONE] ScriptedAgentAdapter / ScriptedTestRunnerAdapter / ScriptedDiscoveryAdapter
+│   └── ...                               # a later live integration test driving one full pipeline
+│                                          # run against real agents is not yet written (§10)
 │
 ├── docs/
 │   └── WRITEUP.md                 # assignment §5 deliverable (architecture diagram, MCP-vs-REST
@@ -284,12 +318,18 @@ AgenticHarness/
    and live Skill-mechanism/permission/behavioral verification; see §10). The GitHub and Jira
    skill packs required for the assignment's overall "≥4 skill packs" bar are separate,
    not-yet-started work (§3, §4 "Later integrations").
-6. Build or import the real target repository with at least 50 files.
-7. Orchestrator skill and `/work` free-form prompt mode.
-8. Checkpoint, memory loop, pre-dispatch hook, and completion guardrail.
-9. Independent GitHub push-verification path.
-10. Close one complete free-form prompt pipeline with real evidence.
-11. Add Jira, Obsidian, cost tracking, connector comparison, broader skills, and
+6. Deterministic orchestrator core (`harness/orchestrator/`) — **COMPLETE** as a standalone,
+   fake-adapter-tested engine: one-pass state machine, artifact validation gates, staged-command
+   mediation, evidence retention, run-summary generation for every terminal outcome (246 tests
+   passing; see §10). **Not** complete: no live `Agent`/`SendMessage` adapter, no real
+   test-runner adapter, no reasoning-backed Discovery adapter, no end-to-end run.
+7. Build or import the real target repository with at least 50 files.
+8. Live Claude Code adapter layer, real test-runner adapter, reasoning-backed Discovery adapter,
+   and `/work` free-form prompt mode.
+9. Checkpoint, memory loop, pre-dispatch hook, and completion guardrail.
+10. Independent GitHub push-verification path.
+11. Close one complete free-form prompt pipeline with real evidence.
+12. Add Jira, Obsidian, cost tracking, connector comparison, broader skills, and
     planted-defect demonstrations.
 
 ---
@@ -528,13 +568,126 @@ Demonstrated live, on a repo with ≥50 files:
 - **None of this is committed yet either** (code-craftsmanship, test-runner, and their tests/
   docs/retained evidence) — check `git status` for the current state before assuming otherwise.
 
+### Deterministic orchestrator core (`harness/orchestrator/`)
+
+A one-pass, fake-adapter-tested orchestration engine implementing Discovery → Research →
+Implementation → Verification as a deterministic state machine. This is a standalone milestone,
+not yet wired into a live Claude Code session — see "Status distinctions" below before assuming
+any of this runs a real pipeline.
+
+#### Implemented
+
+- `harness/orchestrator/core.py` — the state machine and top-level `run()` entry point: drives
+  exactly one straight-through attempt through Discovery, Research (Architect), Implementation
+  (Engineer), and Verification (Quality Engineer), with no automatic route-back on a
+  verification failure.
+- `harness/orchestrator/state.py` — the `State` enum and its projections onto
+  `run-summary.schema.json`'s narrower `final_verdict` vocabulary and phase names.
+- `harness/orchestrator/discovery.py` — the `DiscoveryAdapter` boundary: a proposed scope
+  document is supplied externally (`raw_prompt`/`task_id`/`run_id`/`created_at`/
+  `target_repo_path` in, a scope dict out, no persistence performed by the adapter itself), and
+  this module alone validates it (schema, `validate_scope_semantics`, real path safety) before
+  the orchestrator ever promotes or trusts it.
+- `harness/orchestrator/adapters.py` — the `AgentAdapter` (`start()`/`resume()`, explicit opaque
+  handle), `TestRunnerAdapter` (`invoke()`/`diff_stats()`), and `DiscoveryAdapter` `Protocol`
+  interfaces. No Claude Agent SDK dependency, no API-key authentication, no `claude -p`
+  subprocess call — Claude Code-native per §2, live invocation deferred to the main session.
+- `harness/orchestrator/paths.py` — real filesystem containment (`Path.resolve(strict=True)`
+  plus a containment check, so a symlink/junction escape resolves outside the root and is
+  caught, not merely a lexical check), the same fixed Protected Path list Engineer/Quality
+  Engineer/code-craftsmanship already use, and the `path_validation` attestation builder that
+  genuinely performs the check it attests to rather than asserting the claim.
+- `harness/orchestrator/evidence_io.py` — strict JSON parsing (no fence-stripping, no prose
+  extraction), raw-candidate retention under `runs/<run_id>/attempts/` before any validation,
+  and collision-guarded, atomic promotion of a validated candidate to its canonical filename
+  (`scope.json`, `findings.json`, `implementation-report.json`, `verification-report.json`,
+  `run-summary.json`) — a second write to an existing canonical path is always a hard error,
+  never a silent overwrite.
+- Staged command mediation in `core.py`: every request from Engineer/Quality Engineer is
+  validated (`task_id`, `run_id`, `command_id`, `command`, `working_directory`) against the
+  request the orchestrator itself built before a `command_result` is trusted;
+  `command_rejected` halts the phase immediately; exit code `124` (timeout) and `125`
+  (persistent mutation) are forwarded to the agent unchanged, with `125` additionally retained
+  as a policy event in `runs/<run_id>/logs/policy-events.jsonl`.
+- Same-handle continuity: the handle returned by `AgentAdapter.start()` is the only handle ever
+  passed to `resume()` for that phase; a `resume()` failure blocks the phase and never triggers
+  a second `start()` call.
+- `run-summary.json` generation for every terminal outcome (`discovery_refused`,
+  `discovery_invalid`, `research_blocked`, `implementation_blocked`, `verification_blocked`,
+  `verification_failed`, `verification_inconclusive`, `completed`, and the internal-failure
+  `failed` bucket), always schema-valid against `run-summary.schema.json`.
+
+#### Verified
+
+- 246 tests collected, 246 passed, 0 failed, pytest exit code 0.
+- All seven orchestrator modules (`__init__.py`, `paths.py`, `adapters.py`, `state.py`,
+  `evidence_io.py`, `discovery.py`, `core.py`) compile cleanly (`python -m py_compile`).
+- `verification_inconclusive` is explicitly tested: a schema-valid Quality Engineer report with
+  an unresolved `environment` classification produces `VERIFICATION_INCONCLUSIVE`, never
+  `COMPLETED`, and a schema-valid run summary that says so.
+- Internal failed-state summary behavior is explicitly tested: an injected, genuinely unexpected
+  exception in an evidence-persistence call (after run identity and the run directory already
+  exist) is caught by `run()`'s top-level safety net, lands in `State.FAILED`, retains both the
+  pre-crash raw candidate and a fallback error-evidence file, and still produces a schema-valid
+  `run-summary.json` with `final_verdict: "blocked"` — never a false `"pass"`.
+- Discovery refusal and invalid-scope behavior are both explicitly tested and shown to be
+  asymmetric: a refused scope is a legitimate, schema-valid artifact and **is** promoted to the
+  real canonical `scope.json`; an invalid draft is never promoted, and `artifact_refs.scope`
+  instead references a retained, existing, explicitly-labeled error-evidence file (see "Known
+  contract limitation" below).
+- No automatic route-back to Engineer: exactly one dispatch call site exists per agent role in
+  `core.py`; a `verification_failed` outcome is terminal for this slice, confirmed by asserting
+  Engineer's `start()` count stays at 1 after a `fail` verdict.
+- No live Claude agent is launched by any automated test — every `AgentAdapter`/
+  `TestRunnerAdapter`/`DiscoveryAdapter` in the test suite is the scripted double in
+  `tests/fakes/agent_adapter.py`.
+
+#### Status distinctions
+
+- Designed: yes
+- Implemented: yes
+- Automatically tested: yes
+- State-transition verified: yes
+- Artifact-validation verified: yes
+- Same-handle continuity verified with fake adapters: yes
+- Live Agent/SendMessage integrated: no
+- Live test-runner adapter integrated: no
+- End-to-end verified: no
+- Complete orchestrator milestone: no
+
+#### Remaining work
+
+1. Populate or import the 50+ file demo repository.
+2. Implement the live Claude Code adapter layer.
+3. Implement the real test-runner adapter.
+4. Provide a reasoning-backed Discovery adapter through the main session or `/work`.
+5. Run the first real Discovery → Research → Implementation → Verification pipeline.
+6. Add `/work`.
+7. Add checkpoint/resume.
+8. Add hooks and guardrails.
+9. Build the remaining GitHub and Jira/ticket-intake skills.
+
+#### Known contract limitation
+
+`run-summary.schema.json` requires `artifact_refs.scope` unconditionally, but an invalid or
+internally-failed Discovery outcome may have no canonical `scope.json` to reference at all. The
+orchestrator points `artifact_refs.scope` at retained error evidence under
+`runs/<run_id>/attempts/` instead, and that file's own content explicitly states no scope was
+ever promoted. This is schema-valid — `artifact_refs.scope` is still a non-empty string path to
+a real, existing file — but the schema itself has no property to distinguish a canonical,
+validated artifact reference from a retained error-evidence reference; that distinction is
+carried only by convention (the path and the file's own prose), not by the contract. Schema
+revision to close this gap is deferred and was not performed in this milestone.
+
 ### Immediate next milestone
 
-Code-craftsmanship and test-runner are now complete and live-verified (see the bullets above).
-The two remaining paths to close out the full Skills requirement (§3) are the `github/` and
-`jira/` skill packs — not required for the Core MVP loop (§4) but required for the assignment's
-"≥4 skill packs" bar. Building the real target/demo repository (§6 item 6) and the orchestrator
-(§6 item 7) do not depend on those two packs and can proceed in parallel.
+Code-craftsmanship, test-runner, and the deterministic orchestrator core are complete and
+verified at their respective layers (see above). None of the three remaining paths depend on
+each other and can proceed in parallel: (1) the `github/` and `jira/` skill packs, required for
+the assignment's "≥4 skill packs" bar but not the Core MVP loop (§4); (2) the real target/demo
+repository (§6 item 7); (3) the live adapter layer that lets the orchestrator core actually
+dispatch real agents (§6 item 8) — the prerequisite for the first real pipeline run (§6 item 11)
+and therefore for closing the Core MVP loop at all.
 
 ### Eight-day MVP planning target
 
@@ -557,9 +710,13 @@ documentation may require additional time after the working MVP closes.
 2. ~~Quality Engineer agent.~~ **COMPLETE**
 3. ~~Code-craftsmanship and test-runner skills.~~ **COMPLETE** (2 of the assignment's required
    ≥4 skill packs; `github/` and `jira/` remain future work — see §3, §10)
-4. Demo repository.
-5. Orchestrator and `/work` prompt mode.
-6. Checkpoint, memory, and guardrail hooks.
-7. First complete evidence-backed pipeline run.
-8. Deferred integrations and final assignment demonstrations (includes `github/`/`jira/` skill
+4. ~~Deterministic orchestrator core.~~ **COMPLETE** as a standalone, fake-adapter-tested engine
+   — not live-integrated, not end-to-end verified, not the complete orchestrator milestone (see
+   §10 "Status distinctions").
+5. Demo repository.
+6. Live Claude Code adapter layer, real test-runner adapter, reasoning-backed Discovery adapter,
+   and `/work` prompt mode.
+7. Checkpoint, memory, and guardrail hooks.
+8. First complete evidence-backed pipeline run.
+9. Deferred integrations and final assignment demonstrations (includes `github/`/`jira/` skill
    packs, Jira/Obsidian connectors, cost tracking, and planted-defect demos).

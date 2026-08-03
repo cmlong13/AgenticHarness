@@ -139,6 +139,52 @@ def validate_findings_semantics(doc: dict, *, artifact: str = "findings") -> lis
     return errors
 
 
+def validate_scope_semantics(doc: dict, *, artifact: str = "scope") -> list[ValidationError]:
+    errors: list[ValidationError] = []
+
+    acceptance_criteria = doc.get("acceptance_criteria", [])
+    ac_dupes = _duplicate_ids(acceptance_criteria)
+    for idx, criterion in enumerate(acceptance_criteria):
+        if criterion.get("id") in ac_dupes:
+            errors.append(
+                ValidationError(
+                    artifact,
+                    f"$.acceptance_criteria[{idx}].id",
+                    f"duplicate acceptance criterion id {criterion.get('id')!r}",
+                )
+            )
+
+    task_graph = doc.get("task_graph", [])
+    node_dupes = _duplicate_ids(task_graph)
+    for idx, node in enumerate(task_graph):
+        if node.get("id") in node_dupes:
+            errors.append(
+                ValidationError(artifact, f"$.task_graph[{idx}].id", f"duplicate task_graph node id {node.get('id')!r}")
+            )
+
+    # depends_on resolution and self-dependency are checked even for a node whose own id is
+    # itself a duplicate -- both problems can be real at once and neither excuses the other.
+    node_ids = {n["id"] for n in task_graph if "id" in n}
+    for idx, node in enumerate(task_graph):
+        node_id = node.get("id")
+        for dep_idx, dependency_id in enumerate(node.get("depends_on", [])):
+            path = f"$.task_graph[{idx}].depends_on[{dep_idx}]"
+            if dependency_id == node_id:
+                errors.append(ValidationError(artifact, path, f"task_graph node {node_id!r} must not depend on itself"))
+            elif dependency_id not in node_ids:
+                errors.append(
+                    ValidationError(artifact, path, f"depends_on references unknown task_graph node id {dependency_id!r}")
+                )
+
+    # The schema's own if/then only requires refusal_reason to be PRESENT when status is
+    # 'refused' -- it does not forbid the field when status is 'approved'. A refusal_reason on
+    # an approved scope is contradictory on its face, so that direction is enforced here.
+    if doc.get("status") == "approved" and "refusal_reason" in doc:
+        errors.append(ValidationError(artifact, "$.refusal_reason", "must not be present when status is 'approved'"))
+
+    return errors
+
+
 def validate_implementation_report_semantics(
     doc: dict, findings_doc: dict, *, artifact: str = "implementation-report"
 ) -> list[ValidationError]:

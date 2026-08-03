@@ -16,6 +16,7 @@ from harness.evidence import (
     validate_checkpoint_semantics,
     validate_findings_semantics,
     validate_implementation_report_semantics,
+    validate_scope_semantics,
     validate_verification_report_semantics,
 )
 
@@ -863,3 +864,60 @@ def test_checkpoint_complete_status_requires_null_phase_fields():
     errors = validate_checkpoint_semantics(doc, artifact="checkpoint")
 
     assert any("must be null when status is 'complete'" in e.message for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# Semantic validation -- scope
+# ---------------------------------------------------------------------------
+
+
+def test_scope_example_has_no_semantic_errors():
+    doc = _load("scope")
+    errors = validate_scope_semantics(doc, artifact="scope.example.json")
+    assert not errors, "\n".join(str(e) for e in errors)
+
+
+def test_scope_duplicate_acceptance_criterion_id_is_caught():
+    doc = copy.deepcopy(_load("scope"))
+    doc["acceptance_criteria"].append(copy.deepcopy(doc["acceptance_criteria"][0]))
+
+    errors = validate_scope_semantics(doc, artifact="scope")
+
+    assert any("duplicate acceptance criterion id" in e.message for e in errors)
+
+
+def test_scope_duplicate_task_graph_node_id_is_caught():
+    doc = copy.deepcopy(_load("scope"))
+    doc["task_graph"].append(copy.deepcopy(doc["task_graph"][0]))
+
+    errors = validate_scope_semantics(doc, artifact="scope")
+
+    assert any("duplicate task_graph node id" in e.message for e in errors)
+
+
+def test_scope_depends_on_unknown_node_is_caught():
+    doc = copy.deepcopy(_load("scope"))
+    doc["task_graph"][1]["depends_on"] = ["N-99"]
+
+    errors = validate_scope_semantics(doc, artifact="scope")
+
+    assert any("references unknown task_graph node id" in e.message for e in errors)
+
+
+def test_scope_depends_on_self_is_caught():
+    doc = copy.deepcopy(_load("scope"))
+    doc["task_graph"][0]["depends_on"] = ["N-1"]
+
+    errors = validate_scope_semantics(doc, artifact="scope")
+
+    assert any("must not depend on itself" in e.message for e in errors)
+
+
+def test_scope_approved_with_refusal_reason_is_caught():
+    doc = copy.deepcopy(_load("scope"))
+    assert doc["status"] == "approved"
+    doc["refusal_reason"] = "should not be here"
+
+    errors = validate_scope_semantics(doc, artifact="scope")
+
+    assert any("must not be present when status is 'approved'" in e.message for e in errors)
