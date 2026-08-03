@@ -1,0 +1,10 @@
+{
+  "dti_low_max": 0.36,
+  "dti_medium_max": 0.43,
+  "ltv_low_max": 0.80,
+  "ltv_medium_max": 0.95,
+  "max_dti_hard_fail": 0.50,
+  "max_ltv_hard_fail": 1.00,
+  "min_credit_score": 580,
+  "effective_date": "2026-01-01"
+}

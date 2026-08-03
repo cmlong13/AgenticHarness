@@ -1,0 +1,9 @@
+{
+  "application_id": "LN-1001",
+  "applicant": {"applicant_id": "AP-100001", "full_name": "Jordan Rivera", "years_employed": 5},
+  "collateral": {"description": "single-family home", "appraised_value": 300000},
+  "income_sources": [{"label": "salary", "monthly_amount": 10000}],
+  "debt_obligations": [{"label": "auto_loan", "monthly_payment": 500}],
+  "requested_amount": 150000,
+  "credit_score": 780
+}

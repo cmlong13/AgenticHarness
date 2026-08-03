@@ -1,0 +1,12 @@
+{
+  "application_id": "LN-1002",
+  "applicant": {"applicant_id": "AP-100002", "full_name": "Sam Okafor", "years_employed": 2},
+  "collateral": {"description": "condo", "appraised_value": 250000},
+  "income_sources": [{"label": "salary", "monthly_amount": 4000}],
+  "debt_obligations": [
+    {"label": "auto_loan", "monthly_payment": 900},
+    {"label": "credit_card", "monthly_payment": 1300}
+  ],
+  "requested_amount": 240000,
+  "credit_score": 560
+}

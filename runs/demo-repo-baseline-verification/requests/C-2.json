@@ -1,0 +1,9 @@
+{
+  "task_id": "T-DEMO-BASELINE",
+  "run_id": "demo-repo-baseline-verification",
+  "command_id": "C-2",
+  "command": "python -m pytest tests -q",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "full demo suite verification via the real test-runner skill wrapper"
+}

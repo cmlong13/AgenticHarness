@@ -10,6 +10,9 @@ complete. This satisfies the Core MVP's skill requirement (§4), but not the ass
 broader "≥4 skill packs" requirement (§3) — the GitHub and Jira skill packs are not yet built.
 The orchestrator core has no live Claude Code adapter, no real test-runner adapter, no
 reasoning-backed Discovery adapter, and has never run an end-to-end pipeline — see §10. The
+`demo-repo/` target application (`loanflow`, 55 files) is implemented, automatically tested, and
+verified compatible with the test-runner wrapper and the orchestrator's path rules, but it has
+not yet been used by a live orchestrator run or an end-to-end four-phase pipeline — see §10. The
 Skills requirement, the orchestrator milestone, and the project as a whole are not complete.**
 
 This document is the authoritative internal reference for what is being built. It is derived
@@ -206,7 +209,9 @@ MCP server in favor of curl-based skills for reliability/debuggability).
 - Checkpoint/resume for the pipeline
 - GitHub access via `gh`/`git` CLI (real commits + independent push verification via
   `git ls-remote`/`git rev-parse`)
-- A real target repo (≥50 files) to run against
+- A real target repo (≥50 files) to run against — **complete**: `demo-repo/loanflow`, 55 files,
+  verified compatible with the test-runner wrapper and mutation-safe (§10); not yet used by a
+  live orchestrator run
 
 ### Later integrations (after the loop closes once with real evidence)
 - Ticket mode + Jira/Atlassian connector (MCP and/or REST skill pack)
@@ -280,7 +285,8 @@ AgenticHarness/
 │
 ├── runs/                          # per-run artifacts: findings docs, diffs, verification reports, checkpoints
 │
-├── demo-repo/                     # target repo for live demos — real code + git history (≥50 files)
+├── demo-repo/                     # [DONE] loanflow target app, 55 files — see §10; part of the
+│                                   #        root repo, no nested .git/ of its own
 │
 ├── tests/
 │   ├── __init__.py                       # [DONE]
@@ -323,7 +329,10 @@ AgenticHarness/
    mediation, evidence retention, run-summary generation for every terminal outcome (246 tests
    passing; see §10). **Not** complete: no live `Agent`/`SendMessage` adapter, no real
    test-runner adapter, no reasoning-backed Discovery adapter, no end-to-end run.
-7. Build or import the real target repository with at least 50 files.
+7. Build or import the real target repository with at least 50 files — **COMPLETE**:
+   `demo-repo/loanflow`, 55 files, 22 source modules, 23 test files (101 tests passing);
+   test-runner-wrapper and mutation-safety verified (§10). Not yet used by a live orchestrator
+   run.
 8. Live Claude Code adapter layer, real test-runner adapter, reasoning-backed Discovery adapter,
    and `/work` free-form prompt mode.
 9. Checkpoint, memory loop, pre-dispatch hook, and completion guardrail.
@@ -346,18 +355,18 @@ Resolved:
 - **MVP subagent model convention**: `model: inherit` for all subagents unless a later measured
   reason justifies changing it (see §2).
 - **GitHub remote**: the `AgenticHarness` repo has a GitHub remote with push access confirmed.
+- **`demo-repo/` content/source**: a synthetic Python application, `loanflow` (an educational
+  loan-application underwriting demo), 55 files — implemented, automatically tested, and
+  test-runner-wrapper/mutation-safety verified (see §10). Planted defects (a flaky test, a logic
+  bug) remain deferred to the later acceptance-criteria pass, not part of this clean baseline.
 
 Still open — defaults will be applied unless redirected before the relevant build step:
-1. **`demo-repo/` content/source** — currently empty; needs to become a real ≥50-file repo with
-   git history. No source repo specified yet — default plan is to generate a synthetic one.
-   Planted defects (a flaky test, a logic bug) are deferred demonstrations for the later
-   acceptance-criteria pass, not required in the initial demo-repo population.
-2. **Jira credentials** — ticket mode needs live Jira credentials; none exist yet. MVP avoids
+1. **Jira credentials** — ticket mode needs live Jira credentials; none exist yet. MVP avoids
    this by using prompt mode only.
-3. **Obsidian vault path** — the Obsidian connector needs a real vault path; none exists yet.
-4. **Cost/token extraction mechanism** — depends on what usage data is actually readable (Claude
+2. **Obsidian vault path** — the Obsidian connector needs a real vault path; none exists yet.
+3. **Cost/token extraction mechanism** — depends on what usage data is actually readable (Claude
    Code transcript JSONL vs. API response usage fields); not yet confirmed.
-5. **Write-up location** — assumed `docs/WRITEUP.md`; not explicitly specified, unless the
+4. **Write-up location** — assumed `docs/WRITEUP.md`; not explicitly specified, unless the
    assignment explicitly resolves it.
 
 ---
@@ -657,15 +666,18 @@ any of this runs a real pipeline.
 
 #### Remaining work
 
-1. Populate or import the 50+ file demo repository.
-2. Implement the live Claude Code adapter layer.
-3. Implement the real test-runner adapter.
-4. Provide a reasoning-backed Discovery adapter through the main session or `/work`.
-5. Run the first real Discovery → Research → Implementation → Verification pipeline.
-6. Add `/work`.
-7. Add checkpoint/resume.
-8. Add hooks and guardrails.
-9. Build the remaining GitHub and Jira/ticket-intake skills.
+1. Build `/work` free-form mode as a main-session command/skill.
+2. Provide reasoning-backed Discovery.
+3. Dispatch real Architect, Engineer, and Quality Engineer subagents.
+4. Resume the same Engineer and Quality Engineer instances during staged exchanges.
+5. Mediate tests through the actual test-runner `Skill` mechanism.
+6. Run the first real Discovery → Research → Implementation → Verification pipeline against
+   `demo-repo/`.
+7. Retain and validate all artifacts and produce a real `run-summary.json`.
+
+Populating the 50+ file demo repository (formerly item 1 of this list) is **COMPLETE** — see
+"Demo repository (`demo-repo/loanflow`)" below. Checkpoint/resume, hooks/guardrails, and the
+remaining GitHub/Jira skills stay deferred per §4 "Later integrations," not dropped.
 
 #### Known contract limitation
 
@@ -679,15 +691,76 @@ validated artifact reference from a retained error-evidence reference; that dist
 carried only by convention (the path and the file's own prose), not by the contract. Schema
 revision to close this gap is deferred and was not performed in this milestone.
 
+### Demo repository (`demo-repo/loanflow`)
+
+The controlled target application for live Agentic Harness demonstrations.
+
+#### Implemented
+
+- `demo-repo/` contains `loanflow`, a clean, educational loan-application underwriting demo
+  application — not legally compliant, not financially authoritative, and not for real personal
+  information.
+- 55 meaningful project files under `demo-repo/`. `demo-repo/` is part of the root
+  AgenticHarness Git repository, contains no nested `.git/` of its own, and its history is
+  tracked through the root repository (see "Status distinctions" below).
+- 22 Python source modules under `demo-repo/src/loanflow/`.
+- 23 pytest test files (19 unit, 4 integration) plus `conftest.py`, 4 JSON fixtures, and
+  `config/thresholds.json`.
+- Realistic applicant, application-lifecycle, income/DTI, collateral/LTV, risk-banding,
+  underwriting-rule, decision/explanation, audit-event, health-check, configuration, pipeline,
+  and CLI behavior.
+- Standard-library-only at runtime; no network, database, cloud service, Docker, or
+  authentication dependency anywhere in `demo-repo/`.
+- No nested `.git/` or `.claude/` — `demo-repo/` is part of the root AgenticHarness Git
+  repository and uses the root's single canonical `.claude/` only.
+
+#### Verified
+
+- Demo test suite: 101 collected, 101 passed, 0 failed (`python -m pytest demo-repo/tests -q`,
+  identically reproduced via `cd demo-repo && python -m pytest tests -q`).
+- Full harness suite unaffected: 246 collected, 246 passed, 0 failed.
+- Every `.py` file under `demo-repo/` compiles cleanly (`python -m py_compile`).
+- A SHA-256 before/after hash sweep of every file under `demo-repo/` (excluding
+  `__pycache__`/`.pytest_cache`/`.git`) around a full demo test run showed zero changed, added,
+  or removed paths — the suite leaves the target tree unchanged.
+- The real test-runner wrapper (`.claude/skills/test-runner/scripts/run_command.py`) was
+  invoked directly against `target_repo_path: "demo-repo"` for both a narrow request (risk-band
+  boundary tests) and the full demo test directory; both returned `command_result` with
+  `exit_code: 0` and real pytest results (`8 passed`, `101 passed` respectively) — neither
+  request was rejected, and neither returned `124` (timeout), `125` (mutation), or `126`
+  (internal error). This proves wrapper compatibility and mutation safety; it does **not** mean
+  the demo was exercised through Claude Code's actual `Skill` invocation — the request files
+  were executed directly through the wrapper script, not dispatched via the `Skill` tool. Live
+  orchestrator-to-Skill integration remains future work.
+- Baseline evidence retained at `runs/demo-repo-baseline-verification/requests/`,
+  `runs/demo-repo-baseline-verification/logs/`, and
+  `runs/demo-repo-baseline-verification/verification-summary.md`.
+- The default health-check script (`demo-repo/scripts/health_check.py`) reports
+  `Overall: HEALTHY`, exit code 0, against the committed `config/thresholds.json` baseline.
+- The CLI (`loanflow.cli`, via `PYTHONPATH=demo-repo/src`) produces the expected decision for
+  each retained fixture: approve for `applicant_basic.json`, refer/manual review for
+  `applicant_boundary.json`, decline for `applicant_high_debt.json`.
+
+#### Status distinctions
+
+- Designed: yes
+- Implemented: yes
+- Automatically tested: yes
+- Test-runner-wrapper verified: yes
+- Mutation-safety verified: yes
+- Clean baseline verified: yes
+- Used by a live orchestrator run: no
+- Used in an end-to-end four-phase run: no
+
 ### Immediate next milestone
 
-Code-craftsmanship, test-runner, and the deterministic orchestrator core are complete and
-verified at their respective layers (see above). None of the three remaining paths depend on
-each other and can proceed in parallel: (1) the `github/` and `jira/` skill packs, required for
-the assignment's "≥4 skill packs" bar but not the Core MVP loop (§4); (2) the real target/demo
-repository (§6 item 7); (3) the live adapter layer that lets the orchestrator core actually
-dispatch real agents (§6 item 8) — the prerequisite for the first real pipeline run (§6 item 11)
-and therefore for closing the Core MVP loop at all.
+Code-craftsmanship, test-runner, the deterministic orchestrator core, and the demo repository
+are complete and verified at their respective layers (see above). The remaining paths: (1) the
+`github/` and `jira/` skill packs, required for the assignment's "≥4 skill packs" bar but not the
+Core MVP loop (§4); (2) the live adapter layer that lets the orchestrator core actually dispatch
+real agents against `demo-repo/` (§6 item 8) — the prerequisite for the first real pipeline run
+(§6 item 11) and therefore for closing the Core MVP loop at all. See "Remaining work" above for
+the concrete next steps on the live-adapter path.
 
 ### Eight-day MVP planning target
 
@@ -713,7 +786,9 @@ documentation may require additional time after the working MVP closes.
 4. ~~Deterministic orchestrator core.~~ **COMPLETE** as a standalone, fake-adapter-tested engine
    — not live-integrated, not end-to-end verified, not the complete orchestrator milestone (see
    §10 "Status distinctions").
-5. Demo repository.
+5. ~~Demo repository.~~ **COMPLETE** — `demo-repo/loanflow`, 55 files; automatically tested (101
+   tests), test-runner-wrapper and mutation-safety verified (see §10 "Demo repository"). Not yet
+   used by a live orchestrator run.
 6. Live Claude Code adapter layer, real test-runner adapter, reasoning-backed Discovery adapter,
    and `/work` prompt mode.
 7. Checkpoint, memory, and guardrail hooks.

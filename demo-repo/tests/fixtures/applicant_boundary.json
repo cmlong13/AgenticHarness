@@ -1,0 +1,9 @@
+{
+  "application_id": "LN-1003",
+  "applicant": {"applicant_id": "AP-100003", "full_name": "Alex Chen", "years_employed": 4},
+  "collateral": {"description": "townhouse", "appraised_value": 300000},
+  "income_sources": [{"label": "salary", "monthly_amount": 10000}],
+  "debt_obligations": [{"label": "student_loan", "monthly_payment": 4400}],
+  "requested_amount": 150000,
+  "credit_score": 780
+}
