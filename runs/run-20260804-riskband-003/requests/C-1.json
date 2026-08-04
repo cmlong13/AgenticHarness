@@ -1,0 +1,9 @@
+{
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-003",
+  "command_id": "C-1",
+  "command": "python -m pytest tests/unit/test_explanations.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Pre-implementation TDD evidence: confirm the Engineer's newly added/modified test_explanations.py tests fail against the current explain(decision) single-argument signature before any production code change is made."
+}

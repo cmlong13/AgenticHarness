@@ -1,0 +1,11 @@
+{
+  "response_type": "finalization_evidence_requested",
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-003",
+  "changed_files_known": [
+    { "path": "demo-repo/src/loanflow/explanations.py", "change_type": "modified" },
+    { "path": "demo-repo/src/loanflow/cli.py", "change_type": "modified" },
+    { "path": "demo-repo/tests/unit/test_explanations.py", "change_type": "modified" }
+  ],
+  "note": "Supply real lines_added/lines_removed per path (and diff_ref if available) for exactly this file set."
+}

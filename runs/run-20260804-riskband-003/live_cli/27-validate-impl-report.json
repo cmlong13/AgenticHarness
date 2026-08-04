@@ -1,0 +1,6 @@
+{
+  "operation": "validate_artifact",
+  "phase": "implementation",
+  "doc_ref": "runs/run-20260804-riskband-003/attempts/implementation-5.raw.txt",
+  "context_refs": { "findings": "runs/run-20260804-riskband-003/findings.json" }
+}

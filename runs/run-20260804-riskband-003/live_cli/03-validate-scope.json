@@ -1,0 +1,7 @@
+{
+  "operation": "validate_scope",
+  "candidate_ref": "runs/run-20260804-riskband-003/live_cli/01-scope-candidate.json",
+  "expected_task_id": "T-RISKBAND",
+  "expected_run_id": "run-20260804-riskband-003",
+  "target_repo_path": "demo-repo"
+}

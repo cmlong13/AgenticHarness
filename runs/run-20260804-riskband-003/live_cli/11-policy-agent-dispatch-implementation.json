@@ -1,0 +1,11 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260804-riskband-003",
+  "kind": "agent_dispatch",
+  "payload": {
+    "phase": "implementation",
+    "subagent_type": "engineer",
+    "agent_id": "a5c7fbf7f46248441",
+    "dispatch_sequence": 1
+  }
+}

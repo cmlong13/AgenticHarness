@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-003",
+  "created_at": "2026-08-04T18:13:49Z",
+  "scope_ref": { "path": "runs/run-20260804-riskband-003/scope.json" },
+  "implementation_ref": { "path": "runs/run-20260804-riskband-003/implementation-report.json" },
+  "attempts": [
+    {
+      "id": "V-1",
+      "command": "python -m pytest tests/unit/test_explanations.py -v",
+      "exit_code": 0,
+      "classification": "pass",
+      "output_summary": "4 passed in 0.02s. All four tests in test_explanations.py pass, including test_explain_includes_the_overall_risk_band. No collection errors, no mutation detected.",
+      "retried": false
+    }
+  ],
+  "retry_policy": { "max_retries": 2 },
+  "acceptance_criteria_results": [
+    {
+      "criteria_id": "AC-1",
+      "result": "passed",
+      "attempt_refs": ["V-1"],
+      "evidence_summary": "V-1 (exit 0) ran the full test_explanations.py suite, which covers approve/refer/decline cases via test_explain_approve_mentions_approval_and_each_rule, test_explain_refer_mentions_manual_review, and test_explain_decline_mentions_decline_and_the_failing_rule, plus test_explain_includes_the_overall_risk_band which asserts Band.HIGH.value appears in explain()'s output. Source inspection confirmed explain(decision, overall_risk_band) renders f\"Overall risk band: {overall_risk_band.value}\" and cli.py's call site passes result.risk_profile.overall_band, matching AC-1's required access pattern. All 4 tests passed."
+    },
+    {
+      "criteria_id": "AC-2",
+      "result": "passed",
+      "attempt_refs": ["V-1"],
+      "evidence_summary": "V-1 (exit 0) ran demo-repo/tests/unit/test_explanations.py directly and reported 4 passed, 0 failed, including the new test_explain_includes_the_overall_risk_band test which asserts the risk band appears in the explanation text."
+    }
+  ],
+  "final_verdict": "pass",
+  "routed_back_to_engineer": { "routed": false }
+}

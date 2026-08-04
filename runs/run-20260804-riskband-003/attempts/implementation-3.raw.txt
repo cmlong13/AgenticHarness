@@ -1,0 +1,31 @@
+{
+  "response_type": "post_test_requested",
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-003",
+  "pre_test_confirmation": {
+    "command_id": "C-1",
+    "reported_exit_code": 1,
+    "failure_reason_confirmed": true,
+    "confirmation_rationale": "All 4 failures were TypeError: explain() takes 1 positional argument but 2 were given at the exact call sites (lines 11, 21, 30, 38) predicted by the expected_failure_reason, with no collection or import errors."
+  },
+  "changed_files": [
+    { "path": "demo-repo/src/loanflow/explanations.py", "change_type": "modified" },
+    { "path": "demo-repo/src/loanflow/cli.py", "change_type": "modified" },
+    { "path": "demo-repo/tests/unit/test_explanations.py", "change_type": "modified" }
+  ],
+  "minimal_change_rung": 5,
+  "minimal_change_rationale": "No existing helper renders a risk band into explanation text, so the minimum new code was written: one new required parameter on explain() and one new output line, both built entirely from the already-existing Band enum (risk_bands.py) and the existing dict/f-string formatting pattern already used in explanations.py, plus the matching one-line call-site update in cli.py using the existing PipelineResult.risk_profile.overall_band field -- no new dependency, no change to Decision's or RiskProfile's public shape.",
+  "tests": [
+    { "test_file": "demo-repo/tests/unit/test_explanations.py", "test_name": "test_explain_approve_mentions_approval_and_each_rule", "status": "modified" },
+    { "test_file": "demo-repo/tests/unit/test_explanations.py", "test_name": "test_explain_refer_mentions_manual_review", "status": "modified" },
+    { "test_file": "demo-repo/tests/unit/test_explanations.py", "test_name": "test_explain_decline_mentions_decline_and_the_failing_rule", "status": "modified" },
+    { "test_file": "demo-repo/tests/unit/test_explanations.py", "test_name": "test_explain_includes_the_overall_risk_band", "status": "added" }
+  ],
+  "dependency_changes": [],
+  "requested_command": {
+    "id": "C-2",
+    "command": "python -m pytest tests/unit/test_explanations.py -v",
+    "working_directory": "demo-repo",
+    "expected_outcome": "pass"
+  }
+}

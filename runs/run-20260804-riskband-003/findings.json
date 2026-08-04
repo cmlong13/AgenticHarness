@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-003",
+  "created_at": "2026-08-04T18:13:49Z",
+  "scope_ref": {
+    "path": "runs/run-20260804-riskband-003/scope.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "The current explain() function has the signature `def explain(decision: Decision) -> str` and only reads decision.outcome and decision.rule_results; it does not accept or reference any risk profile or risk band data.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/explanations.py",
+          "start_line": 20,
+          "end_line": 25,
+          "evidence_tier": "executable_code",
+          "excerpt": "def explain(decision: Decision) -> str:\n    lines = [_OUTCOME_HEADLINE[decision.outcome]]\n    for result in decision.rule_results:\n        marker = _MARKER_BY_OUTCOME[result.outcome]\n        lines.append(f\"  [{marker}] {result.rule_name}: {result.reason}\")\n    return \"\\n\".join(lines)"
+        }
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "The production call site of explain() is in demo-repo/src/loanflow/cli.py's _cmd_decide function, called as `explain(result.decision)`, where `result` is the object returned by run_pipeline(); no risk profile data is passed to explain() at this call site today.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/cli.py",
+          "start_line": 55,
+          "end_line": 67,
+          "evidence_tier": "executable_code",
+          "excerpt": "result = run_pipeline(\n        applicant=applicant,\n        ...\n    )\n    print(explain(result.decision))"
+        }
+      ]
+    },
+    {
+      "id": "F-3",
+      "claim": "There is no call site of explain() anywhere in the repository other than the one production call in cli.py and the three test calls in test_explanations.py.",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "grep",
+          "query": "explain\\(",
+          "scope": "demo-repo/ (repo-wide)",
+          "result": "Matches found only in demo-repo/src/loanflow/cli.py:67 (call), demo-repo/src/loanflow/explanations.py:20 (definition), and demo-repo/tests/unit/test_explanations.py:10,20,29 (test calls). No other files in the repository call explain()."
+        }
+      ]
+    },
+    {
+      "id": "F-4",
+      "claim": "demo-repo/tests/unit/test_explanations.py currently contains exactly three tests (approve, refer, decline), each of which constructs a Decision with exactly two positional arguments (outcome, a tuple of RuleResult) and none of which reference a risk band.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_explanations.py",
+          "start_line": 8,
+          "end_line": 32,
+          "evidence_tier": "test_assertion",
+          "excerpt": "decision = Decision(DecisionOutcome.APPROVE, (RuleResult(\"max_dti_rule\", RuleOutcome.PASS, \"DTI is fine\"),))\n... decision = Decision(DecisionOutcome.REFER, (RuleResult(...),)) ... decision = Decision(DecisionOutcome.DECLINE, (RuleResult(...),))"
+        }
+      ]
+    },
+    {
+      "id": "F-5",
+      "claim": "None of the three in-scope files (explanations.py, cli.py, test_explanations.py) contain any reference to 'risk' (case-insensitive) in their current state.",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "grep",
+          "query": "risk (case-insensitive)",
+          "scope": "demo-repo/src/loanflow/explanations.py",
+          "result": "No matches"
+        },
+        {
+          "method": "grep",
+          "query": "risk (case-insensitive)",
+          "scope": "demo-repo/src/loanflow/cli.py",
+          "result": "No matches"
+        },
+        {
+          "method": "grep",
+          "query": "risk (case-insensitive)",
+          "scope": "demo-repo/tests/unit/test_explanations.py",
+          "result": "No matches"
+        }
+      ]
+    },
+    {
+      "id": "F-6",
+      "claim": "Under the current code, explain() has no existing data channel through which a risk band value could reach the explanation text: its only parameter is a Decision, and Decision itself is constructed today with exactly two positional fields (outcome, rule_results) with nothing else.",
+      "classification": "inferred",
+      "supporting_finding_ids": [
+        "F-1",
+        "F-4"
+      ],
+      "reasoning": "F-1 shows explain()'s current signature takes only a `decision: Decision` parameter and its body reads only decision.outcome and decision.rule_results. F-4 shows that, in every existing construction of Decision (across all three current tests), exactly two positional arguments are supplied with no risk-profile-related field. Combining these, neither explain()'s parameter list nor the Decision object it receives currently carries risk band data, so satisfying AC-1 will require the risk band to reach explain() through some channel that does not exist in the code today."
+    }
+  ],
+  "open_questions": [
+    "AC-1 asserts the access pattern PipelineResult.risk_profile.overall_band.value, but pipeline.py, risk_profile.py, decisions.py, and risk_bands.py are all listed as out_of_scope for this research task, so the exact attribute names, the overall_band field's type, and .value semantics could not be independently verified against executable code. A repo-wide grep for 'overall_band' did surface demo-repo/src/loanflow/risk_profile.py and demo-repo/tests/unit/test_risk_profile.py as files referencing it, but per the scope boundary their contents were not opened or cited.",
+    "Implementing N-2 (extending explain() to accept and render the risk band, and updating the cli.py call site) and performing N-3 (running the narrow and full demo-repo test suites) are implementation/verification work outside the Architect's research-only role and were not performed."
+  ]
+}

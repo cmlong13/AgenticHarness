@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-003",
+  "created_at": "2026-08-04T18:13:49Z",
+  "scope_ref": {
+    "path": "runs/run-20260804-riskband-003/scope.json"
+  },
+  "findings_ref": {
+    "path": "runs/run-20260804-riskband-003/findings.json",
+    "finding_ids": ["F-1", "F-2", "F-4"]
+  },
+  "minimal_change_rung": 5,
+  "minimal_change_rationale": "No existing helper renders a risk band into explanation text, so the minimum new code was written: one new required parameter on explain() and one new output line, both built entirely from the already-existing Band enum (risk_bands.py) and the existing dict/f-string formatting pattern already used in explanations.py, plus the matching one-line call-site update in cli.py using the existing PipelineResult.risk_profile.overall_band field -- no new dependency, no change to Decision's or RiskProfile's public shape.",
+  "changed_files": [
+    { "path": "demo-repo/src/loanflow/explanations.py", "change_type": "modified", "lines_added": 3, "lines_removed": 2 },
+    { "path": "demo-repo/src/loanflow/cli.py", "change_type": "modified", "lines_added": 1, "lines_removed": 1 },
+    { "path": "demo-repo/tests/unit/test_explanations.py", "change_type": "modified", "lines_added": 11, "lines_removed": 3 }
+  ],
+  "diff_ref": "runs/run-20260804-riskband-003/diff.patch",
+  "commands": [
+    {
+      "id": "C-1",
+      "stage": "pre_implementation",
+      "command": "python -m pytest tests/unit/test_explanations.py -v",
+      "exit_code": 1,
+      "output_summary": "4 failed in 0.14s. All four failures are TypeError: explain() takes 1 positional argument but 2 were given, raised at each explain(decision, Band.X) call site (test_explanations.py lines 11, 21, 30, 38) -- matches expected_failure_reason exactly. No collection errors, no import errors, no unrelated failures."
+    },
+    {
+      "id": "C-2",
+      "stage": "post_implementation",
+      "command": "python -m pytest tests/unit/test_explanations.py -v",
+      "exit_code": 0,
+      "output_summary": "4 passed in 0.02s. All four tests in test_explanations.py pass, including test_explain_includes_the_overall_risk_band. No collection errors, no mutation detected."
+    }
+  ],
+  "test_first_evidence": {
+    "pre_implementation_command_id": "C-1",
+    "post_implementation_command_id": "C-2"
+  },
+  "tests": [
+    { "test_file": "demo-repo/tests/unit/test_explanations.py", "test_name": "test_explain_approve_mentions_approval_and_each_rule", "status": "modified" },
+    { "test_file": "demo-repo/tests/unit/test_explanations.py", "test_name": "test_explain_refer_mentions_manual_review", "status": "modified" },
+    { "test_file": "demo-repo/tests/unit/test_explanations.py", "test_name": "test_explain_decline_mentions_decline_and_the_failing_rule", "status": "modified" },
+    { "test_file": "demo-repo/tests/unit/test_explanations.py", "test_name": "test_explain_includes_the_overall_risk_band", "status": "added" }
+  ],
+  "dependency_changes": [],
+  "status": "ready_for_verification"
+}

@@ -1,0 +1,6 @@
+{
+  "operation": "validate_artifact",
+  "phase": "verification",
+  "doc_ref": "runs/run-20260804-riskband-003/attempts/verification-3.raw.txt",
+  "context_refs": { "scope": "runs/run-20260804-riskband-003/scope.json" }
+}

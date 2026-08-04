@@ -1,0 +1,14 @@
+```json
+{
+  "response_type": "attempt_requested",
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-003",
+  "requested_command": {
+    "id": "V-1",
+    "command": "python -m pytest tests/unit/test_explanations.py -v",
+    "working_directory": "demo-repo",
+    "criteria_ids_targeted": ["AC-1", "AC-2"],
+    "rationale": "Runs the exact narrow test file covering both AC-1 (explain() renders overall_band) and AC-2 (all test_explanations.py tests pass including the new risk-band test), matching the Engineer's own post-implementation command C-2."
+  }
+}
+```

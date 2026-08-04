@@ -1,0 +1,80 @@
+diff --git a/demo-repo/src/loanflow/cli.py b/demo-repo/src/loanflow/cli.py
+index bf32230..2d6cbfe 100644
+--- a/demo-repo/src/loanflow/cli.py
++++ b/demo-repo/src/loanflow/cli.py
+@@ -64,7 +64,7 @@ def _cmd_decide(args: argparse.Namespace) -> int:
+         clock=SystemClock(),
+         audit_log=audit_log,
+     )
+-    print(explain(result.decision))
++    print(explain(result.decision, result.risk_profile.overall_band))
+     return 0
+ 
+ 
+diff --git a/demo-repo/src/loanflow/explanations.py b/demo-repo/src/loanflow/explanations.py
+index e7bf750..904c913 100644
+--- a/demo-repo/src/loanflow/explanations.py
++++ b/demo-repo/src/loanflow/explanations.py
+@@ -2,6 +2,7 @@
+ from __future__ import annotations
+ 
+ from loanflow.decisions import Decision, DecisionOutcome
++from loanflow.risk_bands import Band
+ from loanflow.underwriting_rules import RuleOutcome
+ 
+ _OUTCOME_HEADLINE = {
+@@ -17,8 +18,8 @@ _MARKER_BY_OUTCOME = {
+ }
+ 
+ 
+-def explain(decision: Decision) -> str:
+-    lines = [_OUTCOME_HEADLINE[decision.outcome]]
++def explain(decision: Decision, overall_risk_band: Band) -> str:
++    lines = [_OUTCOME_HEADLINE[decision.outcome], f"Overall risk band: {overall_risk_band.value}"]
+     for result in decision.rule_results:
+         marker = _MARKER_BY_OUTCOME[result.outcome]
+         lines.append(f"  [{marker}] {result.rule_name}: {result.reason}")
+diff --git a/demo-repo/tests/unit/test_explanations.py b/demo-repo/tests/unit/test_explanations.py
+index d3ef477..ace29e3 100644
+--- a/demo-repo/tests/unit/test_explanations.py
++++ b/demo-repo/tests/unit/test_explanations.py
+@@ -2,12 +2,13 @@ from __future__ import annotations
+ 
+ from loanflow.decisions import Decision, DecisionOutcome
+ from loanflow.explanations import explain
++from loanflow.risk_bands import Band
+ from loanflow.underwriting_rules import RuleOutcome, RuleResult
+ 
+ 
+ def test_explain_approve_mentions_approval_and_each_rule() -> None:
+     decision = Decision(DecisionOutcome.APPROVE, (RuleResult("max_dti_rule", RuleOutcome.PASS, "DTI is fine"),))
+-    text = explain(decision)
++    text = explain(decision, Band.LOW)
+     assert "approved" in text.lower()
+     assert "max_dti_rule" in text
+     assert "[OK]" in text
+@@ -17,7 +18,7 @@ def test_explain_refer_mentions_manual_review() -> None:
+     decision = Decision(
+         DecisionOutcome.REFER, (RuleResult("max_dti_rule", RuleOutcome.BORDERLINE, "DTI is borderline"),)
+     )
+-    text = explain(decision)
++    text = explain(decision, Band.MEDIUM)
+     assert "manual review" in text.lower()
+     assert "[BORDERLINE]" in text
+ 
+@@ -26,7 +27,14 @@ def test_explain_decline_mentions_decline_and_the_failing_rule() -> None:
+     decision = Decision(
+         DecisionOutcome.DECLINE, (RuleResult("max_ltv_rule", RuleOutcome.HARD_FAIL, "LTV too high"),)
+     )
+-    text = explain(decision)
++    text = explain(decision, Band.HIGH)
+     assert "declined" in text.lower()
+     assert "[FAIL]" in text
+     assert "LTV too high" in text
++
++
++def test_explain_includes_the_overall_risk_band() -> None:
++    decision = Decision(DecisionOutcome.APPROVE, (RuleResult("max_dti_rule", RuleOutcome.PASS, "DTI is fine"),))
++    text = explain(decision, Band.HIGH)
++    assert "risk band" in text.lower()
++    assert Band.HIGH.value in text

@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-003",
+  "created_at": "2026-08-04T18:13:49Z",
+  "objective_summary": "COMPLETED -- the first real, live four-phase Discovery -> Research -> Implementation -> Verification /work pipeline to finish end-to-end against demo-repo/. Discovery produced and promoted scope.json (objective: add RiskProfile.overall_band to explain()'s human-readable decision explanation). Research: a real, live-dispatched Architect (agent a8e5a6118fb7648f7) returned clean unfenced JSON on the first attempt -- 6 findings (3 found, 2 honest not_found, 1 inferred) -- promoted to findings.json. Implementation: a real, live-dispatched Engineer (agent a5c7fbf7f46248441) wrote a genuine failing TDD test first (independently confirmed via git status/diff -- only the in-scope test file changed, no production source touched yet), requested pre-test evidence mediated through the real (forked) test-runner Skill, got the exact expected TypeError failure, then implemented the smallest change: explain() gained a required overall_risk_band: Band parameter and one new output line, cli.py's call site was updated to pass result.risk_profile.overall_band -- independently confirmed via git diff to match the Engineer's own changed_files claim exactly. Crucially, the Engineer's Edit/Write tools remained available after the forked test-runner invocation, resolving the exact defect that blocked the prior live attempt (run-20260804-riskband-002) -- the forked-isolation repair to test-runner/SKILL.md is now live-verified for the first time. Post-implementation and finalization evidence were mediated for real (exit_code 0, 4 passed), and implementation-report.json was promoted with status ready_for_verification -- the first such artifact ever produced by a real /work run. Verification: a real, live-dispatched Quality Engineer (agent a96d7d1edcebbc7e5) independently re-ran the narrow test command (exit_code 0, 4 passed) and returned final_verdict: pass for both acceptance criteria, promoted to verification-report.json. The orchestrator independently re-verified this pass verdict itself (not on the Quality Engineer's word alone): re-ran the same narrow command through the real test-runner Skill (ORCH-1, exit_code 0), ran the full demo-repo suite (ORCH-2, exit_code 0, 102 passed -- 101 baseline + 1 new), and confirmed via git status/git diff --stat that exactly the three claimed files changed (demo-repo/src/loanflow/explanations.py, demo-repo/src/loanflow/cli.py, demo-repo/tests/unit/test_explanations.py) with no drift and no out-of-scope or Protected Path changes. Two transport/parse failures occurred (the Architect's Research response arrived clean; the Engineer's first pre_test_requested and the Quality Engineer's first attempt_requested were both Markdown-fenced) -- each was retained verbatim as evidence, classified, and repaired via exactly one transport-only correction to the same agent id per phase, per the documented transport-repair protocol, never by locally stripping fences.",
+  "artifact_refs": {
+    "scope": "runs/run-20260804-riskband-003/scope.json",
+    "findings": "runs/run-20260804-riskband-003/findings.json",
+    "implementation_report": "runs/run-20260804-riskband-003/implementation-report.json",
+    "verification_report": "runs/run-20260804-riskband-003/verification-report.json"
+  },
+  "final_verdict": "pass",
+  "phases_completed": [
+    "discovery",
+    "research",
+    "implementation",
+    "verification"
+  ],
+  "remaining_risks": [
+    "No hooks (skill-enforcement, pre-dispatch check, completion-guardrail) exist yet in this milestone, so nothing at the tool/process layer would have stopped a false completion claim -- this run's integrity rests entirely on the orchestrator's own independent re-verification (git status/diff, a fresh test-runner Skill re-run), not on an automated guardrail.",
+    "memory/lessons-learned.md does not exist yet, so this run's lessons are recorded only in this run-summary and PROJECT_SPEC.md, not fed back automatically into a future run's Discovery step.",
+    "This was a small, well-bounded change (one new required parameter, one new output line, one call-site update); the Engineer's staged protocol has not yet been exercised live under a multi-iteration retry (e.g. an unfixable dependency, a genuine post-implementation failure requiring a corrective edit) or a command_rejected/mutation-sentinel case."
+  ],
+  "follow_up_actions": [
+    "Append the appropriate lessons (max 5 bullets) to memory/lessons-learned.md now that it's clear this pipeline can close end-to-end, once that file is created per the deferred memory-loop milestone.",
+    "Exercise the Engineer's post-implementation corrective-edit loop and the Quality Engineer's infrastructure_flake retry path live, neither of which was needed by this clean run.",
+    "Build the completion-guardrail, pre-dispatch-check, and skill-enforcement hooks (§3 'Hooks') so future runs don't rely solely on the orchestrator's own manual re-verification discipline."
+  ],
+  "duration_seconds": 2400,
+  "lessons_learned_appended": []
+}

@@ -1,0 +1,13 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260804-riskband-003",
+  "kind": "skill_invocation",
+  "payload": {
+    "skill": "test-runner",
+    "request_path": "runs/run-20260804-riskband-003/requests/C-1.json",
+    "invoked_via": "Skill tool",
+    "command_id": "C-1",
+    "context": "fork",
+    "background": false
+  }
+}

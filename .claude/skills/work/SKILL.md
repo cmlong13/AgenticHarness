@@ -380,12 +380,16 @@ wire format only: it never asks the Engineer to redo work, change `changed_files
 
 # Phase 4: Verification (real Quality Engineer dispatch) -- not exercised in a dry run
 
-Same shape as Phase 3: dispatch, capture and retain the agent id as a policy event,
-retain every raw turn before parsing, mediate every `attempt_requested` through the real
-`test-runner` Skill, resume the *same* Quality Engineer for every reply including any
-evidence-supported `infrastructure_flake` retry (max 2, per `quality-engineer.md`),
-`validate_artifact`/`promote_artifact` (`phase: "verification"`,
-`context_refs.scope` pointing at the promoted `scope.json`) on the final report.
+Broadly the same shape as Phase 3: dispatch, capture and retain the agent id as a policy
+event, retain every raw turn before parsing, mediate every `attempt_requested` through
+the real `test-runner` Skill, resume the *same* Quality Engineer for every reply
+including any evidence-supported `infrastructure_flake` retry (max 2, per
+`quality-engineer.md`), `validate_artifact`/`promote_artifact` (`phase: "verification"`,
+`context_refs.scope` pointing at the promoted `scope.json`) on the final report. If a raw
+turn does not parse as strict JSON, or parses but is wrapped in a Markdown fence or
+carries leading/trailing prose, classify and handle it via "Quality Engineer transport
+repair" below -- do **not** treat it as merely "the same protocol as the Engineer's" by
+informal analogy; the rules below are this phase's own explicit, authoritative protocol.
 
 After a `pass`/`fail`/`inconclusive` verdict, independently re-verify before repeating
 it to the user: re-run the same narrow command yourself through the Skill, and run
@@ -395,6 +399,73 @@ Never report "verification passed" solely because the Quality Engineer said so.
 This milestone does not implement automatic route-back to the Engineer on a `logic_bug`
 verdict (deferred per `PROJECT_SPEC.md` §4 "Later integrations" / this ticket's Scope
 restrictions) -- a `fail` verdict ends the run and is reported honestly as such.
+
+## Quality Engineer transport repair (Verification phase, at most one correction total)
+
+Exactly one transport-only correction attempt is permitted per Verification phase,
+shared across all of that phase's staged turns (`attempt_requested` and the final
+report) -- not one per turn. This mirrors "Engineer transport repair" above but is
+scoped to the Quality Engineer's staged protocol instead of the Engineer's. It repairs
+the wire format only: it never asks the Quality Engineer to redo verification, request a
+different command, change any `requested_command`/`command`/`working_directory`, change
+any acceptance-criteria classification, `final_verdict`, or any other substantive
+content, or make any further tool call (the Quality Engineer holds no `Edit`/`Write`/
+`Bash` tool to begin with, so there is nothing further for it to do beyond replying).
+
+1. Classify the failure exactly as in Research/Implementation: a **transport/parse
+   failure** is raw text that does not parse as strict JSON at all, or parses but was
+   wrapped in a Markdown code fence, or carries leading/trailing prose -- a violation of
+   `quality-engineer.md`'s own "Exactly one raw JSON object per turn, no fence, no prose"
+   contract, assessable before the turn's content is even read. A **content failure** --
+   the JSON parses cleanly but is the wrong `response_type`, fails schema validation, or
+   fails a semantic check `quality-engineer.md` defines (a stale `command_id`, a
+   `task_id`/`run_id` mismatch, an unrecognized reference, a findings_ref/changed_files
+   mismatch) -- is not a transport problem and is not eligible for this repair; that is
+   handled through `quality-engineer.md`'s own `rejected_reply` re-request mechanism,
+   which the Quality Engineer itself drives, or, if that is exhausted or inapplicable,
+   the phase blocks.
+2. Retain the malformed output exactly as received -- via `retain_attempt`, before any
+   parsing. Never locally strip Markdown fences, trim prose, or otherwise rewrite the
+   response yourself to make it parse; a locally repaired response is not evidence that
+   the Quality Engineer itself can produce a conforming one.
+3. `retain_policy_event` (`kind: "transport_parse_failure"`, `phase: "verification"`)
+   with the raw attempt reference and a description of exactly what was wrong
+   (unparsable / fenced / leading-or-trailing prose).
+4. Only if this phase's one-correction budget has not already been spent: send a
+   transport-only correction request to the **same Quality Engineer agent id** captured
+   at this phase's `agent_dispatch` policy event -- use `SendMessage` to that exact id,
+   never a new `Agent` call. The message must tell the Quality Engineer explicitly, in
+   these terms:
+   - do not request a different command, criterion, or classification
+   - do not change `final_verdict`, `acceptance_criteria_results`, `attempts`, or any
+     other content
+   - return the exact same envelope content as raw JSON
+   - no Markdown fence
+   - no leading or trailing prose
+   If the budget has already been spent this phase, skip straight to blocking (step 7
+   below) without sending a second correction request.
+5. Wait for the completion notification from that same agent id before proceeding --
+   exactly as the staged continuation protocol requires (see "Staged continuation
+   protocol" below); do not act on a partial or absent result.
+6. Retain the corrected response as the next Verification attempt: `retain_attempt`
+   (`phase: "verification"`, next `attempt_n`), verbatim, before parsing it. Then
+   validate it exactly as any other turn -- no relaxed rules for a corrected response. If
+   it is now a valid envelope or final artifact, resume the staged protocol normally at
+   the point this turn left off.
+7. This is the **one and only** correction attempt permitted for this Verification
+   phase, regardless of which turn triggered it. If the corrected response is itself
+   still malformed (another transport failure) or is now invalid for content reasons, do
+   **not** send a second correction request under any circumstance: the phase ends
+   (`state: "verification_blocked"`); `retain_policy_event`
+   (`kind: "transport_repair_exhausted"`) noting that the single permitted correction was
+   used and did not resolve the failure.
+8. Never spawn a replacement Quality Engineer (a new `Agent` call) for this phase at any
+   point in this sequence and present it as a continuation of the original -- that
+   fabricates continuity exactly the way the cardinal "never trust/fabricate a completion
+   claim" rule forbids. If the same agent id cannot be resumed (the tool errors, or the
+   reply cannot be matched to the id), treat that identically to a broken staged
+   continuation: block the phase, `retain_policy_event` (`kind: "continuity_broken"`), do
+   not retry with a fresh agent.
 
 # Staged continuation protocol (documented now, not live-exercised until Phase 3/4 run)
 

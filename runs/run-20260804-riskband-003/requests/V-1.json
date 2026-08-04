@@ -1,0 +1,9 @@
+{
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-003",
+  "command_id": "V-1",
+  "command": "python -m pytest tests/unit/test_explanations.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Independent Verification of AC-1/AC-2: re-execute test_explanations.py exactly, without trusting the Engineer's own post-implementation claim."
+}

@@ -1,0 +1,17 @@
+{
+  "operation": "check_command_identity",
+  "request": {
+    "task_id": "T-RISKBAND",
+    "run_id": "run-20260804-riskband-003",
+    "command_id": "C-2",
+    "command": "python -m pytest tests/unit/test_explanations.py -v",
+    "working_directory": "demo-repo"
+  },
+  "result": {
+    "task_id": "T-RISKBAND",
+    "run_id": "run-20260804-riskband-003",
+    "command_id": "C-2",
+    "command": "python -m pytest tests/unit/test_explanations.py -v",
+    "working_directory": "demo-repo"
+  }
+}

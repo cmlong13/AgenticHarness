@@ -1,0 +1,9 @@
+{
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-003",
+  "command_id": "C-2",
+  "command": "python -m pytest tests/unit/test_explanations.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Post-implementation evidence: confirm all test_explanations.py tests pass now that explain() accepts and renders the overall risk band."
+}

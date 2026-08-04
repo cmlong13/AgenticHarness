@@ -1,0 +1,11 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260804-riskband-003",
+  "kind": "agent_dispatch",
+  "payload": {
+    "phase": "verification",
+    "subagent_type": "quality-engineer",
+    "agent_id": "a96d7d1edcebbc7e5",
+    "dispatch_sequence": 1
+  }
+}

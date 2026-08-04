@@ -1,0 +1,9 @@
+{
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-003",
+  "command_id": "ORCH-2",
+  "command": "python -m pytest tests -q",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Orchestrator's own health check: confirm the full demo-repo suite still passes after this change, per scope.json task_graph N-3 ('Verify narrow and full demo-repo test suites')."
+}

@@ -1,0 +1,21 @@
+```json
+{
+  "response_type": "pre_test_requested",
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-003",
+  "test_created": {
+    "test_file": "demo-repo/tests/unit/test_explanations.py",
+    "test_name": "test_explain_includes_the_overall_risk_band",
+    "status": "added"
+  },
+  "requested_command": {
+    "id": "C-1",
+    "command": "python -m pytest tests/unit/test_explanations.py -v",
+    "working_directory": "demo-repo",
+    "expected_outcome": "fail",
+    "expected_failure_reason": "explain() currently has signature def explain(decision: Decision) -> str (single positional parameter), but all four tests in the updated test_explanations.py now call explain(decision, <Band>) with two positional arguments, so pytest should report TypeError: explain() takes 1 positional argument but 2 were given for every test in this file."
+  },
+  "findings_relied_on": ["F-1", "F-2", "F-4"],
+  "minimal_change_rung_plan": 5
+}
+```

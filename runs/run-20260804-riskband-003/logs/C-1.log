@@ -1,0 +1,72 @@
+command: python -m pytest tests/unit/test_explanations.py -v
+executed_as: C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe -m pytest tests/unit/test_explanations.py -v
+working_directory: demo-repo
+timeout_seconds: 300
+real_pytest_exit_code: 1
+reported_exit_code: 1
+
+--- STDOUT ---
+[1m============================= test session starts =============================[0m
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo
+configfile: pyproject.toml
+[1mcollecting ... [0mcollected 4 items
+
+tests/unit/test_explanations.py::test_explain_approve_mentions_approval_and_each_rule [31mFAILED[0m[31m [ 25%][0m
+tests/unit/test_explanations.py::test_explain_refer_mentions_manual_review [31mFAILED[0m[31m [ 50%][0m
+tests/unit/test_explanations.py::test_explain_decline_mentions_decline_and_the_failing_rule [31mFAILED[0m[31m [ 75%][0m
+tests/unit/test_explanations.py::test_explain_includes_the_overall_risk_band [31mFAILED[0m[31m [100%][0m
+
+================================== FAILURES ===================================
+[31m[1m____________ test_explain_approve_mentions_approval_and_each_rule _____________[0m
+
+    [0m[94mdef[39;49;00m[90m [39;49;00m[92mtest_explain_approve_mentions_approval_and_each_rule[39;49;00m() -> [94mNone[39;49;00m:[90m[39;49;00m
+        decision = Decision(DecisionOutcome.APPROVE, (RuleResult([33m"[39;49;00m[33mmax_dti_rule[39;49;00m[33m"[39;49;00m, RuleOutcome.PASS, [33m"[39;49;00m[33mDTI is fine[39;49;00m[33m"[39;49;00m),))[90m[39;49;00m
+>       text = explain(decision, Band.LOW)[90m[39;49;00m
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^[90m[39;49;00m
+[1m[31mE       TypeError: explain() takes 1 positional argument but 2 were given[0m
+
+[1m[31mtests\unit\test_explanations.py[0m:11: TypeError
+[31m[1m__________________ test_explain_refer_mentions_manual_review __________________[0m
+
+    [0m[94mdef[39;49;00m[90m [39;49;00m[92mtest_explain_refer_mentions_manual_review[39;49;00m() -> [94mNone[39;49;00m:[90m[39;49;00m
+        decision = Decision([90m[39;49;00m
+            DecisionOutcome.REFER, (RuleResult([33m"[39;49;00m[33mmax_dti_rule[39;49;00m[33m"[39;49;00m, RuleOutcome.BORDERLINE, [33m"[39;49;00m[33mDTI is borderline[39;49;00m[33m"[39;49;00m),)[90m[39;49;00m
+        )[90m[39;49;00m
+>       text = explain(decision, Band.MEDIUM)[90m[39;49;00m
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[90m[39;49;00m
+[1m[31mE       TypeError: explain() takes 1 positional argument but 2 were given[0m
+
+[1m[31mtests\unit\test_explanations.py[0m:21: TypeError
+[31m[1m_________ test_explain_decline_mentions_decline_and_the_failing_rule __________[0m
+
+    [0m[94mdef[39;49;00m[90m [39;49;00m[92mtest_explain_decline_mentions_decline_and_the_failing_rule[39;49;00m() -> [94mNone[39;49;00m:[90m[39;49;00m
+        decision = Decision([90m[39;49;00m
+            DecisionOutcome.DECLINE, (RuleResult([33m"[39;49;00m[33mmax_ltv_rule[39;49;00m[33m"[39;49;00m, RuleOutcome.HARD_FAIL, [33m"[39;49;00m[33mLTV too high[39;49;00m[33m"[39;49;00m),)[90m[39;49;00m
+        )[90m[39;49;00m
+>       text = explain(decision, Band.HIGH)[90m[39;49;00m
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^[90m[39;49;00m
+[1m[31mE       TypeError: explain() takes 1 positional argument but 2 were given[0m
+
+[1m[31mtests\unit\test_explanations.py[0m:30: TypeError
+[31m[1m_________________ test_explain_includes_the_overall_risk_band _________________[0m
+
+    [0m[94mdef[39;49;00m[90m [39;49;00m[92mtest_explain_includes_the_overall_risk_band[39;49;00m() -> [94mNone[39;49;00m:[90m[39;49;00m
+        decision = Decision(DecisionOutcome.APPROVE, (RuleResult([33m"[39;49;00m[33mmax_dti_rule[39;49;00m[33m"[39;49;00m, RuleOutcome.PASS, [33m"[39;49;00m[33mDTI is fine[39;49;00m[33m"[39;49;00m),))[90m[39;49;00m
+>       text = explain(decision, Band.HIGH)[90m[39;49;00m
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^[90m[39;49;00m
+[1m[31mE       TypeError: explain() takes 1 positional argument but 2 were given[0m
+
+[1m[31mtests\unit\test_explanations.py[0m:38: TypeError
+[36m[1m=========================== short test summary info ===========================[0m
+[31mFAILED[0m tests/unit/test_explanations.py::[1mtest_explain_approve_mentions_approval_and_each_rule[0m - TypeError: explain() takes 1 positional argument but 2 were given
+[31mFAILED[0m tests/unit/test_explanations.py::[1mtest_explain_refer_mentions_manual_review[0m - TypeError: explain() takes 1 positional argument but 2 were given
+[31mFAILED[0m tests/unit/test_explanations.py::[1mtest_explain_decline_mentions_decline_and_the_failing_rule[0m - TypeError: explain() takes 1 positional argument but 2 were given
+[31mFAILED[0m tests/unit/test_explanations.py::[1mtest_explain_includes_the_overall_risk_band[0m - TypeError: explain() takes 1 positional argument but 2 were given
+[31m============================== [31m[1m4 failed[0m[31m in 0.14s[0m[31m ==============================[0m
+
+--- STDERR ---
+
+--- MUTATION CHECK ---
+no persistent non-cache file addition, deletion, or modification detected

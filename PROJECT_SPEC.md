@@ -8,18 +8,26 @@ core (`harness/orchestrator/` — a one-pass Discovery → Research → Implemen
 state machine, automatically tested end-to-end against scripted fake adapters only) are
 complete. This satisfies the Core MVP's skill requirement (§4), but not the assignment's
 broader "≥4 skill packs" requirement (§3) — the GitHub and Jira skill packs are not yet built.
-Two real, live `/work` attempts have since run against `demo-repo/`
-(`run-20260803-riskband-001`, `run-20260804-riskband-002` — see §10), both retained as evidence
-and both ending `final_verdict: "blocked"`, not completed. The second live-verified real
-Architect and Engineer dispatch, an Engineer transport-repair correction resuming the same agent
-id, a genuine TDD failing test mediated through the real test-runner Skill, and then surfaced a
-real defect: the (at the time, inline) test-runner Skill's `disallowed-tools` restriction
-propagated into the resumed Engineer's own tool availability, blocking Implementation. The chosen
-repair — running `test-runner` forked (`context: fork`, `background: false`) — is implemented but
-**not yet live-verified by another `/work` run**. No end-to-end four-phase pipeline has completed.
-The `demo-repo/` target application (`loanflow`, 55 files) is implemented, automatically tested,
-and verified compatible with the test-runner wrapper and the orchestrator's path rules. The
-Skills requirement, the orchestrator milestone, and the project as a whole are not complete.**
+Three real, live `/work` attempts have now run against `demo-repo/`
+(`run-20260803-riskband-001`, `run-20260804-riskband-002`, `run-20260804-riskband-003` — see
+§10), all retained as evidence. The first two ended `final_verdict: "blocked"`, not completed;
+each surfaced and led to a repair of a real defect (fenced Architect transport, then an inline
+test-runner Skill invocation stripping the resumed Engineer's own `Edit`/`Write`). **The third,
+`run-20260804-riskband-003`, is the first successful literal `/work` execution: a real, live
+four-phase Discovery → Research → Implementation → Verification pipeline that completed
+end-to-end against `demo-repo/`, ending `final_verdict: "pass"`.** It produced the first
+canonical `implementation-report.json` with `ready_for_verification` and the first canonical
+passing `verification-report.json`, live-verified the forked test-runner isolation repair (the
+resumed Engineer's `Edit`/`Write` remained available), and independently confirmed 102 passing
+demo tests, a minimal three-file diff, and a genuine failing test committed before the
+production change. See "Live evidence (`run-20260804-riskband-003`) — completed" in §10 for the
+full account. The harness's own hooks/guardrails, same-run Quality-Engineer logic-failure
+route-back, checkpoint/resume, memory loop, token/cost accounting, GitHub/Jira skills and
+connectors, Obsidian integration, and false-push/flaky-test demonstrations remain open — this
+milestone closes the core loop once, it does not close the project. The `demo-repo/` target
+application (`loanflow`, 55 files) is implemented, automatically tested, and verified compatible
+with the test-runner wrapper and the orchestrator's path rules. The Skills requirement and the
+project as a whole are still not complete.**
 
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
@@ -351,19 +359,30 @@ AgenticHarness/
 6. Deterministic orchestrator core (`harness/orchestrator/`) — **COMPLETE** as a standalone,
    fake-adapter-tested engine: one-pass state machine, artifact validation gates, staged-command
    mediation, evidence retention, run-summary generation for every terminal outcome (246 tests
-   passing; see §10). **Not** complete: no live `Agent`/`SendMessage` adapter, no real
-   test-runner adapter, no reasoning-backed Discovery adapter, no end-to-end run.
+   passing; see §10). `core.py` itself still has no live `Agent`/`SendMessage` adapter, no real
+   test-runner adapter wired in, and no reasoning-backed Discovery adapter — live dispatch
+   instead happens through the separate `/work` skill + `live_cli.py` path (Option C, §10),
+   which **has** now completed a real end-to-end run (`run-20260804-riskband-003`).
 7. Build or import the real target repository with at least 50 files — **COMPLETE**:
-   `demo-repo/loanflow`, 55 files, 22 source modules, 23 test files (101 tests passing);
-   test-runner-wrapper and mutation-safety verified (§10). Not yet used by a live orchestrator
-   run.
+   `demo-repo/loanflow`, 55 files, 22 source modules, 23 test files (102 tests passing after
+   `run-20260804-riskband-003`'s risk-band change); test-runner-wrapper and mutation-safety
+   verified (§10). Used by a live, completed four-phase orchestrator run
+   (`run-20260804-riskband-003`).
 8. Live Claude Code adapter layer, real test-runner adapter, reasoning-backed Discovery adapter,
-   and `/work` free-form prompt mode.
-9. Checkpoint, memory loop, pre-dispatch hook, and completion guardrail.
-10. Independent GitHub push-verification path.
-11. Close one complete free-form prompt pipeline with real evidence.
+   and `/work` free-form prompt mode — **COMPLETE and live-verified**: `run-20260804-riskband-003`
+   exercised all of Discovery (reasoning-backed, main session), a real Architect/Engineer/Quality
+   Engineer dispatch, staged same-agent continuation, and the forked real test-runner Skill,
+   end-to-end (see §10 "Live evidence (`run-20260804-riskband-003`)").
+9. Checkpoint, memory loop, pre-dispatch hook, and completion guardrail. **Not started** — see
+   §4 "Later integrations."
+10. Independent GitHub push-verification path. **Not started** — no commit/push has been
+    performed by the harness in any live run to date (by design; see `work/SKILL.md` standing
+    rule 12).
+11. Close one complete free-form prompt pipeline with real evidence — **COMPLETE**:
+    `run-20260804-riskband-003`, `final_verdict: "pass"`, all four canonical artifacts promoted,
+    102 demo tests passing, no commit/push performed.
 12. Add Jira, Obsidian, cost tracking, connector comparison, broader skills, and
-    planted-defect demonstrations.
+    planted-defect demonstrations. **Not started.**
 
 ---
 
@@ -405,11 +424,20 @@ Demonstrated live, on a repo with ≥50 files:
 
 - [ ] `/work <ticket-id>` pulls a real ticket via the Atlassian connector and produces a scoped
       task graph.
-- [ ] Research phase produces a findings doc where every claim has a `file:line` citation,
-      including at least one honest "Not Found."
-- [ ] Architect physically cannot edit source files (tool restriction, not politeness).
-- [ ] Engineer's diff cites the architect finding it builds on; no new dependencies without a
-      written justification.
+- [x] Research phase produces a findings doc where every claim has a `file:line` citation,
+      including at least one honest "Not Found." Live-demonstrated:
+      `runs/run-20260804-riskband-003/findings.json` — 3 `found`/1 `inferred` finding cite
+      `file:line` evidence, 2 honest `not_found` findings cite documented search attempts.
+- [x] Architect physically cannot edit source files (tool restriction, not politeness).
+      Independently verified both via boundary testing
+      (`docs/architect-permission-verification.md`) and live in `run-20260804-riskband-003`
+      (the Architect returned findings only; all file changes came from the separately
+      dispatched Engineer).
+- [x] Engineer's diff cites the architect finding it builds on; no new dependencies without a
+      written justification. Live-demonstrated:
+      `runs/run-20260804-riskband-003/implementation-report.json`'s `findings_ref.finding_ids`
+      is `["F-1", "F-2", "F-4"]` (all `found` classifications from the promoted
+      `findings.json`); `dependency_changes` is empty.
 - [ ] A planted flaky test is classified as infrastructure and retried; a planted logic bug is
       classified as logic, not retried, and routed back to the engineer — fixed in the same run.
 - [ ] Completion-guardrail hook demonstrably blocks a run where verification evidence is
@@ -693,9 +721,15 @@ any of this runs a real pipeline.
 - State-transition verified: yes
 - Artifact-validation verified: yes
 - Same-handle continuity verified with fake adapters: yes
-- Live Agent/SendMessage integrated: no
-- Live test-runner adapter integrated: no
-- End-to-end verified: no
+- Live Agent/SendMessage integrated: no *(this module, `core.py`, itself never calls a
+  live adapter — Option C below routes live dispatch through the `/work` skill and
+  `live_cli.py` instead; live Agent/SendMessage dispatch has happened, but not through
+  `core.py`/`core.run()` — see `run-20260804-riskband-003`)*
+- Live test-runner adapter integrated: no *(same caveat — the live path mediates through
+  the real `test-runner` Skill directly from `/work`, not through a `TestRunnerAdapter`
+  passed into `core.run()`)*
+- End-to-end verified: no for `core.py` itself; **yes for the harness overall**, via the
+  `/work` skill's Option C path (`run-20260804-riskband-003`, `final_verdict: "pass"`)
 - Complete orchestrator milestone: no
 
 #### Live architecture decision (Option C)
@@ -866,6 +900,102 @@ specified in instructions, and it surfaced the specific defect this milestone re
   the next `/work` attempt, not one this milestone can certify from static
   configuration alone.
 
+#### Live evidence (2026-08-04, `run-20260804-riskband-003`) — completed
+
+`run-20260804-riskband-003` is a **real, live `/work` attempt**, retained unmodified at
+`runs/run-20260804-riskband-003/`. It ended `final_verdict: "pass"` -- **the first
+successful literal `/work` execution to complete Discovery → Research → Implementation →
+Verification end-to-end against `demo-repo/`**, closing the item 6 gap "Remaining work"
+below tracked as open through both prior live attempts.
+
+- **Discovery → Research → Implementation → Verification all completed and promoted.**
+  `scope.json`, `findings.json`, `implementation-report.json`
+  (`status: "ready_for_verification"` -- **the first such artifact ever produced by a
+  real `/work` run**), and `verification-report.json` (`final_verdict: "pass"` -- **the
+  first canonical passing verification report ever produced by a real `/work` run**) are
+  all canonical and schema-valid.
+- **Canonical findings: 6 total -- 3 `found` (F-1, F-2, F-4), 2 honest `not_found`
+  (F-3, F-5), 1 `inferred` (F-6),** per `findings.json`, the sole source of truth for
+  this count. This count is consistent across every retained artifact and draft in this
+  run (the raw Architect attempt, `findings.json`, `implementation-report.json`'s
+  `findings_ref.finding_ids`, and both the draft and canonical `run-summary.json`); an
+  audit of the run directory found no retained document stating a different count. Any
+  other figure quoted for this run elsewhere is superseded by this one.
+- **The forked test-runner isolation repair is now live-verified.** A real,
+  live-dispatched Engineer (agent `a5c7fbf7f46248441`) requested pre-implementation test
+  evidence mediated through the real, forked (`context: fork`, `background: false`)
+  `test-runner` Skill, received the real result, and its `Edit`/`Write` tools remained
+  available on its next turn to make the implementation edit -- resolving the exact
+  defect `run-20260804-riskband-002` surfaced. `PROJECT_SPEC.md`'s "not yet live-verified"
+  caveat on the fork repair (above) is resolved by this run.
+- **Genuine TDD evidence, in the correct order.** Independently confirmed via
+  `git status`/`git diff` before command C-1 was mediated: only
+  `demo-repo/tests/unit/test_explanations.py` had changed, no production file yet. C-1
+  (`python -m pytest tests/unit/test_explanations.py -v`) returned `exit_code: 1` with
+  the exact expected `TypeError` (not a syntax/import error or unrelated failure). Only
+  after that failure was confirmed did the Engineer make its production edit; C-2, run
+  after the edit, returned `exit_code: 0`, 4 passed.
+- **Same-Engineer and same-Quality-Engineer staged continuation, both live-verified.**
+  Per `logs/policy-events.jsonl`, exactly one `agent_dispatch` event exists for each of
+  the Architect (`a8e5a6118fb7648f7`), Engineer (`a5c7fbf7f46248441`), and Quality
+  Engineer (`a96d7d1edcebbc7e5`) -- no second dispatch for any phase, so no replacement
+  agent was ever substituted for a continuation. The narrative and staged-turn evidence
+  (`attempts/implementation-1..5.raw.txt`, `attempts/verification-1..3.raw.txt`) show the
+  Engineer resumed across 5 turns and the Quality Engineer across 3 turns, all under
+  their single respective dispatched agent id.
+- **Exactly one transport correction per phase, both formalized.** The Engineer's first
+  `pre_test_requested` reply and the Quality Engineer's first `attempt_requested` reply
+  were each Markdown-fenced; each was repaired with exactly one transport-only
+  correction to the same agent id (`transport_parse_failure` policy events retained for
+  both), matching the one-correction-per-phase budget. The Quality Engineer's repair had
+  previously been handled only "by extension" of the Architect/Engineer protocols (per
+  `logs/policy-events.jsonl`'s own description field); `work/SKILL.md` now states an
+  explicit Quality Engineer transport-repair protocol (see "Quality Engineer transport
+  repair" in `work/SKILL.md`) rather than relying on informal analogy, with matching
+  coverage in `tests/test_work_skill.py`.
+- **Every test command was mediated through the real, forked `test-runner` Skill.**
+  `logs/policy-events.jsonl` records five `skill_invocation` events (C-1, C-2, V-1,
+  ORCH-1, ORCH-2), each `invoked_via: "Skill tool"`, `context: "fork"`,
+  `background: false`. Request/result identity (`check_command_identity`) is explicitly
+  recorded and matched for C-1, C-2, and V-1 (`live_cli/18-check-identity-c1.json`,
+  `22-check-identity-c2.json`, `36-check-identity-v1.json`).
+- **Evidence gap, honestly recorded rather than invented: ORCH-1 and ORCH-2 (the
+  orchestrator's own independent re-verification commands) have no retained
+  `check_command_identity` operation.** `live_cli/41-policy-orch-checks.json` and
+  `42-policy-orch-checks2.json` are `retain_policy_event` calls recording the
+  `skill_invocation` only -- unlike C-1/C-2/V-1, neither is followed by a
+  `check_command_identity` step in the retained `live_cli/` sequence. The orchestrator's
+  own narrative in `run-summary.json` still asserts ORCH-1 and ORCH-2 returned the
+  expected `exit_code: 0` results, but this claim is not backed by the same explicit
+  identity-check artifact the staged-agent commands have. This is a genuine gap in this
+  run's evidence trail, not a failure of the run itself, and `work/SKILL.md` does not yet
+  require an explicit `check_command_identity` step for the orchestrator's own
+  independent-reverification commands (only for staged-agent-requested commands).
+- **Independent Git-reality check, matching the implementation report exactly.** Exactly
+  three files changed: `demo-repo/src/loanflow/explanations.py`,
+  `demo-repo/src/loanflow/cli.py`, `demo-repo/tests/unit/test_explanations.py` -- no
+  other `demo-repo/` file, and no Protected Path, changed. The working diff for these
+  three files is byte-identical to the retained `runs/run-20260804-riskband-003/diff.patch`
+  and matches `implementation-report.json`'s own `changed_files` claim. The diff is
+  minimal: one new required parameter and one new output line in `explanations.py`, one
+  call-site line in `cli.py`, and the corresponding test updates.
+- **102 demo tests passing.** ORCH-2 (`python -m pytest tests -q`, `working_directory:
+  "demo-repo"`) returned `exit_code: 0`, 102 passed -- the prior 101-test baseline plus
+  the one new risk-band test. Independently reproduced in this audit
+  (`python -m pytest demo-repo/tests -q` from the repo root): 102 passed.
+- **No commit or push was performed by the harness at any point in this run** -- `git
+  log` shows no new commit from this run, consistent with `work/SKILL.md` standing rule
+  12.
+- **Remaining gaps, not closed by this milestone** (see §3/§4 "Later integrations" for
+  full detail): hooks and guardrails (skill-enforcement, pre-dispatch-check,
+  completion-guardrail, post-agent cost); same-run Quality-Engineer logic-failure
+  route-back to the Engineer (a `fail` verdict still ends the run, per Phase 4's own
+  documented behavior); checkpoint/resume; the memory loop and `lessons-learned.md`
+  (still does not exist); token/cost accounting; the GitHub and Jira skill packs and
+  their connectors; the Obsidian integration; and false-push/flaky-test demonstrations.
+  This run closes the Core MVP's live end-to-end loop once, with real evidence -- it does
+  not close the project.
+
 #### Remaining work
 
 1. ~~Build `/work` free-form mode as a main-session command/skill.~~ **Entry point and
@@ -875,51 +1005,45 @@ specified in instructions, and it surfaced the specific defect this milestone re
    `/work --dry-run` walk-through — see "Dry-run evidence" above.
 2. Provide reasoning-backed Discovery. **Exercised live and worked**: Discovery
    produced a real, schema/semantically-valid `scope.json` in the dry run above.
-3. Dispatch real Architect, Engineer, and Quality Engineer subagents. **Architect and
-   Engineer: real dispatch confirmed live**, including a real Engineer transport-repair
-   correction resuming the same agent id (see "Live evidence
-   (`run-20260804-riskband-002`)" above). Quality Engineer dispatch remains **not**
-   exercised live — `run-20260804-riskband-002` correctly withheld it because the
-   Engineer's own report was blocked (`quality-engineer.md`'s Step 4 requires an
-   immediate `blocked` report with no command requested in that case, adding no new
-   evidence beyond `runs/quality-engineer-boundary-test/`).
+3. Dispatch real Architect, Engineer, and Quality Engineer subagents. **COMPLETE** — all
+   three real-dispatched live in `run-20260804-riskband-003` (Architect
+   `a8e5a6118fb7648f7`, Engineer `a5c7fbf7f46248441`, Quality Engineer
+   `a96d7d1edcebbc7e5`), each with exactly one `agent_dispatch` policy event (no
+   replacement agent for any phase). See "Live evidence (`run-20260804-riskband-003`) —
+   completed" above.
 4. Resume the same Engineer and Quality Engineer instances during staged exchanges.
-   **Engineer: exercised live and worked** for the pre-test stage and one transport
-   correction (`run-20260804-riskband-002`) — the same agent id was resumed
-   successfully. It could not be exercised through the post-test/finalization stages
-   because the same run then blocked on the inline test-runner restriction (see below).
-   Quality Engineer staged resume remains **not** exercised live.
-5. Mediate tests through the actual test-runner `Skill` mechanism. **Two real
-   invocations have now succeeded live** (`run-20260803-riskband-001`'s dry-run smoke
-   check and `run-20260804-riskband-002`'s pre-test mediation, the latter returning a
-   real, correctly-diagnosed TDD failure) — still partial evidence, not exhaustive
-   coverage (e.g. a `command_rejected` or a mutation-sentinel `125` case has not yet
-   been observed through `/work` itself). `run-20260804-riskband-002` also surfaced a
-   real defect in this mediation path — the inline invocation's `disallowed-tools`
-   restriction propagated into the resumed Engineer's own tool availability, blocking
-   Implementation — repaired by forking the skill (`context: fork`, `background:
-   false`; see "Live evidence" above). **The fork itself is not yet live-verified.**
+   **COMPLETE** — both exercised live and worked end-to-end in `run-20260804-riskband-003`:
+   the Engineer resumed across 5 staged turns (including its one transport correction)
+   through `finalization_evidence_requested` and its final report; the Quality Engineer
+   resumed across 3 staged turns (including its one transport correction) through its
+   final `pass` verdict. Both under their single respective dispatched agent id, per
+   `logs/policy-events.jsonl`.
+5. Mediate tests through the actual test-runner `Skill` mechanism. **COMPLETE** for the
+   forked path — `run-20260804-riskband-003` mediated five real commands (C-1, C-2, V-1,
+   ORCH-1, ORCH-2) through the forked, synchronous `test-runner` Skill, with
+   request/result identity confirmed for C-1/C-2/V-1. Still not exhaustive: a
+   `command_rejected` or a mutation-sentinel `125` case has not yet been observed through
+   `/work` itself.
 6. Run the first real Discovery → Research → Implementation → Verification pipeline
-   against `demo-repo/`. **Not complete.** `run-20260803-riskband-001`'s Research phase
-   ended `blocked` (fenced Architect output); `run-20260804-riskband-002` went further
-   — Discovery and Research both completed and promoted cleanly, and Implementation
-   began and produced a genuine failing TDD test — but ended `blocked` before the
-   Engineer's implementation edit, for the reason above. No live four-phase run has
-   occurred. The forked test-runner Skill is the next thing to verify before a further
-   attempt can be expected to reach Implementation's edit step.
-7. Retain and validate all artifacts and produce a real `run-summary.json`. **Partially
-   demonstrated**: real, schema-valid `run-summary.json` files with honest `"blocked"`
-   verdicts were produced for both `run-20260803-riskband-001` (only `scope.json`
-   promoted) and `run-20260804-riskband-002` (`scope.json`, `findings.json`, and a
-   `blocked`-status `implementation-report.json` all promoted) — `implementation-report.json`
-   reaching a `ready_for_verification` status, and `verification-report.json` at all,
-   have not yet been produced by a real run.
+   against `demo-repo/`. **COMPLETE** — `run-20260804-riskband-003` is the first live
+   `/work` run to complete all four phases end-to-end, `final_verdict: "pass"`. See "Live
+   evidence (`run-20260804-riskband-003`) — completed" above for the full account.
+7. Retain and validate all artifacts and produce a real `run-summary.json`. **COMPLETE**
+   for a passing run — `run-20260804-riskband-003` produced the first canonical
+   `implementation-report.json` with `status: "ready_for_verification"` and the first
+   canonical `verification-report.json` with `final_verdict: "pass"`, alongside canonical
+   `scope.json`, `findings.json`, and a `"pass"`-verdict `run-summary.json`. The
+   `run-20260803-riskband-001`/`run-20260804-riskband-002` `"blocked"`-verdict summaries
+   remain retained as evidence of the earlier, unsuccessful attempts they honestly
+   describe.
 
 Populating the 50+ file demo repository (formerly item 1 of this list) is **COMPLETE** — see
-"Demo repository (`demo-repo/loanflow`)" below. Checkpoint/resume, hooks/guardrails, and the
-remaining GitHub/Jira skills stay deferred per §4 "Later integrations," not dropped. Items
-2–7 remain open until a real `/work` run exercises them — see "Live architecture decision
-(Option C)" above for what is and is not proven so far.
+"Demo repository (`demo-repo/loanflow`)" below. Items 1–7 above are now all complete, closing
+the Core MVP's live end-to-end loop with real evidence (`run-20260804-riskband-003`).
+Checkpoint/resume, hooks/guardrails, the memory loop, token/cost accounting, and the remaining
+GitHub/Jira/Obsidian integrations stay deferred per §4 "Later integrations," not dropped, and
+are not satisfied by this milestone — see "Live evidence (`run-20260804-riskband-003`) —
+completed" above for the explicit list of what remains open.
 
 #### Known contract limitation
 
@@ -991,18 +1115,21 @@ The controlled target application for live Agentic Harness demonstrations.
 - Test-runner-wrapper verified: yes
 - Mutation-safety verified: yes
 - Clean baseline verified: yes
-- Used by a live orchestrator run: no
-- Used in an end-to-end four-phase run: no
+- Used by a live orchestrator run: **yes** — `run-20260804-riskband-003`
+- Used in an end-to-end four-phase run: **yes** — `run-20260804-riskband-003`,
+  `final_verdict: "pass"`, 102 demo tests passing post-change
 
 ### Immediate next milestone
 
-Code-craftsmanship, test-runner, the deterministic orchestrator core, and the demo repository
-are complete and verified at their respective layers (see above). The remaining paths: (1) the
-`github/` and `jira/` skill packs, required for the assignment's "≥4 skill packs" bar but not the
-Core MVP loop (§4); (2) the live adapter layer that lets the orchestrator core actually dispatch
-real agents against `demo-repo/` (§6 item 8) — the prerequisite for the first real pipeline run
-(§6 item 11) and therefore for closing the Core MVP loop at all. See "Remaining work" above for
-the concrete next steps on the live-adapter path.
+Code-craftsmanship, test-runner, the deterministic orchestrator core, the demo repository, and
+the live adapter layer (§6 items 5–8, 11) are all now complete and verified, including one real,
+passing, end-to-end four-phase `/work` run (`run-20260804-riskband-003`) — the Core MVP's live
+loop has closed once, with real evidence. The remaining paths: (1) the `github/` and `jira/`
+skill packs, required for the assignment's "≥4 skill packs" bar but not the Core MVP loop (§4);
+(2) hooks/guardrails, checkpoint/resume, the memory loop, and token/cost accounting (§6 items
+9–10); (3) Obsidian integration, connector comparisons, and planted-defect (flaky-test,
+false-push) demonstrations (§6 item 12). See "Live evidence (`run-20260804-riskband-003`) —
+completed" in §10 for exactly what this milestone did and did not close.
 
 ### Eight-day MVP planning target
 
@@ -1026,14 +1153,17 @@ documentation may require additional time after the working MVP closes.
 3. ~~Code-craftsmanship and test-runner skills.~~ **COMPLETE** (2 of the assignment's required
    ≥4 skill packs; `github/` and `jira/` remain future work — see §3, §10)
 4. ~~Deterministic orchestrator core.~~ **COMPLETE** as a standalone, fake-adapter-tested engine
-   — not live-integrated, not end-to-end verified, not the complete orchestrator milestone (see
-   §10 "Status distinctions").
-5. ~~Demo repository.~~ **COMPLETE** — `demo-repo/loanflow`, 55 files; automatically tested (101
-   tests), test-runner-wrapper and mutation-safety verified (see §10 "Demo repository"). Not yet
-   used by a live orchestrator run.
-6. Live Claude Code adapter layer, real test-runner adapter, reasoning-backed Discovery adapter,
-   and `/work` prompt mode.
-7. Checkpoint, memory, and guardrail hooks.
-8. First complete evidence-backed pipeline run.
+   — `core.py` itself is not live-integrated (live dispatch runs through `/work`/`live_cli.py`
+   instead, per Option C), but the harness overall is now end-to-end live-verified (see §10
+   "Status distinctions" and "Live evidence (`run-20260804-riskband-003`)").
+5. ~~Demo repository.~~ **COMPLETE** — `demo-repo/loanflow`, 55 files; automatically tested (102
+   tests as of `run-20260804-riskband-003`), test-runner-wrapper and mutation-safety verified
+   (see §10 "Demo repository"). Used by a live, completed four-phase orchestrator run.
+6. ~~Live Claude Code adapter layer, real test-runner adapter, reasoning-backed Discovery
+   adapter, and `/work` prompt mode.~~ **COMPLETE and live-verified** —
+   `run-20260804-riskband-003`.
+7. Checkpoint, memory, and guardrail hooks. **Not started.**
+8. ~~First complete evidence-backed pipeline run.~~ **COMPLETE** — `run-20260804-riskband-003`,
+   `final_verdict: "pass"`. See §10 "Live evidence (`run-20260804-riskband-003`) — completed."
 9. Deferred integrations and final assignment demonstrations (includes `github/`/`jira/` skill
-   packs, Jira/Obsidian connectors, cost tracking, and planted-defect demos).
+   packs, Jira/Obsidian connectors, cost tracking, and planted-defect demos). **Not started.**

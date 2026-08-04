@@ -243,6 +243,99 @@ class TestEngineerTransportRepair:
         assert "not eligible for this repair" in self.flat_text.lower()
 
 
+class TestQualityEngineerTransportRepair:
+    """Formalizes the verification-phase transport-repair behavior exercised live in
+    run-20260804-riskband-003 (a Quality Engineer envelope wrapped in a Markdown fence),
+    matching the Architect/Engineer transport-repair policies but scoped to the Quality
+    Engineer's staged protocol, as its own explicit protocol rather than an informal
+    "same shape as Phase 3" analogy."""
+
+    def setup_method(self) -> None:
+        self.text = SKILL_PATH.read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+
+    def test_transport_repair_section_present(self) -> None:
+        assert "Quality Engineer transport repair" in self.text
+
+    def test_phase4_references_dedicated_protocol_not_just_analogy(self) -> None:
+        phase4_idx = self.text.index("# Phase 4")
+        repair_idx = self.text.index("## Quality Engineer transport repair")
+        assert phase4_idx < repair_idx
+        phase4_flat = " ".join(self.text[phase4_idx:repair_idx].split())
+        assert "Quality Engineer transport repair" in phase4_flat
+        assert "own explicit, authoritative protocol" in phase4_flat.lower()
+
+    def test_malformed_output_retained_verbatim_not_locally_fixed(self) -> None:
+        # The Quality Engineer transport-repair section reuses the same "never locally
+        # strip fences" language already asserted for Architect/Engineer -- this test
+        # only pins that the *section itself* still carries the instruction nearby.
+        repair_idx = self.text.index("## Quality Engineer transport repair")
+        section = self.text[repair_idx:]
+        assert "Never locally strip Markdown fences" in section
+
+    def test_transport_failure_policy_event_recorded_for_verification_phase(self) -> None:
+        assert '`kind: "transport_parse_failure"`, `phase: "verification"`' in self.text or (
+            "transport_parse_failure" in self.text and 'phase: "verification"' in self.text
+        )
+
+    def test_correction_targets_same_qe_agent_id_via_send_message(self) -> None:
+        assert "same Quality Engineer agent id" in self.flat_text
+        assert "SendMessage" in self.text
+        assert "never a new `Agent` call" in self.flat_text or "never a new Agent call" in self.flat_text
+
+    def test_correction_message_terms_documented(self) -> None:
+        for phrase in [
+            "do not request a different command, criterion, or classification",
+            "do not change `final_verdict`, `acceptance_criteria_results`, `attempts`",
+            "return the exact same envelope content as raw JSON",
+            "no Markdown fence",
+            "no leading or trailing prose",
+        ]:
+            assert phrase in self.text, f"expected correction-message term {phrase!r} in SKILL.md"
+
+    def test_no_redo_and_no_further_tool_call_permitted_during_correction(self) -> None:
+        repair_idx = self.text.index("## Quality Engineer transport repair")
+        section_intro = self.text[repair_idx:repair_idx + 1200]
+        assert "never asks the Quality Engineer to redo verification" in " ".join(section_intro.split())
+        assert "Edit`/`Write`/" in section_intro or "edit`/`write`/" in section_intro.lower()
+
+    def test_wait_for_same_agent_completion_before_proceeding(self) -> None:
+        repair_idx = self.text.index("## Quality Engineer transport repair")
+        section = self.text[repair_idx:]
+        assert "Wait for the completion notification from that same agent id" in " ".join(section.split())
+
+    def test_exactly_one_correction_attempt_permitted_per_phase_not_per_turn(self) -> None:
+        assert "exactly one transport-only correction attempt is permitted per verification phase" in self.flat_text.lower()
+        assert "not one per turn" in self.flat_text
+        repair_idx = self.text.index("## Quality Engineer transport repair")
+        section_flat = " ".join(self.text[repair_idx:].split())
+        assert "do **not** send a second correction request" in section_flat
+
+    def test_still_malformed_or_invalid_after_correction_blocks_verification(self) -> None:
+        repair_idx = self.text.index("## Quality Engineer transport repair")
+        section = self.text[repair_idx:]
+        assert '"verification_blocked"' in section
+        assert "transport_repair_exhausted" in section
+
+    def test_replacement_qe_fallback_forbidden(self) -> None:
+        assert "Never spawn a replacement Quality Engineer" in self.flat_text
+        repair_idx = self.text.index("## Quality Engineer transport repair")
+        assert "fabricates continuity" in self.text[repair_idx:].lower()
+
+    def test_content_failures_excluded_and_routed_to_rejected_reply_mechanism(self) -> None:
+        repair_idx = self.text.index("## Quality Engineer transport repair")
+        section = self.text[repair_idx:].lower()
+        assert "content failure" in section
+        assert "rejected_reply" in section
+        assert "not eligible for this repair" in section
+
+    def test_budget_shared_across_attempt_requested_and_final_report(self) -> None:
+        repair_idx = self.text.index("## Quality Engineer transport repair")
+        intro = " ".join(self.text[repair_idx:repair_idx + 600].split())
+        assert "attempt_requested" in intro
+        assert "final report" in intro.lower()
+
+
 class TestTestRunnerForkedMediation:
     """Covers the fork-isolation repair adopted after run-20260804-riskband-002: the
     test-runner Skill now runs in an isolated forked context (context: fork,

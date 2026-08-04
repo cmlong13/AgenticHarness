@@ -64,7 +64,7 @@ def _cmd_decide(args: argparse.Namespace) -> int:
         clock=SystemClock(),
         audit_log=audit_log,
     )
-    print(explain(result.decision))
+    print(explain(result.decision, result.risk_profile.overall_band))
     return 0
 
 
