@@ -1,0 +1,5 @@
+{
+  "operation": "retain_rejection",
+  "run_id": "run-20260804-riskband-001",
+  "rejection_ref": "runs/run-20260804-riskband-001/live_cli/c1-command-rejected.json"
+}

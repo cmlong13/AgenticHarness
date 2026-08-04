@@ -181,11 +181,46 @@ Record the rung and a one-sentence rationale.
 For every new or changed behavior, write or extend one test at a path that passes every check
 in Step 1, with `Write`/`Edit`, before writing any implementation code.
 
+# Command grammar — the only accepted form
+
+Every `requested_command.command` you emit in Step 7 and Step 9 must be **exactly**:
+
+```
+python -m pytest <targets-and-options>
+```
+
+The test-runner Skill's wrapper enforces this as a strict positional grammar and returns
+`command_rejected` — not a real `exit_code` — for anything else. A rejection is not something
+the caller repairs or negotiates on your behalf: it halts the Implementation phase outright
+(see `work/SKILL.md`'s "never rewrite" rule under "What the caller still owns" below). Get the
+syntax right on the first request:
+
+- **Never** request bare `pytest ...` (e.g. `pytest tests/test_x.py -v`). The interpreter
+  token must be exactly `python` (or `python.exe`) followed by `-m pytest` — `pytest` alone is
+  not an accepted executable, no matter how conventional it is outside this wrapper.
+- **Never** request an environment-activation command — `source .venv/bin/activate && ...`,
+  `.venv\Scripts\activate.bat && ...`, `conda activate ... ; ...`, or any equivalent. The
+  wrapper tokenizes and runs your `command` string directly with `shell=False`; there is no
+  shell to interpret `&&`/`;`/activation scripts, and no persistent environment for them to
+  modify even if there were.
+- **Never** request shell chaining or control operators of any kind: `&&`, `||`, `;`, `|`,
+  backgrounding (`&`), or subshells.
+- **Never** request redirection (`>`, `>>`, `<`, `2>&1`, or similar) — the wrapper captures
+  stdout/stderr itself and writes the retained log; redirection syntax is not meaningful to it.
+- Only these flags are accepted: `-x -s -v -vv -q --collect-only --co --no-header`, plus
+  `-k <expr>`, `-m <expr>`, `--maxfail <n>`, `--tb <short|long|line|native|no>`. Request no
+  other flag. At least one positional test target (a file, directory, or node id resolving
+  inside `target_repo_path`) is required — a bare `python -m pytest` with no target is
+  rejected too.
+
+You have no tool to run this command yourself and confirm it parses — request exactly the
+form above and let the caller mediate it through the real test-runner Skill.
+
 # Step 7: Request pre-implementation evidence — `pre_test_requested`
 
-Emit `pre_test_requested` naming the narrowest command that exercises the new test, its
-`working_directory`, and why you expect it to fail. Assign a fresh `command_id` (e.g. `C-1`).
-Stop and wait.
+Emit `pre_test_requested` naming the narrowest command that exercises the new test (in the
+exact form from "Command grammar" above), its `working_directory`, and why you expect it to
+fail. Assign a fresh `command_id` (e.g. `C-1`). Stop and wait.
 
 # Step 8: Validate the reply, then confirm the failure reason
 
@@ -210,7 +245,8 @@ command request — there is no separate `implementation_ready` turn:
 - `minimal_change_rung` and `minimal_change_rationale`
 - `tests` added/modified
 - `dependency_changes`
-- `requested_command` for the post-implementation run, with a fresh `command_id` (e.g. `C-2`)
+- `requested_command` for the post-implementation run, in the exact form from "Command
+  grammar" above, with a fresh `command_id` (e.g. `C-2`)
 
 Stop and wait.
 
@@ -384,11 +420,15 @@ invented wrapper key.
 
 You never invent: real command exit codes/output, real line-count statistics, `diff_ref`, real
 filesystem/symlink resolution, or the decision to persist. The caller attests to
-`path_validation` before dispatch; executes every requested command and reports it via
-`command_result`; computes and supplies real diff statistics via `finalization_evidence`;
-validates your final report against `implementation-report.schema.json` and the semantic rules
-in `harness/evidence.py`; and persists it **unchanged**. The caller must not silently rewrite
-an invalid final report into a valid one.
+`path_validation` before dispatch; executes every requested command **byte-for-byte as you
+wrote it** — never widening, correcting, retrying with rewritten syntax, or otherwise editing
+your `requested_command.command` string, even when it violates "Command grammar" above — and
+reports the real outcome via `command_result` or, if the wrapper rejected it outright,
+`command_rejected`, which halts the phase rather than being silently patched around; computes
+and supplies real diff statistics via `finalization_evidence`; validates your final report
+against `implementation-report.schema.json` and the semantic rules in `harness/evidence.py`;
+and persists it **unchanged**. The caller must not silently rewrite an invalid final report
+into a valid one, nor a rejected command into an accepted one.
 
 # Boundaries — technically enforced vs. behavioral vs. caller-attested
 

@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-001",
+  "created_at": "2026-08-04T16:58:09Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "Add the applicant's overall risk band to the human-readable decision explanation"
+  },
+  "objective": "Add the applicant's overall risk band (RiskProfile.overall_band) to the human-readable decision explanation text produced by explain(), so CLI/report consumers can see it without inspecting raw RiskProfile data.",
+  "in_scope": [
+    "demo-repo/src/loanflow/explanations.py",
+    "demo-repo/src/loanflow/cli.py",
+    "demo-repo/tests/unit/test_explanations.py"
+  ],
+  "out_of_scope": [
+    "demo-repo/src/loanflow/risk_profile.py",
+    "demo-repo/src/loanflow/decisions.py",
+    "demo-repo/src/loanflow/pipeline.py",
+    "demo-repo/src/loanflow/risk_bands.py"
+  ],
+  "constraints": [
+    "No new dependencies without written justification",
+    "No change to the public shape of Decision or RiskProfile",
+    "Standard library only",
+    "Minimal diff extending explain()'s existing line-based output pattern"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "explain() output includes the applicant's overall risk band (RiskProfile.overall_band.value), sourced from PipelineResult.risk_profile, for approve/refer/decline cases"
+    },
+    {
+      "id": "AC-2",
+      "description": "All tests in demo-repo/tests/unit/test_explanations.py pass, including a new test asserting the risk band appears in the explanation text"
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-1",
+      "description": "Confirm the explain()/cli.py/PipelineResult wiring and the exact risk-band access pattern (RiskProfile.overall_band via PipelineResult.risk_profile)",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-2",
+      "description": "Extend explain() to accept and render the overall risk band; update the one call site in cli.py; add a failing test first",
+      "phase": "implementation",
+      "depends_on": [
+        "N-1"
+      ]
+    },
+    {
+      "id": "N-3",
+      "description": "Verify the narrow explanations test file and the full demo-repo test suite",
+      "phase": "verification",
+      "depends_on": [
+        "N-2"
+      ]
+    }
+  ],
+  "status": "approved"
+}

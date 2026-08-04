@@ -40,6 +40,13 @@ $ARGUMENTS
 8. Test execution is always mediated through the real `test-runner` Skill (the `Skill`
    tool, invoking the `test-runner` skill by name) -- never a direct `Bash` call to
    `.claude/skills/test-runner/scripts/run_command.py`, and never a fabricated result.
+   The Engineer's or Quality Engineer's `requested_command.command` string is submitted
+   to the Skill byte-for-byte, exactly as the agent wrote it -- never widened, corrected,
+   retried with rewritten syntax, or otherwise rewritten by the orchestrator, even when
+   its syntax looks wrong (e.g. a bare `pytest ...` instead of `python -m pytest ...`). A
+   resulting `command_rejected` halts the staged protocol per `test-runner/SKILL.md`'s
+   own escalation instruction -- it is evidence of a real contract violation, not
+   something to silently patch around by resubmitting a corrected string.
 9. Completion claims from any subagent are independently checked before being repeated
    to the user -- re-run the narrow test yourself, inspect `git status`/`git diff`
    yourself. An agent's "done" is a claim, not evidence.
@@ -288,13 +295,80 @@ is not a completed four-phase run.
 7. Only after step 6 passes may you resume the same Engineer with the real
    `command_result` and allow it to proceed toward `post_test_requested`.
 8. `retain_attempt` every raw turn (`phase: "implementation"`, incrementing `attempt_n`)
-   before parsing it, exactly as for Research.
+   before parsing it, exactly as for Research. If a raw turn does not parse as strict
+   JSON, or parses but is wrapped in a Markdown fence or carries leading/trailing prose,
+   classify and handle it via "Engineer transport repair" below before concluding the
+   turn is simply invalid content.
 9. On the final artifact: `validate_artifact` then `promote_artifact`
    (`phase: "implementation"`, `context_refs.findings` pointing at the promoted
    `findings.json`). Independently re-check `changed_files` against the Protected Path
    list yourself (`build_path_attestation`/`live_cli` does not re-derive this for you;
    it is the same list `paths.py` enforces -- inspect the promoted report's
    `changed_files` directly).
+
+## Engineer transport repair (Implementation phase, at most one correction total)
+
+Exactly one transport-only correction attempt is permitted per Implementation phase,
+shared across all of that phase's staged turns (`pre_test_requested`,
+`post_test_requested`, `finalization_evidence_requested`, and the final report) -- not
+one per turn. This mirrors "Architect transport repair" above but is scoped to the
+Engineer's multi-turn staged protocol instead of a single-shot report. It repairs the
+wire format only: it never asks the Engineer to redo work, change `changed_files`,
+`tests`, `minimal_change_rung`, or any `requested_command` content, or make any further
+`Edit`/`Write` call.
+
+1. Classify the failure exactly as in Research: a **transport/parse failure** is raw
+   text that does not parse as strict JSON at all, or parses but was wrapped in a
+   Markdown code fence, or carries leading/trailing prose -- a violation of
+   `engineer.md`'s own "Exactly one raw JSON object per turn, no fence, no prose"
+   contract, assessable before the turn's content is even read. A **content failure**
+   -- the JSON parses cleanly but is the wrong `response_type`, fails schema validation,
+   or fails a semantic check `engineer.md` defines (a stale `command_id`, a
+   `task_id`/`run_id` mismatch, an unrecognized reference) -- is not a transport problem
+   and is not eligible for this repair; that is handled through `engineer.md`'s own
+   `rejected_reply` re-request mechanism, which the Engineer itself drives (capped at 3
+   consecutive rejections of the same outstanding request), or, if that is exhausted or
+   inapplicable, the phase blocks.
+2. Retain the malformed output exactly as received -- already done by step 8's
+   `retain_attempt`. Never locally strip Markdown fences, trim prose, or otherwise
+   rewrite the response yourself to make it parse; a locally repaired response is not
+   evidence that the Engineer itself can produce a conforming one.
+3. `retain_policy_event` (`kind: "transport_parse_failure"`, `phase: "implementation"`)
+   with the raw attempt reference and a description of exactly what was wrong
+   (unparsable / fenced / leading-or-trailing prose).
+4. Only if this phase's one-correction budget has not already been spent: send a
+   transport-only correction request to the **same Engineer agent id** captured at this
+   phase's `agent_dispatch` policy event -- use `SendMessage` to that exact id, never a
+   new `Agent` call. The message must tell the Engineer explicitly, in these terms:
+   - do not make any further `Edit`/`Write` call
+   - do not change `changed_files`, `tests`, `minimal_change_rung`, or any other content
+   - return the exact same envelope content as raw JSON
+   - no Markdown fence
+   - no leading or trailing prose
+   If the budget has already been spent this phase, skip straight to blocking (step 7
+   below) without sending a second correction request.
+5. Wait for the completion notification from that same agent id before proceeding --
+   exactly as the staged continuation protocol requires (see "Staged continuation
+   protocol" below); do not act on a partial or absent result.
+6. Retain the corrected response as the next Implementation attempt: `retain_attempt`
+   (`phase: "implementation"`, next `attempt_n`), verbatim, before parsing it. Then
+   validate it exactly as any other turn -- no relaxed rules for a corrected response. If
+   it is now a valid envelope or final artifact, resume the staged protocol normally at
+   the point this turn left off.
+7. This is the **one and only** correction attempt permitted for this Implementation
+   phase, regardless of which turn triggered it. If the corrected response is itself
+   still malformed (another transport failure) or is now invalid for content reasons,
+   do **not** send a second correction request under any circumstance: the phase ends
+   (`state: "implementation_blocked"`); `retain_policy_event`
+   (`kind: "transport_repair_exhausted"`) noting that the single permitted correction was
+   used and did not resolve the failure.
+8. Never spawn a replacement Engineer (a new `Agent` call) for this phase at any point in
+   this sequence and present it as a continuation of the original -- that fabricates
+   continuity exactly the way the cardinal "never trust/fabricate a completion claim"
+   rule forbids. If the same agent id cannot be resumed (the tool errors, or the reply
+   cannot be matched to the id), treat that identically to a broken staged continuation:
+   block the phase, `retain_policy_event` (`kind: "continuity_broken"`), do not retry
+   with a fresh agent.
 
 # Phase 4: Verification (real Quality Engineer dispatch) -- not exercised in a dry run
 

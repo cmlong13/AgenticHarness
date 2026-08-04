@@ -82,6 +82,48 @@ class TestEngineerFrontmatter:
         assert resolved_tools(self.fields).isdisjoint(FORBIDDEN_TOOLS)
 
 
+class TestEngineerCommandGrammar:
+    """The Engineer's instructions must document test-runner's exact accepted command
+    grammar so a live Engineer requests a conformant command on its first attempt
+    (regression guard for the failure observed live in run-20260804-riskband-001, where
+    the Engineer requested bare 'pytest ...' and the wrapper rejected it)."""
+
+    def setup_method(self) -> None:
+        self.path = AGENTS_DIR / "engineer.md"
+        self.text = self.path.read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+
+    def test_command_grammar_section_present(self) -> None:
+        assert "Command grammar" in self.text
+
+    def test_exact_accepted_form_documented(self) -> None:
+        assert "python -m pytest <targets-and-options>" in self.text
+
+    def test_bare_pytest_prohibited(self) -> None:
+        assert "Never** request bare `pytest" in self.text or "never request bare `pytest" in self.flat_text.lower()
+        assert "pytest tests/test_x.py -v" in self.text or "not an accepted executable" in self.flat_text
+
+    def test_environment_activation_prohibited(self) -> None:
+        assert "environment-activation command" in self.flat_text
+        assert "activate" in self.flat_text.lower()
+
+    def test_shell_chaining_prohibited(self) -> None:
+        assert "shell chaining" in self.flat_text
+        for operator in ("&&", "||", ";", "|"):
+            assert operator in self.text
+
+    def test_redirection_prohibited(self) -> None:
+        assert "redirection" in self.flat_text
+        assert ">" in self.text and "2>&1" in self.text
+
+    def test_steps_seven_and_nine_reference_the_grammar(self) -> None:
+        assert "exact form from \"Command grammar\" above" in self.flat_text
+
+    def test_caller_forbidden_from_rewriting_commands(self) -> None:
+        assert "byte-for-byte as you" in self.flat_text
+        assert "never widening, correcting, retrying with rewritten syntax" in self.flat_text
+
+
 class TestArchitectFrontmatter:
     """Regression guard -- the Architect's boundary must not drift either."""
 

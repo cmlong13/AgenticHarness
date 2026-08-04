@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-001",
+  "created_at": "2026-08-04T16:58:09Z",
+  "objective_summary": "NOT a completed pipeline. Discovery and Research completed cleanly and are promoted: scope.json (objective: add RiskProfile.overall_band to explain()'s output) and findings.json (10 findings from a real, live-dispatched Architect: 8 found, 1 honest not_found, 1 inferred, all citing file:line evidence -- confirms explain() currently accepts only Decision, the overall band lives on RiskProfile.overall_band reachable via PipelineResult.risk_profile, and cli.py's sole call site does not pass it). A real, live-dispatched Engineer (agent id a4dbb84b0cea9c6d0) began Implementation: it performed genuine TDD Step 6 work (added test_explain_includes_overall_risk_band and updated the 3 existing explain() calls to pass a Band argument in demo-repo/tests/unit/test_explanations.py only -- independently confirmed via git status/diff, no production source touched), then emitted a pre_test_requested envelope. That first envelope was wrapped in a Markdown code fence, violating engineer.md's no-fence contract; a transport-only correction was requested from the same agent id (never redoing work, by analogy to the Architect transport-repair protocol) and the corrected reply parsed as clean raw JSON. The Engineer's requested command ('pytest tests/unit/test_explanations.py -v') was then submitted verbatim to the real test-runner Skill and was rejected by the wrapper's strict grammar (only 'python -m pytest ...' is accepted; 'pytest' as the bare executable is not) -- a genuine command_rejected, not a fabricated one. Per test-runner/SKILL.md's explicit escalation instruction, this halts the staged protocol rather than being silently worked around, so the Implementation phase is blocked here. Verification was never attempted -- there is no implementation-report.json to hand it.",
+  "artifact_refs": {
+    "scope": "runs/run-20260804-riskband-001/scope.json",
+    "findings": "runs/run-20260804-riskband-001/findings.json"
+  },
+  "final_verdict": "blocked",
+  "phases_completed": [
+    "discovery",
+    "research"
+  ],
+  "remaining_risks": [
+    "engineer.md does not document test-runner's exact accepted command grammar ('python -m pytest ...' only) to the Engineer, so a live Engineer naturally requests conventional pytest CLI syntax ('pytest ...'), which the wrapper's validate_grammar always rejects (grammar_no_match) -- this is a cross-agent contract gap, not a one-off mistake, and will recur on every live Engineer dispatch until engineer.md is updated or the wrapper's grammar is widened.",
+    "The Engineer's staged protocol has no caller-facing mechanism (analogous to Rejecting a command_result) for the caller to tell the Engineer 'your requested command's syntax was rejected, please resend in the accepted grammar' -- work/SKILL.md's Architect transport-repair pattern was extended by analogy once in this run for a Markdown-fence transport issue, but test-runner/SKILL.md explicitly forbids working around a command_rejected, so no analogous repair was attempted for the grammar mismatch.",
+    "The Engineer/Quality Engineer staged continuation protocol is now partially live-exercised for the first time (one real Agent dispatch, one real SendMessage-based resume, two real retained turns) but still ends before reaching command_result/post_test_requested/finalization_evidence -- the later stages of the staged protocol remain unexercised live.",
+    "Quality Engineer dispatch remains entirely unexercised live -- Implementation never reached ready_for_verification."
+  ],
+  "follow_up_actions": [
+    "Update engineer.md to explicitly document test-runner's accepted command grammar ('exactly python -m pytest <args>') so the Engineer requests a conformant command on its first attempt, or widen the wrapper's grammar to also accept a bare 'pytest' invocation -- pick one and re-run.",
+    "Design and authorize a caller-to-Engineer correction mechanism for a rejected requested_command (distinct from the existing command_result-rejection mechanism), or explicitly confirm that command_rejected must always be a hard stop for this milestone.",
+    "Re-run /work with the same free-form request once the grammar-mismatch gap above is fixed, to exercise the remainder of the Implementation staged protocol (post_test_requested, finalization_evidence, ready_for_verification) and the Verification phase for the first time live.",
+    "Consider whether the fence-transport correction extended by analogy to the Engineer in this run should be formally documented in work/SKILL.md (it is not yet written down anywhere outside this run's policy-events.jsonl)."
+  ],
+  "duration_seconds": 1097
+}

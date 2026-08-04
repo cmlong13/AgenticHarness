@@ -166,6 +166,83 @@ class TestArchitectTransportRepair:
         assert "fabricates continuity" in self.flat_text.lower() or "fabricate continuity" in self.flat_text.lower()
 
 
+class TestOrchestratorNeverRewritesRequestedCommands:
+    def setup_method(self) -> None:
+        self.text = SKILL_PATH.read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+
+    def test_commands_submitted_byte_for_byte(self) -> None:
+        assert "byte-for-byte" in self.flat_text
+
+    def test_rewriting_explicitly_forbidden(self) -> None:
+        assert "never widened, corrected, retried with rewritten syntax, or otherwise" in self.flat_text.lower()
+
+    def test_command_rejected_halts_rather_than_gets_patched_around(self) -> None:
+        assert "command_rejected` halts the staged protocol" in self.text or "halts the staged protocol" in self.flat_text
+
+
+class TestEngineerTransportRepair:
+    """Formalizes the implementation-phase transport-repair behavior exercised live in
+    run-20260804-riskband-001 (an Engineer envelope wrapped in a Markdown fence), matching
+    the Architect transport-repair policy but scoped to the Engineer's multi-turn staged
+    protocol."""
+
+    def setup_method(self) -> None:
+        self.text = SKILL_PATH.read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+
+    def test_transport_repair_section_present(self) -> None:
+        assert "Engineer transport repair" in self.text
+
+    def test_malformed_output_retained_verbatim_not_locally_fixed(self) -> None:
+        assert "Never locally strip Markdown fences" in self.flat_text
+
+    def test_transport_failure_policy_event_recorded_for_implementation_phase(self) -> None:
+        assert '`kind: "transport_parse_failure"`, `phase: "implementation"`' in self.text or (
+            "transport_parse_failure" in self.text and "phase: \"implementation\"" in self.text
+        )
+
+    def test_correction_targets_same_engineer_agent_id_via_send_message(self) -> None:
+        assert "same Engineer agent id" in self.flat_text
+        assert "SendMessage" in self.text
+        assert "never a new `Agent` call" in self.flat_text or "never a new Agent call" in self.flat_text
+
+    def test_correction_message_terms_documented(self) -> None:
+        for phrase in [
+            "do not make any further `Edit`/`Write` call",
+            "do not change `changed_files`, `tests`, `minimal_change_rung`",
+            "return the exact same envelope content as raw JSON",
+            "no Markdown fence",
+            "no leading or trailing prose",
+        ]:
+            assert phrase in self.text, f"expected correction-message term {phrase!r} in SKILL.md"
+
+    def test_no_additional_code_edits_permitted_during_correction(self) -> None:
+        assert "never asks the Engineer to redo work" in self.flat_text
+        assert "any further `Edit`/`Write` call" in self.text
+
+    def test_wait_for_same_agent_completion_before_proceeding(self) -> None:
+        assert "Wait for the completion notification from that same agent id" in self.flat_text
+
+    def test_exactly_one_correction_attempt_permitted_per_phase_not_per_turn(self) -> None:
+        assert "exactly one transport-only correction attempt is permitted per implementation phase" in self.flat_text.lower()
+        assert "not one per turn" in self.flat_text
+        assert "do **not** send a second correction request" in self.text
+
+    def test_still_malformed_or_invalid_after_correction_blocks_implementation(self) -> None:
+        assert '"implementation_blocked"' in self.text
+        assert "transport_repair_exhausted" in self.text
+
+    def test_replacement_engineer_fallback_forbidden(self) -> None:
+        assert "Never spawn a replacement Engineer" in self.flat_text
+        assert "fabricates continuity" in self.flat_text.lower()
+
+    def test_content_failures_excluded_and_routed_to_rejected_reply_mechanism(self) -> None:
+        assert "content failure" in self.flat_text.lower()
+        assert "rejected_reply" in self.text
+        assert "not eligible for this repair" in self.flat_text.lower()
+
+
 class TestTestRunnerMediationAndRestrictionLifecycle:
     def setup_method(self) -> None:
         self.text = SKILL_PATH.read_text(encoding="utf-8")

@@ -1,0 +1,12 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260804-riskband-001",
+  "kind": "transport_parse_failure",
+  "payload": {
+    "phase": "implementation",
+    "attempt_n": 1,
+    "agent_id": "a4dbb84b0cea9c6d0",
+    "raw_attempt_ref": "runs/run-20260804-riskband-001/attempts/implementation-1.raw.txt",
+    "description": "Engineer's pre_test_requested envelope was wrapped in a Markdown ```json fence (leading/trailing fence markers), violating engineer.md's Structured Response Contract ('Exactly one raw JSON object per turn, no fence, no prose'). Text does not parse as strict JSON as received. Independently confirmed via git status/diff that the Engineer had already performed real, legitimate, in-scope Step 6 TDD work (added test_explain_includes_overall_risk_band and updated 3 existing calls to explain() in demo-repo/tests/unit/test_explanations.py only -- no production source changed, no out-of-scope or Protected Path file touched) before this malformed envelope was returned. This is the same failure class PROJECT_SPEC.md documents for the Architect (run-20260803-riskband-001), now also observed on the Engineer's staged protocol. No repair protocol for this failure mode is authorized for the Engineer/staged phases in work/SKILL.md (the documented transport-repair mechanism is explicitly scoped to the Architect's single-shot Research phase); by analogy to that mechanism and to engineer.md's own rejected_reply pattern (reject malformed reply, request unchanged re-emission, cap attempts), one transport-only correction request is being sent to this same agent id before considering the phase blocked."
+  }
+}
