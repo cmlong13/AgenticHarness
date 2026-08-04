@@ -1,0 +1,11 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260804-riskband-002",
+  "kind": "transport_parse_failure",
+  "payload": {
+    "phase": "implementation",
+    "attempt_ref": "runs/run-20260804-riskband-002/attempts/implementation-1.raw.txt",
+    "agent_id": "a7c52385d707fe116",
+    "description": "Response was wrapped in a Markdown ```json ... ``` code fence, violating engineer.md's 'exactly one raw JSON object, no fence' contract. json.loads on the raw retained text failed with 'Expecting value: line 1 column 1 (char 0)'."
+  }
+}

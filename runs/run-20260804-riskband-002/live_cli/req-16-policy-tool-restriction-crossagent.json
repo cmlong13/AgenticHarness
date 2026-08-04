@@ -1,0 +1,10 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260804-riskband-002",
+  "kind": "cross_agent_tool_restriction_observed",
+  "payload": {
+    "phase": "implementation",
+    "agent_id": "a7c52385d707fe116",
+    "description": "After the orchestrator invoked the test-runner Skill (Skill tool, mediating command C-1) in this turn, the resumed Engineer subagent's own Edit and Write tool calls at its Step 9 implementation edit both returned an unavailable-in-this-context error, causing it to correctly self-report status: blocked rather than fabricate an edit. This is new evidence beyond PROJECT_SPEC.md's dry-run finding, which only observed the disallowed-tools restriction affecting the main-session orchestrator's own Write/Edit calls for the remainder of a turn; here the same restriction appears to have also propagated into a dispatched/resumed subagent's tool availability for the remainder of the same top-level user turn. Independently confirmed via git status/diff -- demo-repo/src/loanflow/explanations.py and cli.py remain unmodified; only the test file the Engineer edited before the Skill invocation is changed. No fabricated edit occurred."
+  }
+}

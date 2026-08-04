@@ -46,7 +46,12 @@ $ARGUMENTS
    its syntax looks wrong (e.g. a bare `pytest ...` instead of `python -m pytest ...`). A
    resulting `command_rejected` halts the staged protocol per `test-runner/SKILL.md`'s
    own escalation instruction -- it is evidence of a real contract violation, not
-   something to silently patch around by resubmitting a corrected string.
+   something to silently patch around by resubmitting a corrected string. The skill runs
+   forked and synchronous (`context: fork`, `background: false`) -- wait for its real
+   result before continuing; if the fork fails, returns nothing, or returns malformed
+   evidence, block the phase honestly (see "Test-runner Skill mediation: forked
+   isolation" below) rather than fabricating a result or falling back to a direct
+   wrapper call.
 9. Completion claims from any subagent are independently checked before being repeated
    to the user -- re-run the narrow test yourself, inspect `git status`/`git diff`
    yourself. An agent's "done" is a claim, not evidence.
@@ -246,7 +251,10 @@ is not a completed four-phase run.
 3. Invoke the **`Skill` tool** with `skill: "test-runner"` and `args:
    "runs/<run_id>/requests/<command_id>.json"`. Do not call
    `.claude/skills/test-runner/scripts/run_command.py` via `Bash` directly -- that would
-   prove the wrapper works, not that the Skill mechanism was actually used.
+   prove the wrapper works, not that the Skill mechanism was actually used. The skill
+   runs forked and synchronous (`context: fork`, `background: false` --
+   see "Test-runner Skill mediation: forked isolation" below); wait for its real result
+   in this same turn before proceeding, exactly as you would have before the fork.
    `retain_policy_event` with `kind: "skill_invocation"` and a payload naming the skill,
    the request path, and that it was invoked via the `Skill` tool -- this is what
    distinguishes "the Skill was really invoked" from "a wrapper log merely exists,"
@@ -426,38 +434,85 @@ Implementation/Verification phase actually runs one -- the dry run in this miles
 exercises Research (single-shot, no staging) and one standalone test-runner Skill
 invocation, not this staged loop.
 
-# Test-runner Skill restriction lifecycle
+# Test-runner Skill mediation: forked isolation (not inline turn-wide denial)
 
-Once the real `test-runner` Skill has been invoked (the `Skill` tool call itself, in the
-dry-run smoke check or in any Phase 3/4 staged test mediation), its `disallowed-tools`
-restrictions (`Write`, `Edit`, ...) remain enforced at the tool layer for the remainder
-of the **current user turn** -- not just for the single invoking call. This was observed
-live during this milestone's dry run (see `PROJECT_SPEC.md`'s dry-run evidence) and is
-**expected turn-lifecycle behavior, not an unexplained defect** -- do not treat a denied
-`Write`/`Edit` after a `test-runner` invocation as a bug to route around by retrying; it
-is the expected state for the rest of the turn.
+`test-runner/SKILL.md` declares `context: fork` and `background: false`. Every
+invocation of the `test-runner` Skill therefore runs in its own isolated forked
+subagent context, not inline in the caller's own turn. `background: false` (requires
+Claude Code v2.1.218+; confirmed present in the installed version at the time this
+section was written) keeps the call synchronous -- you still wait for the real result
+in the same turn before continuing, exactly as before. What changed is isolation, not
+waiting semantics: the forked subagent's own `disallowed-tools` restriction (`Write`,
+`Edit`, ...) is scoped to that fork's own context. It must not be relied upon to affect,
+and must not be treated as if it affects, the main-session orchestrator's own tools or
+any subagent (Engineer, Quality Engineer) resumed after the fork completes.
 
-Concretely, for the remainder of the turn after the first `test-runner` Skill invocation:
+**This is not the normal path for live Implementation:** relying on an inline,
+turn-wide `Write`/`Edit` denial after a `test-runner` invocation -- and routing around
+it with `Bash` heredocs for evidence operations, or worse, blocking Implementation
+entirely because a resumed Engineer lost its own `Edit`/`Write` -- is exactly the
+failure this fork repairs, not a state to plan around. Do not reintroduce workarounds
+from before the fork (e.g. "avoid `Write`/`Edit` for the rest of the turn") as if they
+were still required; they applied only to the old inline invocation.
 
-1. The main-session orchestrator must not depend on `Write` or `Edit` for any further
-   evidence operation. Every subsequent `live_cli.py` request-file write, retention, or
-   promotion must go through `Bash` (e.g. a heredoc or redirect writing the request file,
-   then invoking `python -m harness.orchestrator.live_cli --request-file ...`), not a
-   direct `Write`/`Edit` call that may now be denied.
-2. `Bash` may be used to write `live_cli.py` request files and invoke `live_cli.py`
-   itself, but must **never** be used to edit application source under `demo-repo/`.
-   That boundary is independent of this restriction and does not relax because `Write`/
-   `Edit` are unavailable -- only the **Engineer** subagent (via its own `Edit`/`Write`
-   tool grant, per `engineer.md`) may modify approved files under `demo-repo/`, and only
-   within its `path_validation` attestation and Protected Path constraints.
-3. Test execution must still always go through the real `test-runner` Skill (the `Skill`
-   tool) -- never fall back to invoking
-   `.claude/skills/test-runner/scripts/run_command.py` directly via `Bash` merely because
-   `Write`/`Edit` are restricted. A direct wrapper call proves the wrapper works, not
-   that the Skill mechanism was used, which is exactly what "Standing rules" item 8
-   already forbids regardless of tool-availability pressure.
-4. This restriction is scoped to "the remainder of the current user turn." A genuinely
-   new user turn is not bound by a prior turn's `test-runner` invocation.
+## Why this exists: `run-20260804-riskband-002` (retained evidence, not a template)
+
+`runs/run-20260804-riskband-002/` is a real, live-executed `/work` attempt, retained
+unmodified as evidence, that motivated this fork. It independently live-verified
+several things that remain true and are not being redone here: the Engineer requesting
+the accepted `python -m pytest ...` grammar, the Engineer transport-repair protocol
+resuming the same Engineer id successfully after a Markdown-fenced reply, a genuine
+failing regression test produced by the Engineer *before* any production change, and a
+real test-runner Skill invocation returning the expected failure with request/result
+identity matching. It then blocked: invoking the (at the time, inline) `test-runner`
+Skill removed `Write`/`Edit` from the rest of that user turn, and that removal was
+observed to propagate into the *resumed Engineer's own tool availability* -- not just
+the main session's -- so the same Engineer could reach its pre-test failing state but
+could not then make the implementation edit. See
+`runs/run-20260804-riskband-002/run-summary.json` and
+`runs/run-20260804-riskband-002/logs/policy-events.jsonl`'s
+`cross_agent_tool_restriction_observed` event for the full evidence. That run is not to
+be re-derived, edited, or deleted -- it is the documented reason the fork exists, and
+the fork itself is **not yet live-verified** by an actual `/work` run (see
+`PROJECT_SPEC.md`).
+
+## What the orchestrator must actually do, every invocation
+
+1. Write the request file with `Write` as before (unaffected -- the fork isolates the
+   *skill's own* tool pool, not the caller's).
+2. Invoke the **`Skill` tool** with `skill: "test-runner"` as before. Because the skill
+   is forked and `background: false`, wait for its real result in this same turn --
+   never proceed as if a result arrived when none has, and never poll or guess at a
+   pending fork's outcome.
+3. If the fork genuinely returns a `command_result` or `command_rejected`: handle it
+   exactly as documented above (`check_command_identity`, sentinel exit codes, escalation
+   on rejection) -- nothing about validation, identity checking, or escalation changes
+   because the invocation is forked.
+4. **If the fork fails outright** -- the `Skill` tool call errors, times out, or the
+   subagent otherwise never returns a result -- or **returns something that is not a
+   well-formed `command_result`/`command_rejected`** (malformed JSON, missing required
+   fields, a response that doesn't match the request you sent): treat this identically
+   to a broken staged continuation. `retain_policy_event` (`kind:
+   "test_runner_fork_failure"`) describing exactly what was missing or malformed, block
+   the phase, and report it honestly. Never fabricate a `command_result`, never assume a
+   pass or a fail, and never fall back to a direct `Bash` call to
+   `.claude/skills/test-runner/scripts/run_command.py` to "get an answer anyway" -- that
+   would prove the wrapper works, not that the Skill mechanism mediated the command,
+   which "Standing rules" item 8 already forbids regardless of the pressure to produce a
+   result.
+5. `Bash` remains available to the orchestrator throughout -- for writing `live_cli.py`
+   request files and invoking `live_cli.py` itself -- but must **never** be used to edit
+   application source under `demo-repo/`. Only the **Engineer** subagent (via its own
+   `Edit`/`Write` tool grant, per `engineer.md`) may modify approved files under
+   `demo-repo/`, and only within its `path_validation` attestation and Protected Path
+   constraints. This boundary is unconditional, independent of the fork.
+6. After a valid pre-test `command_result` confirming the expected TDD failure (per the
+   "Mandatory TDD orchestration check" above), resume the **same Engineer agent id**
+   captured at this phase's `agent_dispatch` policy event with that real result. Because
+   the test-runner Skill's tool restriction is now confined to its own fork, the resumed
+   Engineer's `Edit`/`Write` grant (per `engineer.md`) is expected to remain intact for
+   its Step 9 implementation edit -- this expectation is the fork's whole purpose, and it
+   still requires a real `/work` run to confirm live before it can be reported as proven.
 
 # Reporting
 

@@ -1,0 +1,21 @@
+```json
+{
+  "response_type": "pre_test_requested",
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-002",
+  "test_created": {
+    "test_file": "demo-repo/tests/unit/test_explanations.py",
+    "test_name": "test_explain_includes_overall_risk_band",
+    "status": "added"
+  },
+  "requested_command": {
+    "id": "C-1",
+    "command": "python -m pytest tests/unit/test_explanations.py -v",
+    "working_directory": "demo-repo",
+    "expected_outcome": "fail",
+    "expected_failure_reason": "explain() currently accepts only (decision) and does not accept a second overall_band argument, so all four tests (three updated call sites plus the new test) will fail with a TypeError for missing/unexpected positional argument."
+  },
+  "findings_relied_on": ["F-1", "F-2", "F-3", "F-4", "F-5"],
+  "minimal_change_rung_plan": 2
+}
+```

@@ -1,0 +1,146 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-002",
+  "created_at": "2026-08-04T17:34:16Z",
+  "scope_ref": {
+    "path": "runs/run-20260804-riskband-002/scope.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "explain() currently has the signature `def explain(decision: Decision) -> str`, accepting only a Decision and no risk-band or risk-profile parameter.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/explanations.py",
+          "start_line": 20,
+          "end_line": 20,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "The current body of explain() builds output lines solely from the outcome headline (_OUTCOME_HEADLINE[decision.outcome]) and per-rule marker/reason lines (decision.rule_results); it does not emit any risk-band text.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/explanations.py",
+          "start_line": 20,
+          "end_line": 25,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-3",
+      "claim": "cli.py's _cmd_decide assigns the return value of run_pipeline(...) to `result` and currently calls `explain(result.decision)`, passing only the decision object into explain(), not any risk profile or risk band value.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/cli.py",
+          "start_line": 55,
+          "end_line": 67,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-4",
+      "claim": "cli.py's _cmd_decide function (line 67) is a production call site of explain(), invoking it as `explain(result.decision)` and printing the result.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/cli.py",
+          "start_line": 67,
+          "end_line": 67,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-5",
+      "claim": "test_explanations.py currently contains exactly three tests covering explain() (approve, refer, decline outcomes), and none of them assert on the applicant's risk band or on any 'overall_band'/'RiskProfile' text in the explanation output.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_explanations.py",
+          "start_line": 8,
+          "end_line": 32,
+          "evidence_tier": "test_assertion"
+        }
+      ]
+    },
+    {
+      "id": "F-6",
+      "claim": "No other file in the repository besides demo-repo/src/loanflow/cli.py (production) and demo-repo/tests/unit/test_explanations.py (tests) calls explain() from loanflow.explanations.",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "grep",
+          "query": "explain\\(",
+          "scope": "demo-repo",
+          "result": "Matches only at demo-repo/src/loanflow/cli.py:67 (call site), demo-repo/src/loanflow/explanations.py:20 (definition), and demo-repo/tests/unit/test_explanations.py:10,20,29 (test call sites). No other call sites anywhere in the repo."
+        },
+        {
+          "method": "grep",
+          "query": "from loanflow.explanations import|import explanations",
+          "scope": "demo-repo",
+          "result": "Only demo-repo/src/loanflow/cli.py:20 and demo-repo/tests/unit/test_explanations.py:4 import the explanations module."
+        }
+      ]
+    },
+    {
+      "id": "F-7",
+      "claim": "demo-repo/src/loanflow/explanations.py currently contains no reference to risk_profile, RiskProfile, or overall_band anywhere in the module.",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "grep",
+          "query": "risk_profile|RiskProfile|overall_band",
+          "scope": "demo-repo/src/loanflow/explanations.py",
+          "result": "No matches found"
+        }
+      ]
+    },
+    {
+      "id": "F-8",
+      "claim": "demo-repo/src/loanflow/cli.py currently contains no reference to risk_profile, RiskProfile, or overall_band anywhere in the module.",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "grep",
+          "query": "risk_profile|RiskProfile|overall_band",
+          "scope": "demo-repo/src/loanflow/cli.py",
+          "result": "No matches found"
+        }
+      ]
+    },
+    {
+      "id": "F-9",
+      "claim": "demo-repo/tests/unit/test_explanations.py currently contains no reference to risk_profile, RiskProfile, or overall_band anywhere in the file.",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "grep",
+          "query": "risk_profile|RiskProfile|overall_band",
+          "scope": "demo-repo/tests/unit/test_explanations.py",
+          "result": "No matches found"
+        }
+      ]
+    },
+    {
+      "id": "F-10",
+      "claim": "Because explain()'s only production call site is cli.py's _cmd_decide (F-4), and that same function already binds the full run_pipeline() return value to the local variable `result` before calling explain() (F-3), extending explain() to take a risk band argument would require cli.py's single call site at line 67 to be updated to source that argument from the same `result` object already in scope there, with no other production code needing changes.",
+      "classification": "inferred",
+      "supporting_finding_ids": ["F-3", "F-4"],
+      "reasoning": "F-3 establishes that `result` (the full run_pipeline() return value) is already a local variable in _cmd_decide at the point explain() is called. F-4 establishes that this is the only production call to explain() in the repository. Together these mean any additional argument explain() needs (such as a risk band) can be sourced from the already-available `result` object at this single call site, without touching any other production file -- though the exact attribute path on `result` (e.g., whether it is `result.risk_profile.overall_band`) cannot be confirmed from in-scope files alone since PipelineResult's definition lives in the out-of-scope pipeline.py."
+    }
+  ],
+  "open_questions": [
+    "The scope's objective and AC-1 assert that PipelineResult exposes a `.risk_profile` attribute and that RiskProfile exposes `.overall_band.value`, but PipelineResult's definition lives in demo-repo/src/loanflow/pipeline.py and RiskProfile/overall_band's definitions live in demo-repo/src/loanflow/risk_profile.py and demo-repo/src/loanflow/risk_bands.py -- all four are explicitly out_of_scope for this research task, so the exact attribute path and value type (e.g., whether overall_band is an enum with a `.value`) could not be directly confirmed from the in-scope files alone.",
+    "Implementing the changes described in task_graph node N-2 (extending explain()'s signature/body to render the risk band, and updating the cli.py call site to pass it) is implementation work and falls outside the Architect's research-only role; no code or patch is provided here.",
+    "Writing the new test asserting the risk band appears in the explanation text (AC-2) is also implementation work and falls outside the Architect's research-only role."
+  ]
+}

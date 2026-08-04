@@ -1,0 +1,38 @@
+﻿diff --git a/demo-repo/tests/unit/test_explanations.py b/demo-repo/tests/unit/test_explanations.py
+index d3ef477..e7de9b4 100644
+--- a/demo-repo/tests/unit/test_explanations.py
++++ b/demo-repo/tests/unit/test_explanations.py
+@@ -7,7 +7,7 @@ from loanflow.underwriting_rules import RuleOutcome, RuleResult
+ 
+ def test_explain_approve_mentions_approval_and_each_rule() -> None:
+     decision = Decision(DecisionOutcome.APPROVE, (RuleResult("max_dti_rule", RuleOutcome.PASS, "DTI is fine"),))
+-    text = explain(decision)
++    text = explain(decision, "low")
+     assert "approved" in text.lower()
+     assert "max_dti_rule" in text
+     assert "[OK]" in text
+@@ -17,7 +17,7 @@ def test_explain_refer_mentions_manual_review() -> None:
+     decision = Decision(
+         DecisionOutcome.REFER, (RuleResult("max_dti_rule", RuleOutcome.BORDERLINE, "DTI is borderline"),)
+     )
+-    text = explain(decision)
++    text = explain(decision, "medium")
+     assert "manual review" in text.lower()
+     assert "[BORDERLINE]" in text
+ 
+@@ -26,7 +26,14 @@ def test_explain_decline_mentions_decline_and_the_failing_rule() -> None:
+     decision = Decision(
+         DecisionOutcome.DECLINE, (RuleResult("max_ltv_rule", RuleOutcome.HARD_FAIL, "LTV too high"),)
+     )
+-    text = explain(decision)
++    text = explain(decision, "high")
+     assert "declined" in text.lower()
+     assert "[FAIL]" in text
+     assert "LTV too high" in text
++
++
++def test_explain_includes_overall_risk_band() -> None:
++    decision = Decision(DecisionOutcome.APPROVE, (RuleResult("max_dti_rule", RuleOutcome.PASS, "DTI is fine"),))
++    text = explain(decision, "low")
++    assert "risk band" in text.lower()
++    assert "low" in text.lower()

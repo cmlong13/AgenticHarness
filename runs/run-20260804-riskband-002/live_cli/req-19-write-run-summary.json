@@ -1,0 +1,6 @@
+{
+  "operation": "write_run_summary",
+  "run_id": "run-20260804-riskband-002",
+  "summary_ref": "runs/run-20260804-riskband-002/live_cli/run-summary.candidate.json",
+  "state": "implementation_blocked"
+}

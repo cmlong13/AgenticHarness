@@ -1,0 +1,72 @@
+command: python -m pytest tests/unit/test_explanations.py -v
+executed_as: C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe -m pytest tests/unit/test_explanations.py -v
+working_directory: demo-repo
+timeout_seconds: 300
+real_pytest_exit_code: 1
+reported_exit_code: 1
+
+--- STDOUT ---
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo
+configfile: pyproject.toml
+collecting ... collected 4 items
+
+tests/unit/test_explanations.py::test_explain_approve_mentions_approval_and_each_rule FAILED [ 25%]
+tests/unit/test_explanations.py::test_explain_refer_mentions_manual_review FAILED [ 50%]
+tests/unit/test_explanations.py::test_explain_decline_mentions_decline_and_the_failing_rule FAILED [ 75%]
+tests/unit/test_explanations.py::test_explain_includes_overall_risk_band FAILED [100%]
+
+================================== FAILURES ===================================
+____________ test_explain_approve_mentions_approval_and_each_rule _____________
+
+    def test_explain_approve_mentions_approval_and_each_rule() -> None:
+        decision = Decision(DecisionOutcome.APPROVE, (RuleResult("max_dti_rule", RuleOutcome.PASS, "DTI is fine"),))
+>       text = explain(decision, "low")
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: explain() takes 1 positional argument but 2 were given
+
+tests\unit\test_explanations.py:10: TypeError
+__________________ test_explain_refer_mentions_manual_review __________________
+
+    def test_explain_refer_mentions_manual_review() -> None:
+        decision = Decision(
+            DecisionOutcome.REFER, (RuleResult("max_dti_rule", RuleOutcome.BORDERLINE, "DTI is borderline"),)
+        )
+>       text = explain(decision, "medium")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: explain() takes 1 positional argument but 2 were given
+
+tests\unit\test_explanations.py:20: TypeError
+_________ test_explain_decline_mentions_decline_and_the_failing_rule __________
+
+    def test_explain_decline_mentions_decline_and_the_failing_rule() -> None:
+        decision = Decision(
+            DecisionOutcome.DECLINE, (RuleResult("max_ltv_rule", RuleOutcome.HARD_FAIL, "LTV too high"),)
+        )
+>       text = explain(decision, "high")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: explain() takes 1 positional argument but 2 were given
+
+tests\unit\test_explanations.py:29: TypeError
+___________________ test_explain_includes_overall_risk_band ___________________
+
+    def test_explain_includes_overall_risk_band() -> None:
+        decision = Decision(DecisionOutcome.APPROVE, (RuleResult("max_dti_rule", RuleOutcome.PASS, "DTI is fine"),))
+>       text = explain(decision, "low")
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: explain() takes 1 positional argument but 2 were given
+
+tests\unit\test_explanations.py:37: TypeError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_explanations.py::test_explain_approve_mentions_approval_and_each_rule
+FAILED tests/unit/test_explanations.py::test_explain_refer_mentions_manual_review
+FAILED tests/unit/test_explanations.py::test_explain_decline_mentions_decline_and_the_failing_rule
+FAILED tests/unit/test_explanations.py::test_explain_includes_overall_risk_band
+============================== 4 failed in 0.12s ==============================
+
+--- STDERR ---
+
+--- MUTATION CHECK ---
+no persistent non-cache file addition, deletion, or modification detected

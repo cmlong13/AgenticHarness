@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260804-riskband-002",
+  "created_at": "2026-08-04T17:34:16Z",
+  "scope_ref": {
+    "path": "runs/run-20260804-riskband-002/scope.json"
+  },
+  "findings_ref": {
+    "path": "runs/run-20260804-riskband-002/findings.json",
+    "finding_ids": ["F-1", "F-2", "F-3", "F-4", "F-5"]
+  },
+  "commands": [
+    {
+      "id": "C-1",
+      "stage": "pre_implementation",
+      "command": "python -m pytest tests/unit/test_explanations.py -v",
+      "exit_code": 1,
+      "output_ref": "runs/run-20260804-riskband-002/logs/C-1.log"
+    }
+  ],
+  "dependency_changes": [],
+  "status": "blocked",
+  "blocked_reason": "The Edit and Write tools required to apply the approved implementation change to demo-repo/src/loanflow/explanations.py (and the matching call-site update in demo-repo/src/loanflow/cli.py) are unavailable in this context -- both tool calls returned 'exists but is not enabled in this context, use one of the available tools instead' -- even though the pre-implementation failing test (C-1, confirmed genuine TypeError failure matching the planned signature change) was already established; Step 9's implementation edit cannot be made without a working Edit or Write tool."
+}

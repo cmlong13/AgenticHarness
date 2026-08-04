@@ -121,6 +121,30 @@ class TestTestRunnerSkill:
             assert tool in disallowed, f"{tool} should be in disallowed-tools"
         assert "Bash" not in disallowed
 
+    def test_runs_in_a_forked_context(self) -> None:
+        # Isolates this skill's disallowed-tools restriction to its own subagent
+        # context instead of leaking into the invoking turn -- see
+        # runs/run-20260804-riskband-002/ for the live evidence that motivated this.
+        assert self.fields.get("context") == "fork"
+
+    def test_forked_invocation_is_synchronous(self) -> None:
+        # background: false (Claude Code v2.1.218+) makes the fork wait for its result
+        # in the invoking turn instead of running detached -- the orchestrator still
+        # needs the real command_result before it can resume the staged protocol.
+        assert self.fields.get("background") == "false"
+
+    def test_fork_frontmatter_documented_in_body(self) -> None:
+        assert "context: fork" in self.text
+        assert "background: false" in self.text
+        assert "v2.1.218" in self.text
+
+    def test_allowed_and_disallowed_tools_still_declared_alongside_fork(self) -> None:
+        # The fork repairs *where* disallowed-tools applies, not whether it's declared
+        # at all -- the strict wrapper-only allowlist and the Write/Edit/... denylist
+        # must both still be present on the forked skill.
+        assert self.fields.get("allowed-tools")
+        assert self.fields.get("disallowed-tools")
+
     def test_does_not_prevent_bypass_disclaimer_present(self) -> None:
         assert "does not sandbox the caller" in self.flat_text
 

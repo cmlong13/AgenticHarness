@@ -8,11 +8,17 @@ core (`harness/orchestrator/` — a one-pass Discovery → Research → Implemen
 state machine, automatically tested end-to-end against scripted fake adapters only) are
 complete. This satisfies the Core MVP's skill requirement (§4), but not the assignment's
 broader "≥4 skill packs" requirement (§3) — the GitHub and Jira skill packs are not yet built.
-The orchestrator core has no live Claude Code adapter, no real test-runner adapter, no
-reasoning-backed Discovery adapter, and has never run an end-to-end pipeline — see §10. The
-`demo-repo/` target application (`loanflow`, 55 files) is implemented, automatically tested, and
-verified compatible with the test-runner wrapper and the orchestrator's path rules, but it has
-not yet been used by a live orchestrator run or an end-to-end four-phase pipeline — see §10. The
+Two real, live `/work` attempts have since run against `demo-repo/`
+(`run-20260803-riskband-001`, `run-20260804-riskband-002` — see §10), both retained as evidence
+and both ending `final_verdict: "blocked"`, not completed. The second live-verified real
+Architect and Engineer dispatch, an Engineer transport-repair correction resuming the same agent
+id, a genuine TDD failing test mediated through the real test-runner Skill, and then surfaced a
+real defect: the (at the time, inline) test-runner Skill's `disallowed-tools` restriction
+propagated into the resumed Engineer's own tool availability, blocking Implementation. The chosen
+repair — running `test-runner` forked (`context: fork`, `background: false`) — is implemented but
+**not yet live-verified by another `/work` run**. No end-to-end four-phase pipeline has completed.
+The `demo-repo/` target application (`loanflow`, 55 files) is implemented, automatically tested,
+and verified compatible with the test-runner wrapper and the orchestrator's path rules. The
 Skills requirement, the orchestrator milestone, and the project as a whole are not complete.**
 
 This document is the authoritative internal reference for what is being built. It is derived
@@ -568,6 +574,16 @@ Demonstrated live, on a repo with ≥50 files:
   `reset_mutation_fixture.py` script was added and its determinism verified live (reset → rerun
   → identical mutation detected → reset again), without disturbing the original retained
   detection evidence.
+- **Forked-isolation repair (2026-08-04)**: a live `/work` attempt
+  (`runs/run-20260804-riskband-002/`) found that invoking `test-runner` inline removed
+  `Write`/`Edit` not only from the rest of the orchestrator's own turn but from a
+  *resumed Engineer subagent's* tool availability too, blocking Implementation after a
+  genuinely successful pre-test mediation. `test-runner/SKILL.md` now declares `context:
+  fork` and `background: false` (Claude Code v2.1.218+) so the skill's own
+  `disallowed-tools` restriction is confined to its own forked context. The wrapper
+  script, its grammar, and its `allowed-tools`/`disallowed-tools` declarations are
+  unchanged — see "Live evidence (`run-20260804-riskband-002`)" in §10 for the full
+  account. **This repair has not yet been live-verified by a real `/work` run.**
 - **Documented, unresolved limitation carried over from this verification, motivating the
   planned hooks milestone**: during the A/B evaluation, one no-skill baseline agent hit a real
   `Write` permission denial on a file and worked around it by using `Bash` (a still-open tool)
@@ -801,6 +817,55 @@ What this genuinely proves:
 - No file under `demo-repo/` changed (`git status --short -- demo-repo` empty, verified
   independently after the run, not merely assumed).
 
+#### Live evidence (2026-08-04, `run-20260804-riskband-002`) — blocked but useful
+
+`run-20260804-riskband-002` was a **real, live `/work` attempt** (not a hand-rehearsal
+like `run-20260803-riskband-001` above), retained unmodified at
+`runs/run-20260804-riskband-002/`. It ended `final_verdict: "blocked"` -- not a
+completed pipeline -- but it live-verified several things that were previously only
+specified in instructions, and it surfaced the specific defect this milestone repairs:
+
+- **The Engineer's command-grammar fix held live.** The Engineer's `pre_test_requested`
+  used the accepted `python -m pytest tests/unit/test_explanations.py -v` grammar, not
+  the bare `pytest ...` form a prior run had produced -- confirming `engineer.md`'s
+  grammar correction actually changed live behavior, not just its written contract.
+- **The Engineer transport-repair protocol worked live, resuming the same agent id.**
+  The Engineer's first `pre_test_requested` reply was wrapped in a Markdown fence,
+  violating its own no-fence contract; the one permitted transport-only correction was
+  sent to the *same* Engineer agent id (`a7c52385d707fe116`) via `SendMessage`, and the
+  corrected reply parsed as clean raw JSON -- direct live evidence the
+  "Engineer transport repair" protocol in `work/SKILL.md` functions as designed, not
+  just as documented instructions.
+- **A genuine failing TDD regression test was produced correctly, before any production
+  change.** Independently confirmed via `git status`/`git diff` before mediation: only
+  the in-scope test file (`demo-repo/tests/unit/test_explanations.py`) had changed.
+- **The real test-runner Skill returned the expected failure.** The mediated
+  `command_result` had `exit_code: 1`, and the retained log showed the exact expected
+  `TypeError` from the planned signature change -- not a syntax error, import error, or
+  unrelated regression. Request/result identity matched
+  (`check_command_identity`).
+- **It then blocked on the defect this milestone repairs.** Invoking the (at the time,
+  inline, non-forked) `test-runner` Skill removed `Write`/`Edit` for the rest of that
+  user turn -- and this run is the first live evidence that the removal propagated into
+  the *resumed Engineer subagent's own tool availability*, not just the main session's,
+  per `runs/run-20260804-riskband-002/logs/policy-events.jsonl`'s
+  `cross_agent_tool_restriction_observed` event. The Engineer correctly self-reported a
+  schema-valid `blocked` implementation-report (`Edit`/`Write` "not enabled in this
+  context") rather than fabricating an edit; independently re-confirmed via
+  `git status`/`git diff` that no unauthorized or silent edit occurred.
+- **Chosen repair, not yet live-verified:** `test-runner/SKILL.md` now declares
+  `context: fork` and `background: false` (Claude Code v2.1.218+; the installed version
+  at the time of this repair was 2.1.221), so the Skill's own `disallowed-tools`
+  restriction is confined to its own forked context instead of leaking into the
+  invoking turn or a resumed subagent. This is a harness-configuration repair only --
+  `run-command.py`'s wrapper grammar, its `allowed-tools`/`disallowed-tools`
+  declarations, and `work/SKILL.md`'s request/result identity checking are unchanged.
+  **It has not yet been exercised by a real `/work` run** -- whether the fork's
+  isolation actually holds (the resumed Engineer's `Edit`/`Write` genuinely remains
+  available after a forked test-runner invocation) is a claim to be live-verified by
+  the next `/work` attempt, not one this milestone can certify from static
+  configuration alone.
+
 #### Remaining work
 
 1. ~~Build `/work` free-form mode as a main-session command/skill.~~ **Entry point and
@@ -810,24 +875,44 @@ What this genuinely proves:
    `/work --dry-run` walk-through — see "Dry-run evidence" above.
 2. Provide reasoning-backed Discovery. **Exercised live and worked**: Discovery
    produced a real, schema/semantically-valid `scope.json` in the dry run above.
-3. Dispatch real Architect, Engineer, and Quality Engineer subagents. **Architect: real
-   dispatch confirmed live** (returned a real agent id and content), though its raw
-   output did not conform to its own no-fence contract — see "Dry-run evidence" above.
-   Engineer and Quality Engineer dispatch remain **not** exercised live.
+3. Dispatch real Architect, Engineer, and Quality Engineer subagents. **Architect and
+   Engineer: real dispatch confirmed live**, including a real Engineer transport-repair
+   correction resuming the same agent id (see "Live evidence
+   (`run-20260804-riskband-002`)" above). Quality Engineer dispatch remains **not**
+   exercised live — `run-20260804-riskband-002` correctly withheld it because the
+   Engineer's own report was blocked (`quality-engineer.md`'s Step 4 requires an
+   immediate `blocked` report with no command requested in that case, adding no new
+   evidence beyond `runs/quality-engineer-boundary-test/`).
 4. Resume the same Engineer and Quality Engineer instances during staged exchanges.
-   **Not exercised live** — the dry run never reached a staged phase.
-5. Mediate tests through the actual test-runner `Skill` mechanism. **One real
-   invocation succeeded live** (see "Dry-run evidence" above) — this is partial
-   evidence, not exhaustive coverage of the mediation path (e.g. a `command_rejected`
-   or a mutation-sentinel `125` case has not yet been observed through `/work` itself).
+   **Engineer: exercised live and worked** for the pre-test stage and one transport
+   correction (`run-20260804-riskband-002`) — the same agent id was resumed
+   successfully. It could not be exercised through the post-test/finalization stages
+   because the same run then blocked on the inline test-runner restriction (see below).
+   Quality Engineer staged resume remains **not** exercised live.
+5. Mediate tests through the actual test-runner `Skill` mechanism. **Two real
+   invocations have now succeeded live** (`run-20260803-riskband-001`'s dry-run smoke
+   check and `run-20260804-riskband-002`'s pre-test mediation, the latter returning a
+   real, correctly-diagnosed TDD failure) — still partial evidence, not exhaustive
+   coverage (e.g. a `command_rejected` or a mutation-sentinel `125` case has not yet
+   been observed through `/work` itself). `run-20260804-riskband-002` also surfaced a
+   real defect in this mediation path — the inline invocation's `disallowed-tools`
+   restriction propagated into the resumed Engineer's own tool availability, blocking
+   Implementation — repaired by forking the skill (`context: fork`, `background:
+   false`; see "Live evidence" above). **The fork itself is not yet live-verified.**
 6. Run the first real Discovery → Research → Implementation → Verification pipeline
-   against `demo-repo/`. **Not complete** — the dry run's Research phase itself ended
-   `blocked` (fenced Architect output), and Implementation/Verification were not
-   attempted by design. No live four-phase run has occurred.
+   against `demo-repo/`. **Not complete.** `run-20260803-riskband-001`'s Research phase
+   ended `blocked` (fenced Architect output); `run-20260804-riskband-002` went further
+   — Discovery and Research both completed and promoted cleanly, and Implementation
+   began and produced a genuine failing TDD test — but ended `blocked` before the
+   Engineer's implementation edit, for the reason above. No live four-phase run has
+   occurred. The forked test-runner Skill is the next thing to verify before a further
+   attempt can be expected to reach Implementation's edit step.
 7. Retain and validate all artifacts and produce a real `run-summary.json`. **Partially
-   demonstrated**: a real, schema-valid `run-summary.json` with an honest `"blocked"`
-   verdict was produced for the dry run — but only `scope.json` reached canonical
-   promotion; `findings.json`/`implementation-report.json`/`verification-report.json`
+   demonstrated**: real, schema-valid `run-summary.json` files with honest `"blocked"`
+   verdicts were produced for both `run-20260803-riskband-001` (only `scope.json`
+   promoted) and `run-20260804-riskband-002` (`scope.json`, `findings.json`, and a
+   `blocked`-status `implementation-report.json` all promoted) — `implementation-report.json`
+   reaching a `ready_for_verification` status, and `verification-report.json` at all,
    have not yet been produced by a real run.
 
 Populating the 50+ file demo repository (formerly item 1 of this list) is **COMPLETE** — see

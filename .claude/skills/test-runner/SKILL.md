@@ -7,18 +7,35 @@ description: Validates and executes exactly one narrowly-scoped "python -m pytes
   Engineer holds the Skill tool.
 allowed-tools: Bash(python ${CLAUDE_SKILL_DIR}/scripts/run_command.py *)
 disallowed-tools: Write, Edit, NotebookEdit, PowerShell, Agent, Skill, WebFetch, WebSearch
+context: fork
+background: false
 ---
+
+# Why this runs forked (`context: fork`, `background: false`)
+This skill executes in its own isolated subagent context, not inline in the caller's
+turn. `background: false` (requires Claude Code v2.1.218+) makes the fork synchronous:
+the caller still waits for the real result before continuing, exactly as before —
+only the *isolation* changed, not the waiting semantics. This was a direct repair for
+evidence retained at `runs/run-20260804-riskband-002/`: invoking this skill inline
+removed `Write`/`Edit` from the rest of that *entire turn*, including a resumed
+Engineer subagent's own tool availability, so a genuinely-produced failing test could
+be mediated but the same Engineer could not then implement the fix. Running this skill
+forked confines its `disallowed-tools` restriction to the fork's own isolated context —
+the invoking session's and any resumed subagent's tool availability are untouched by
+this skill's invocation.
 
 # What allowed-tools/disallowed-tools actually do here
 `allowed-tools` pre-approves *only* the wrapper invocation pattern — no permission
 prompt for calling `run_command.py`. `disallowed-tools` temporarily removes the listed
-tools while this skill is active — including `Write` and `Edit`. `Bash` is deliberately
-kept, since it's the only way to launch the wrapper. **This does not sandbox the
-caller.** A caller that already holds general Bash permission can still make a separate,
-unrelated raw Bash call outside this pattern — nothing here technically prevents that.
-A skill-scoped `PreToolUse` hook could enforce "only the wrapper pattern is allowed
-while this skill is active" for real; that's deferred to the planned hooks milestone
-(`.claude/hooks/` doesn't exist yet), not implemented now.
+tools while this skill is active — including `Write` and `Edit` — but, per the isolation
+above, only *inside the forked context this skill runs in*, not for the caller that
+invoked it. `Bash` is deliberately kept, since it's the only way to launch the wrapper.
+**This does not sandbox the caller.** A caller that already holds general Bash
+permission can still make a separate, unrelated raw Bash call outside this pattern —
+nothing here technically prevents that. A skill-scoped `PreToolUse` hook could enforce
+"only the wrapper pattern is allowed while this skill is active" for real; that's
+deferred to the planned hooks milestone (`.claude/hooks/` doesn't exist yet), not
+implemented now.
 
 # The request file must already exist — this skill never creates it
 Because `Write`/`Edit` are removed for the duration of this skill's invocation, this

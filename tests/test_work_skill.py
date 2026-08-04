@@ -243,7 +243,12 @@ class TestEngineerTransportRepair:
         assert "not eligible for this repair" in self.flat_text.lower()
 
 
-class TestTestRunnerMediationAndRestrictionLifecycle:
+class TestTestRunnerForkedMediation:
+    """Covers the fork-isolation repair adopted after run-20260804-riskband-002: the
+    test-runner Skill now runs in an isolated forked context (context: fork,
+    background: false) instead of inline, so its disallowed-tools restriction no
+    longer leaks into the invoking turn or a resumed Engineer's own tool availability."""
+
     def setup_method(self) -> None:
         self.text = SKILL_PATH.read_text(encoding="utf-8")
         self.flat_text = " ".join(self.text.split())
@@ -251,33 +256,52 @@ class TestTestRunnerMediationAndRestrictionLifecycle:
     def test_test_runner_skill_mediation_required_not_direct_wrapper(self) -> None:
         assert "real `test-runner` Skill" in self.text
         assert "run_command.py" in self.text
-        assert "never a direct `Bash` call" in self.flat_text.lower() or "never fall back to invoking" in self.flat_text.lower()
+        assert "never fall back to a direct `bash` call" in self.flat_text.lower()
 
-    def test_restriction_lifecycle_section_present(self) -> None:
-        assert "Test-runner Skill restriction lifecycle" in self.text
+    def test_forked_mediation_section_present(self) -> None:
+        assert "Test-runner Skill mediation: forked isolation" in self.text
 
-    def test_restriction_scoped_to_current_user_turn(self) -> None:
-        assert "current user turn" in self.flat_text.lower()
+    def test_fork_frontmatter_referenced(self) -> None:
+        assert "context: fork" in self.text
+        assert "background: false" in self.text
 
-    def test_restriction_is_expected_behavior_not_a_defect(self) -> None:
-        assert "expected turn-lifecycle behavior" in self.flat_text
-        assert "not an unexplained defect" in self.flat_text
+    def test_inline_turn_wide_denial_no_longer_described_as_normal_path(self) -> None:
+        # The old "avoid Write/Edit for the rest of the turn" workaround must no longer
+        # be presented as the intended path for live Implementation.
+        assert "is not the normal path for live implementation" in self.flat_text.lower()
+        assert "do not reintroduce workarounds" in self.flat_text.lower()
 
-    def test_post_test_runner_evidence_ops_must_use_bash_bridge(self) -> None:
-        assert "must not depend on `Write` or `Edit`" in self.flat_text
-        assert "harness/orchestrator/live_cli.py" in self.text
-        assert "Bash" in self.text
+    def test_waits_for_forked_result_before_continuing(self) -> None:
+        assert "wait for its real result in this same turn" in self.flat_text.lower() or (
+            "wait for" in self.flat_text.lower() and "before proceeding" in self.flat_text.lower()
+        )
+        assert "never proceed as if a result arrived when none has" in self.flat_text.lower()
+
+    def test_fork_failure_or_malformed_result_blocks_phase(self) -> None:
+        assert "test_runner_fork_failure" in self.text
+        assert "block the phase" in self.flat_text.lower()
+        assert "never fabricate a" in self.flat_text.lower()
+
+    def test_no_direct_wrapper_fallback_on_fork_failure(self) -> None:
+        assert "never fall back to a direct `bash` call" in self.flat_text.lower()
+
+    def test_same_engineer_resumed_after_valid_pretest_result(self) -> None:
+        assert "same engineer agent id" in self.flat_text.lower()
+        assert "resume" in self.flat_text.lower()
+        assert "edit`/`write` grant" in self.flat_text.lower() or "edit/write grant" in self.flat_text.lower()
 
     def test_bash_forbidden_from_editing_demo_repo_source(self) -> None:
-        assert "must **never** be used to edit application source" in self.text or "never be used to edit application source" in self.flat_text.lower()
+        assert "must **never** be used to edit application source" in self.flat_text
 
     def test_only_engineer_may_modify_demo_repo(self) -> None:
-        assert "only the **Engineer** subagent" in self.text or "only the Engineer subagent" in self.flat_text
+        assert "Only the **Engineer** subagent" in self.flat_text
 
-    def test_test_execution_still_mediated_through_skill_after_restriction(self) -> None:
-        # Guards against "restrictions are active, so fall back to the wrapper directly"
-        # reasoning -- the Skill tool must remain the only path even under restriction.
-        assert "Test execution must still always go through the real" in self.flat_text
+    def test_retains_blocked_run_as_evidence_for_the_fork(self) -> None:
+        # Required: the blocked live run stays retained and cited as the reason the
+        # fork exists, not silently dropped once the repair lands.
+        assert "run-20260804-riskband-002" in self.text
+        assert "retained evidence" in self.flat_text.lower()
+        assert "not to be re-derived, edited, or deleted" in self.flat_text.lower()
 
 
 class TestTddSourceChangeInspectionAndCompletionEvidence:
