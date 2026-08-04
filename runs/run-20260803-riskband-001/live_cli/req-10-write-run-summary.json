@@ -1,0 +1,27 @@
+{
+  "operation": "write_run_summary",
+  "run_id": "run-20260803-riskband-001",
+  "state": "research_blocked",
+  "summary": {
+    "schema_version": "1.0",
+    "task_id": "T-RISKBAND",
+    "run_id": "run-20260803-riskband-001",
+    "created_at": "2026-08-03T18:31:34Z",
+    "objective_summary": "DRY RUN, not a completed pipeline. By design (--dry-run), Implementation and Verification were never attempted -- the Engineer and Quality Engineer were never dispatched, and no file under demo-repo/ was modified. Independently of the dry-run boundary, the Research phase itself was genuinely blocked before reaching even that boundary: the real, live-dispatched Architect (agent id a5fea91d4cb36f785) returned a findings candidate wrapped in a Markdown code fence, which architect.md's own Output contract explicitly forbids and which harness/orchestrator/core.py's no-fence-stripping policy required treating as a parse failure rather than silently repairing. The raw response is retained at runs/run-20260803-riskband-001/attempts/research-1.raw.txt; findings.json was never promoted. A separate, non-canonical diagnostic (runs/run-20260803-riskband-001/live_cli/research-1.fence-stripped-diagnostic.json, never promoted) confirms the underlying content -- once manually fence-stripped -- is schema- and semantically-valid, so the Architect's actual research was substantively sound; only the raw transport contract was violated. Discovery completed cleanly: scope.json was validated and promoted. A standalone test-runner Skill smoke check (command_id C-1, python -m pytest tests/unit/test_explanations.py -q against demo-repo) succeeded independently of the Research block: real command_result, exit_code 0, 3 passed, no mutation detected, genuinely invoked via the Skill tool (not a direct wrapper call).",
+    "artifact_refs": {
+      "scope": "runs/run-20260803-riskband-001/scope.json"
+    },
+    "phases_completed": ["discovery"],
+    "remaining_risks": [
+      "Architect's real output was Markdown-fenced despite architect.md explicitly forbidding this -- either the subagent itself does not reliably comply with its own no-fence instruction, or something in the Agent-tool relay path adds a fence; the root cause is not yet isolated and should be before the next live Research attempt.",
+      "Engineer/Quality Engineer staged continuation (Agent start -> SendMessage resume) remains fully unexercised live -- this dry run only exercised a single-shot Architect dispatch and one standalone test-runner Skill call, not the staged multi-turn protocol.",
+      "test-runner Skill's disallowed-tools (Write, Edit, ...) was observed to remain enforced well beyond the single wrapper-invocation turn, for the remainder of this session's subsequent turns -- the exact lifetime of that restriction is not documented in test-runner/SKILL.md and should be characterized before the /work skill's instructions assume a specific timing."
+    ],
+    "follow_up_actions": [
+      "Investigate why the live Architect dispatch returned a fenced response and fix either architect.md's instructions or the relay path before attempting a real Research phase again.",
+      "Run a live Engineer dispatch (in a follow-up milestone) to exercise the staged continuation protocol this dry run left undemonstrated.",
+      "Confirm the exact scope/duration of test-runner's disallowed-tools enforcement empirically rather than assuming it clears after one wrapper call."
+    ],
+    "duration_seconds": 883
+  }
+}

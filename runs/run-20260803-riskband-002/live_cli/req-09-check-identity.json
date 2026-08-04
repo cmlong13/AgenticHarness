@@ -1,0 +1,22 @@
+{
+  "operation": "check_command_identity",
+  "request": {
+    "task_id": "T-RISKBAND",
+    "run_id": "run-20260803-riskband-002",
+    "command_id": "C-1",
+    "command": "python -m pytest tests/unit/test_explanations.py -q",
+    "working_directory": "demo-repo",
+    "target_repo_path": "demo-repo",
+    "purpose": "dry-run smoke check: real test-runner Skill invocation against an already-passing file, no source changes precede it"
+  },
+  "result": {
+    "message_type": "command_result",
+    "task_id": "T-RISKBAND",
+    "run_id": "run-20260803-riskband-002",
+    "command_id": "C-1",
+    "command": "python -m pytest tests/unit/test_explanations.py -q",
+    "working_directory": "demo-repo",
+    "exit_code": 0,
+    "output_ref": "runs/run-20260803-riskband-002/logs/C-1.log"
+  }
+}

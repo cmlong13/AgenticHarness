@@ -1,0 +1,160 @@
+```json
+{
+  "schema_version": "1.0",
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260803-riskband-001",
+  "created_at": "2026-08-03T18:16:51Z",
+  "scope_ref": {
+    "path": "runs/run-20260803-riskband-001/scope.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "explain() in demo-repo/src/loanflow/explanations.py currently takes a single parameter, decision: Decision, and its body only reads decision.outcome and decision.rule_results (via _OUTCOME_HEADLINE and per-rule marker/reason lines). It has no parameter or access path to a RiskProfile or its overall_band anywhere in its signature or body.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/explanations.py",
+          "start_line": 20,
+          "end_line": 25,
+          "evidence_tier": "executable_code",
+          "excerpt": "def explain(decision: Decision) -> str:\n    lines = [_OUTCOME_HEADLINE[decision.outcome]]\n    for result in decision.rule_results:\n        marker = _MARKER_BY_OUTCOME[result.outcome]\n        lines.append(f\"  [{marker}] {result.rule_name}: {result.reason}\")\n    return \"\\n\".join(lines)"
+        }
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "PipelineResult (returned by run_pipeline in demo-repo/src/loanflow/pipeline.py) is a frozen dataclass with two fields: risk_profile (a RiskProfile) and decision (a Decision). Both are populated in the same run_pipeline call and returned together.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/pipeline.py",
+          "start_line": 23,
+          "end_line": 26,
+          "evidence_tier": "executable_code",
+          "excerpt": "@dataclass(frozen=True)\nclass PipelineResult:\n    risk_profile: RiskProfile\n    decision: Decision"
+        },
+        {
+          "path": "demo-repo/src/loanflow/pipeline.py",
+          "start_line": 52,
+          "end_line": 70,
+          "evidence_tier": "executable_code",
+          "excerpt": "profile = build_risk_profile(...)\n...\ndecision = recommend(rule_results)\n...\nreturn PipelineResult(risk_profile=profile, decision=decision)"
+        }
+      ]
+    },
+    {
+      "id": "F-3",
+      "claim": "RiskProfile.overall_band is a field of the RiskProfile frozen dataclass, of type Band. It is computed inside build_risk_profile in demo-repo/src/loanflow/risk_profile.py by taking the max of dti_band, ltv_band, and credit_bucket weights and mapping that combined weight back to a Band via _WEIGHT_TO_BAND.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_profile.py",
+          "start_line": 24,
+          "end_line": 32,
+          "evidence_tier": "executable_code",
+          "excerpt": "@dataclass(frozen=True)\nclass RiskProfile:\n    dti: Percentage\n    dti_band: Band\n    ltv: Percentage\n    ltv_band: Band\n    credit_score: int\n    credit_bucket: CreditBucket\n    overall_band: Band"
+        },
+        {
+          "path": "demo-repo/src/loanflow/risk_profile.py",
+          "start_line": 43,
+          "end_line": 60,
+          "evidence_tier": "executable_code",
+          "excerpt": "combined_weight = max(\n    _BAND_WEIGHT[dti_band], _BAND_WEIGHT[ltv_band], _BUCKET_WEIGHT[credit_bucket]\n)\nreturn RiskProfile(\n    ...\n    overall_band=_WEIGHT_TO_BAND[combined_weight],\n)"
+        }
+      ]
+    },
+    {
+      "id": "F-4",
+      "claim": "Band (the type of RiskProfile.overall_band) is a str Enum with members LOW, MEDIUM, HIGH whose .value are the lowercase strings \"low\", \"medium\", \"high\" respectively, so RiskProfile.overall_band.value is a valid, ready-to-render string.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 16,
+          "end_line": 19,
+          "evidence_tier": "executable_code",
+          "excerpt": "class Band(str, Enum):\n    LOW = \"low\"\n    MEDIUM = \"medium\"\n    HIGH = \"high\""
+        }
+      ]
+    },
+    {
+      "id": "F-5",
+      "claim": "The one call site that invokes explain() in the demo-repo application code is in demo-repo/src/loanflow/cli.py's _cmd_decide function, at `print(explain(result.decision))` (line 67). At that point in the function, `result` (the full PipelineResult, which includes result.risk_profile with its overall_band) is already a local variable in scope -- it was assigned three lines earlier from run_pipeline's return value -- so result.risk_profile.overall_band is directly accessible at the call site without any additional plumbing from elsewhere in the pipeline.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/cli.py",
+          "start_line": 49,
+          "end_line": 68,
+          "evidence_tier": "executable_code",
+          "excerpt": "result = run_pipeline(\n    applicant=applicant,\n    ...\n)\nprint(explain(result.decision))\nreturn 0"
+        }
+      ]
+    },
+    {
+      "id": "F-6",
+      "claim": "explain() is invoked in exactly one place in the application source outside of its own definition and its unit test file: demo-repo/src/loanflow/cli.py line 67. No other application source file calls explain().",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/cli.py",
+          "start_line": 67,
+          "end_line": 67,
+          "evidence_tier": "executable_code",
+          "excerpt": "print(explain(result.decision))"
+        }
+      ]
+    },
+    {
+      "id": "F-7",
+      "claim": "There is currently no reference to \"risk band\"/\"overall_band\" (case-insensitive) anywhere in demo-repo/src/loanflow/explanations.py or demo-repo/src/loanflow/cli.py.",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "grep",
+          "query": "risk.band|risk_band|overall_band (case-insensitive)",
+          "scope": "demo-repo/src/loanflow/explanations.py",
+          "result": "no matches"
+        },
+        {
+          "method": "grep",
+          "query": "risk.band|risk_band|overall_band (case-insensitive)",
+          "scope": "demo-repo/src/loanflow/cli.py",
+          "result": "no matches"
+        },
+        {
+          "method": "read",
+          "query": "full-file read of explanations.py and cli.py",
+          "scope": "demo-repo/src/loanflow/explanations.py, demo-repo/src/loanflow/cli.py",
+          "result": "no mention of risk band, overall_band, or RiskProfile of any kind in either file's source text"
+        }
+      ]
+    },
+    {
+      "id": "F-8",
+      "claim": "The existing test suite in demo-repo/tests/unit/test_explanations.py has exactly three tests: test_explain_approve_mentions_approval_and_each_rule asserts 'approved' appears (case-insensitive), 'max_dti_rule' appears verbatim, and '[OK]' appears; test_explain_refer_mentions_manual_review asserts 'manual review' appears (case-insensitive) and '[BORDERLINE]' appears; test_explain_decline_mentions_decline_and_the_failing_rule asserts 'declined' appears (case-insensitive), '[FAIL]' appears, and 'LTV too high' appears verbatim. None of these three tests reference risk band or RiskProfile, and all construct a Decision directly (not a PipelineResult), calling explain(decision) with a single positional argument.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_explanations.py",
+          "start_line": 8,
+          "end_line": 32,
+          "evidence_tier": "test_assertion",
+          "excerpt": "text = explain(decision)\nassert \"approved\" in text.lower()\n...\nassert \"manual review\" in text.lower()\n...\nassert \"declined\" in text.lower()\nassert \"[FAIL]\" in text\nassert \"LTV too high\" in text"
+        }
+      ]
+    },
+    {
+      "id": "F-9",
+      "claim": "Because the only call site of explain() in application code is demo-repo/src/loanflow/cli.py line 67, and because explain() currently accepts only a Decision (not a PipelineResult or RiskProfile), extending explain() to render the overall risk band will require changing both explain()'s signature/body and updating that one call site to pass risk-band data (e.g. result.risk_profile.overall_band or the whole PipelineResult) alongside the existing decision argument.",
+      "classification": "inferred",
+      "supporting_finding_ids": ["F-1", "F-5", "F-6"],
+      "reasoning": "F-1 establishes explain() currently only accepts and uses a Decision, with no risk-band access. F-6 establishes cli.py line 67 is the sole call site in application code. F-5 establishes that at that call site, result.risk_profile.overall_band is already locally available. Combining these: any change giving explain() access to overall_band necessarily touches both the explain() definition (to accept/render it) and this single call site (to supply it), since no other call site exists to reconcile and the data is not currently threaded through."
+    }
+  ],
+  "open_questions": [
+    "Implementation of the change (extending explain()'s signature/body to accept and render RiskProfile.overall_band, updating the cli.py call site, and adding a new test to test_explanations.py per AC-2) is implementation work and outside the Architect's Research-only role; it is not addressed here beyond confirming the current wiring and access pattern (see F-1 through F-9)."
+  ]
+}
+```

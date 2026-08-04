@@ -1,0 +1,2 @@
+{"kind": "agent_dispatch", "phase": "research", "subagent_type": "architect", "agent_id": "a8aeef2bdc4451dc6", "dispatch_sequence": 1}
+{"kind": "skill_invocation", "skill": "test-runner", "request_path": "runs/run-20260803-riskband-002/requests/C-1.json", "invoked_via": "Skill tool"}

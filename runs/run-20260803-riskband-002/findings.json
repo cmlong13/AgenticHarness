@@ -1,0 +1,137 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-RISKBAND",
+  "run_id": "run-20260803-riskband-002",
+  "created_at": "2026-08-04T01:38:11Z",
+  "scope_ref": {
+    "path": "runs/run-20260803-riskband-002/scope.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "explain() currently accepts only a Decision object and does not accept, reference, or render any risk band / RiskProfile data",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/explanations.py",
+          "start_line": 20,
+          "end_line": 25,
+          "evidence_tier": "executable_code",
+          "excerpt": "def explain(decision: Decision) -> str:\n    lines = [_OUTCOME_HEADLINE[decision.outcome]]\n    for result in decision.rule_results:\n        marker = _MARKER_BY_OUTCOME[result.outcome]\n        lines.append(f\"  [{marker}] {result.rule_name}: {result.reason}\")\n    return \"\\n\".join(lines)"
+        }
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "cli.py's only call to explain() passes result.decision (the Decision returned by run_pipeline) and does not pass result.risk_profile or any risk band data",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/cli.py",
+          "start_line": 55,
+          "end_line": 67,
+          "evidence_tier": "executable_code",
+          "excerpt": "result = run_pipeline(\n        applicant=applicant,\n        ...\n        audit_log=audit_log,\n    )\n    print(explain(result.decision))"
+        }
+      ]
+    },
+    {
+      "id": "F-3",
+      "claim": "explain() is imported and invoked in exactly one production module (cli.py, single call site at line 67) and one test module (test_explanations.py, three call sites) across the entire demo-repo; there is no other call site that would need updating",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/cli.py",
+          "start_line": 20,
+          "end_line": 20,
+          "evidence_tier": "executable_code",
+          "excerpt": "from loanflow.explanations import explain"
+        },
+        {
+          "path": "demo-repo/src/loanflow/cli.py",
+          "start_line": 67,
+          "end_line": 67,
+          "evidence_tier": "executable_code",
+          "excerpt": "print(explain(result.decision))"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_explanations.py",
+          "start_line": 4,
+          "end_line": 4,
+          "evidence_tier": "executable_code",
+          "excerpt": "from loanflow.explanations import explain"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_explanations.py",
+          "start_line": 10,
+          "end_line": 10,
+          "evidence_tier": "test_assertion",
+          "excerpt": "text = explain(decision)"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_explanations.py",
+          "start_line": 20,
+          "end_line": 20,
+          "evidence_tier": "test_assertion",
+          "excerpt": "text = explain(decision)"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_explanations.py",
+          "start_line": 29,
+          "end_line": 29,
+          "evidence_tier": "test_assertion",
+          "excerpt": "text = explain(decision)"
+        }
+      ]
+    },
+    {
+      "id": "F-4",
+      "claim": "The three existing tests in test_explanations.py (approve/refer/decline) construct Decision objects directly and assert only on outcome wording and rule markers; none reference RiskProfile, overall_band, or risk_profile, and none assert that a risk band appears in the explanation text",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_explanations.py",
+          "start_line": 8,
+          "end_line": 32,
+          "evidence_tier": "test_assertion",
+          "excerpt": "def test_explain_approve_mentions_approval_and_each_rule() -> None: ... assert \"approved\" in text.lower() ... def test_explain_decline_mentions_decline_and_the_failing_rule() ... assert \"LTV too high\" in text"
+        }
+      ]
+    },
+    {
+      "id": "F-5",
+      "claim": "No reference to RiskProfile.overall_band or PipelineResult.risk_profile (nor the bare strings 'overall_band' or 'risk_profile') currently exists within the three in-scope files (explanations.py, cli.py, test_explanations.py)",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "grep",
+          "query": "overall_band",
+          "scope": "demo-repo/src/loanflow/explanations.py",
+          "result": "no matches"
+        },
+        {
+          "method": "grep",
+          "query": "overall_band",
+          "scope": "demo-repo/src/loanflow/cli.py",
+          "result": "no matches"
+        },
+        {
+          "method": "grep",
+          "query": "overall_band|risk_profile|RiskProfile",
+          "scope": "demo-repo/tests/unit/test_explanations.py",
+          "result": "no matches"
+        },
+        {
+          "method": "grep",
+          "query": "risk_profile",
+          "scope": "demo-repo/src/loanflow/cli.py",
+          "result": "no matches"
+        }
+      ]
+    }
+  ],
+  "open_questions": [
+    "Confirming the concrete attribute chain and types for PipelineResult.risk_profile and RiskProfile.overall_band (e.g., whether overall_band is an enum exposing a .value attribute as the objective assumes) would require reading demo-repo/src/loanflow/pipeline.py and demo-repo/src/loanflow/risk_profile.py, both of which are listed in scope.json's out_of_scope list and are therefore outside the Architect's permitted investigation boundary for this task. This cannot be independently verified from the in-scope files alone, since none of them currently reference risk_profile or overall_band (see F-5).",
+    "Designing and writing the actual code changes to explain() and cli.py (task_graph node N-2) and the new risk-band test (part of AC-2) is implementation work, which is outside the Architect's Research-only role; it must be carried out by an implementation-phase agent using the findings above as a starting point."
+  ]
+}

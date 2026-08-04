@@ -1,0 +1,30 @@
+{
+  "operation": "write_run_summary",
+  "run_id": "run-20260803-riskband-002",
+  "summary": {
+    "schema_version": "1.0",
+    "task_id": "T-RISKBAND",
+    "run_id": "run-20260803-riskband-002",
+    "created_at": "2026-08-04T01:38:11Z",
+    "objective_summary": "DRY RUN, not a completed pipeline. By design (--dry-run), Implementation and Verification were never attempted -- the Engineer and Quality Engineer were never dispatched, and no file under demo-repo/ was modified. Unlike the prior rehearsal run-20260803-riskband-001 (which blocked in Research on a fenced Architect response), this run's Research phase completed cleanly: a real, live-dispatched Architect (agent id a8aeef2bdc4451dc6) returned raw, unfenced JSON on the first attempt, which validated and promoted to a canonical findings.json (5 findings: 4 found, 1 honest not_found, citing that no reference to overall_band/risk_profile exists yet in the three in-scope files; 2 open_questions correctly deferring the out-of-scope attribute chain and all implementation work). Discovery also completed cleanly: scope.json was independently grounded by reading explanations.py, cli.py, pipeline.py, risk_profile.py, risk_bands.py, and test_explanations.py, then validated and promoted. A standalone test-runner Skill smoke check (command_id C-1, python -m pytest tests/unit/test_explanations.py -q against demo-repo) succeeded: real command_result, exit_code 0, 3 passed, no mutation detected, genuinely invoked via the Skill tool (not a direct wrapper call), and its request/result identity fields matched exactly. git status --short -- demo-repo was independently confirmed empty after the run.",
+    "artifact_refs": {
+      "scope": "runs/run-20260803-riskband-002/scope.json",
+      "findings": "runs/run-20260803-riskband-002/findings.json"
+    },
+    "final_verdict": "blocked",
+    "phases_completed": [
+      "discovery",
+      "research"
+    ],
+    "remaining_risks": [
+      "Engineer/Quality Engineer staged continuation (Agent start -> SendMessage resume) remains fully unexercised live -- this dry run only exercised a single-shot Architect dispatch and one standalone test-runner Skill call, not the staged multi-turn protocol.",
+      "The Architect's open_questions correctly flag that the exact attribute chain (RiskProfile.overall_band being a Band str-Enum with .value) could not be verified by the Architect itself, since pipeline.py and risk_profile.py are out_of_scope for Research -- the orchestrator independently confirmed this from its own Discovery-phase reading, but that confirmation is not part of the promoted findings.json evidence trail."
+    ],
+    "follow_up_actions": [
+      "Run a live Engineer dispatch (in a follow-up milestone, without --dry-run) to consume runs/run-20260803-riskband-002/findings.json and implement AC-1/AC-2, exercising the staged continuation protocol this dry run left undemonstrated.",
+      "Run a live Quality Engineer dispatch after Implementation to independently verify the Engineer's report."
+    ],
+    "duration_seconds": 530,
+    "lessons_learned_appended": []
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260803-riskband-001",
+  "kind": "raw_output_fenced_research_blocked",
+  "payload": {
+    "phase": "research",
+    "raw_attempt_ref": "runs/run-20260803-riskband-001/attempts/research-1.raw.txt",
+    "strict_json_parse_error": "Expecting value: line 1 column 1 (char 0)",
+    "reason": "The live Architect dispatch's returned text began with '```json\\n' and ended with '\\n```' -- a Markdown code fence -- which architect.md's Output section explicitly forbids ('No Markdown code fence... The message begins with { and ends with }'). Per harness/orchestrator/core.py's _parse_raw() policy ('Strict JSON parsing only -- no fence-stripping, no prose extraction. Tolerating a fenced/prose-wrapped reply would normalize a contract violation every agent's own instructions explicitly forbid.'), this raw response was never fence-stripped or otherwise repaired. Research phase is blocked. findings.json was never promoted.",
+    "note": "As a separate, non-canonical diagnostic only (see research-1.fence-stripped-diagnostic.json in this same live_cli/ scratch directory, never promoted to findings.json), the JSON content once manually fence-stripped does pass both schema and semantic validation -- indicating the Architect's underlying research was substantively sound and its findings well-cited; only the raw transport-level contract (no fence) was violated."
+  }
+}

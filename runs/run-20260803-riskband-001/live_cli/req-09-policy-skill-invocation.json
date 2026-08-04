@@ -1,0 +1,15 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260803-riskband-001",
+  "kind": "skill_invocation",
+  "payload": {
+    "skill": "test-runner",
+    "args": "runs/run-20260803-riskband-001/requests/C-1.json",
+    "invoked_via": "Skill tool call (skill: \"test-runner\"), not a direct Bash call to run_command.py",
+    "command_id": "C-1",
+    "result_exit_code": 0,
+    "request_path": "runs/run-20260803-riskband-001/requests/C-1.json",
+    "log_path": "runs/run-20260803-riskband-001/logs/C-1.log",
+    "note": "The Skill tool call surfaced the skill's own instructions (including its disallowed-tools scope) before the wrapper ran, confirming genuine Skill-mechanism mediation rather than a direct wrapper call. As a side effect, disallowed-tools (Write, Edit, ...) remained enforced at the tool layer for the remainder of this session turn sequence -- a live Write attempt was denied twice after this invocation, requiring Bash heredocs for subsequent file writes in this run. This persistence duration was not specified by test-runner/SKILL.md and is recorded here as an observed, not merely assumed, behavior."
+  }
+}

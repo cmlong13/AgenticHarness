@@ -1,0 +1,1 @@
+{"message_type": "command_result", "task_id": "T-RISKBAND", "run_id": "run-20260803-riskband-001", "command_id": "C-1", "command": "python -m pytest tests/unit/test_explanations.py -q", "working_directory": "demo-repo", "exit_code": 0, "output_ref": "runs/run-20260803-riskband-001/logs/C-1.log"}

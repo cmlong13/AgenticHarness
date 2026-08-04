@@ -1,0 +1,11 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260803-riskband-002",
+  "kind": "agent_dispatch",
+  "payload": {
+    "phase": "research",
+    "subagent_type": "architect",
+    "agent_id": "a8aeef2bdc4451dc6",
+    "dispatch_sequence": 1
+  }
+}

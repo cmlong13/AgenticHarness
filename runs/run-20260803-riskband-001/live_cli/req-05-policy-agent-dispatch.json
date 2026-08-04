@@ -1,0 +1,13 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260803-riskband-001",
+  "kind": "agent_dispatch",
+  "payload": {
+    "phase": "research",
+    "subagent_type": "architect",
+    "agent_id": "a5fea91d4cb36f785",
+    "dispatch_sequence": 1,
+    "run_in_background": false,
+    "note": "Dispatched via the Agent tool with subagent_type: architect. The tool result's returned text was wrapped in a Markdown code fence, which architect.md's own Output section explicitly forbids ('No Markdown code fence'). Retained verbatim as attempts/research-1.raw.txt per the harness's no-fence-stripping policy; see policy event 'raw_output_fenced' for the resulting strict-parse outcome."
+  }
+}
