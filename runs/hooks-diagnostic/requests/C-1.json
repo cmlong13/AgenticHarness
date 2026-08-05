@@ -1,0 +1,9 @@
+{
+  "task_id": "T-HOOKSDIAG",
+  "run_id": "hooks-diagnostic",
+  "command_id": "C-1",
+  "command": "python -m pytest tests/unit/test_explanations.py -q",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Diagnostic-only: observe PreToolUse Bash hook payload for a forked test-runner Skill invocation, before designing skill_enforcement.py. Not part of the milestone's real evidence."
+}

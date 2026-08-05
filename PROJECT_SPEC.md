@@ -29,6 +29,32 @@ application (`loanflow`, 55 files) is implemented, automatically tested, and ver
 with the test-runner wrapper and the orchestrator's path rules. The Skills requirement and the
 project as a whole are still not complete.**
 
+**Milestone update (2026-08-05):** on top of `run-20260804-riskband-003`, this session closes a
+second milestone: (1) **ORCH-* request/result identity enforcement** — every orchestrator-owned
+test-runner command (`ORCH-1`, `ORCH-2`, ...), not only staged-agent commands, must now pass
+`check_command_identity` before its result is trusted (`work/SKILL.md` standing rule 13); (2) a
+**bounded same-run logic-failure route-back loop** in `harness/orchestrator/core.py`
+(`classify_verification_outcome`, `_handle_verification_failure`) that resumes the *exact same*
+Engineer and Quality Engineer handles for at most one repair cycle
+(`MAX_LOGIC_REPAIR_ATTEMPTS = 1`) when — and only when — a `verification-report.json` verdict is
+a genuine `logic_bug`; infrastructure flakes, environment failures, and malformed/insufficient
+evidence remain terminal, never routed back; (3) matching route-back/re-verification protocols
+added to `engineer.md`/`quality-engineer.md`; and (4) three real hooks —
+`.claude/hooks/pre_dispatch_check.py` (`PreToolUse`:`Agent`),
+`.claude/hooks/skill_enforcement.py` (`PreToolUse`:`Bash`), and
+`.claude/hooks/completion_guardrail.py` (`Stop`) — implemented, registered in
+`.claude/settings.json`, and exercised both deterministically (`tests/test_hooks.py`,
+`tests/test_route_back_protocol.py`) and, for the two `PreToolUse` hooks, live against real
+Claude Code tool calls refused in this session (`docs/hooks-permission-verification.md`,
+`docs/hooks-signal-verification.md`). **None of this has yet appeared in a new live `/work`
+run** — the route-back loop, the ORCH-* identity check, and the completion guardrail's actual
+`Stop`-event blocking are all deterministically verified but not yet demonstrated end-to-end
+against a real pipeline; see §10 "Hooks and same-run route-back milestone (2026-08-05)" for the
+full, honest account of what is and is not live-proven. Full suite: 442 tests passing, up from
+350 in the previous committed milestone (`4f98077`); `demo-repo/` unaffected (102 tests,
+unchanged; `git status --short -- demo-repo` empty).
+**None of this is committed yet either** — check `git status` before assuming otherwise.
+
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
 followed. Implementation should track this spec; if the two diverge, update this file first.
@@ -189,14 +215,45 @@ with a documented decision on which was kept and why (the reference setup droppe
 MCP server in favor of curl-based skills for reliability/debuggability).
 
 ### Hooks (≥3, plus cost tracking)
-- Skill-enforcement hook — blocks/warns when an agent bypasses a skill that exists for the
-  operation (e.g. raw Jira API call instead of the jira skill).
-- Pre-dispatch check hook — runs before a subagent is spawned; validates required state exists
-  (e.g. findings doc present before the engineer starts).
-- Completion-guardrail hook — runs at end of workflow; blocks "done" if verification evidence is
-  missing.
+- Skill-enforcement hook — **Implemented** (2026-08-05) at `.claude/hooks/skill_enforcement.py`
+  (`PreToolUse`, matcher `Bash`): blocks a direct `Bash` bypass of the test-runner wrapper
+  (`run_command.py`) called outside real, forked `Skill` mediation, and blocks a `Bash` command
+  that looks like a direct write into `demo-repo/` (an orchestrator fallback around the
+  Engineer's own `Edit`/`Write`). Distinguishes the legitimate forked Skill call from an
+  orchestrator bypass via the `agent_id` field's presence/absence in the hook payload —
+  empirically verified live, not assumed (`docs/hooks-signal-verification.md`). Every blocked
+  event is appended to its own ignored, mutable runtime log,
+  `.claude/hooks/logs/skill-enforcement-events.jsonl` (`.gitignore`d 2026-08-05); a verbatim
+  copy of this run's blocked events is committed as retained evidence at
+  `runs/hooks-diagnostic/skill-enforcement-events.jsonl`. Live-verified against
+  two real, refused `Bash` tool calls in this session (`docs/hooks-permission-verification.md`);
+  13 deterministic tests (`tests/test_hooks.py::TestSkillEnforcement`). See §10 "Hooks and
+  same-run route-back milestone (2026-08-05)" for the full account, including the documented
+  heuristic limitation and version-sensitivity caveat.
+- Pre-dispatch check hook — **Implemented** (2026-08-05) at `.claude/hooks/pre_dispatch_check.py`
+  (`PreToolUse`, matcher `Agent`): refuses to dispatch `architect`/`engineer`/`quality-engineer`
+  unless the phase's required precondition artifact (`scope.json` `status: "approved"`,
+  `findings.json`, or `implementation-report.json` `status: "ready_for_verification"`,
+  respectively) is already promoted, well-formed, and identity-matches (`task_id`/`run_id`) the
+  dispatch prompt itself. Live-verified against two real, refused `Agent` tool calls in this
+  session, before any subagent was created (`docs/hooks-permission-verification.md`); 14
+  deterministic tests (`tests/test_hooks.py::TestPreDispatchCheck`).
+- Completion-guardrail hook — **Implemented** (2026-08-05) at
+  `.claude/hooks/completion_guardrail.py` (`Stop`): blocks the orchestrator's turn from ending on
+  a `/work` run's completion claim (`runs/<run_id>/.completion_claim.json`, written by
+  `work/SKILL.md`'s own Reporting step) unless `verification-report.json` exists, is valid,
+  schema/semantically valid, `final_verdict: "pass"`, every canonical artifact
+  `run-summary.json` cites exists and identity-matches, and the implementation report's
+  `changed_files` are genuinely reflected in `git status --porcelain`. **Deterministically
+  verified only** (13 tests, `tests/test_hooks.py::TestCompletionGuardrail`, invoking the real
+  script's `main()` directly against crafted fixtures) — its live end-of-turn `Stop` trigger has
+  not been exercised against a real conversation turn, for the documented safety reason in
+  `docs/hooks-permission-verification.md` (risk of leaving a bad marker in place at the end of
+  this very session). Depends on `/work` cooperatively writing `.completion_claim.json`; an
+  orchestrator turn that never writes that marker is not caught by this hook — a known
+  cooperation boundary, not a claim of unconditional enforcement (see §10).
 - Post-agent cost hook — extracts per-agent token/cost usage so a full pipeline run's total cost
-  is knowable.
+  is knowable. **Not started.**
 
 ### Memory loop
 - `lessons-learned.md` — read before every run; at most 5 bullets appended after each run.
@@ -232,7 +289,11 @@ MCP server in favor of curl-based skills for reliability/debuggability).
 - `architect.md`, `engineer.md`, `quality-engineer.md`
 - Code-craftsmanship skill, test-runner skill
 - Orchestrator skill + `/work` (free-form prompt mode only)
-- Pre-dispatch-check hook + completion-guardrail hook
+- Pre-dispatch-check hook + completion-guardrail hook — **COMPLETE** (2026-08-05): implemented,
+  deterministically tested; pre-dispatch-check additionally live-verified via real refused
+  `Agent` tool calls, completion-guardrail live-verified only via direct script invocation, not
+  yet a real live `Stop`-event block (see §10 "Hooks and same-run route-back milestone
+  (2026-08-05)")
 - `lessons-learned.md` + basic memory directory
 - Checkpoint/resume for the pipeline
 - GitHub access via `gh`/`git` CLI (real commits + independent push verification via
@@ -246,7 +307,9 @@ MCP server in favor of curl-based skills for reliability/debuggability).
 - Obsidian MCP connector + run-summary write-back
 - Full `github/` skill pack breadth (`pr-review`, `commit-history`)
 - Full `jira/` skill pack + field-reference doc
-- Skill-enforcement hook
+- ~~Skill-enforcement hook~~ **COMPLETE** (2026-08-05) — implemented ahead of this list's
+  original schedule as part of the hooks milestone; see §3 "Hooks" and §10 "Hooks and same-run
+  route-back milestone (2026-08-05)"
 - Post-agent cost/token-tracking hook
 - MCP-vs-REST dual implementation + write-up decision
 - Flaky-vs-logic classification with retry/backoff
@@ -373,8 +436,12 @@ AgenticHarness/
    exercised all of Discovery (reasoning-backed, main session), a real Architect/Engineer/Quality
    Engineer dispatch, staged same-agent continuation, and the forked real test-runner Skill,
    end-to-end (see §10 "Live evidence (`run-20260804-riskband-003`)").
-9. Checkpoint, memory loop, pre-dispatch hook, and completion guardrail. **Not started** — see
-   §4 "Later integrations."
+9. Checkpoint, memory loop, pre-dispatch hook, and completion guardrail. **Partially complete**
+   (2026-08-05): pre-dispatch-check, skill-enforcement, and completion-guardrail hooks are
+   implemented, registered in `.claude/settings.json`, and tested — see §10 "Hooks and same-run
+   route-back milestone (2026-08-05)". Checkpoint/resume and the memory loop
+   (`lessons-learned.md`, persistent memory directory) remain **not started**. The post-agent
+   cost/token-tracking hook remains **not started**.
 10. Independent GitHub push-verification path. **Not started** — no commit/push has been
     performed by the harness in any live run to date (by design; see `work/SKILL.md` standing
     rule 12).
@@ -440,8 +507,21 @@ Demonstrated live, on a repo with ≥50 files:
       `findings.json`); `dependency_changes` is empty.
 - [ ] A planted flaky test is classified as infrastructure and retried; a planted logic bug is
       classified as logic, not retried, and routed back to the engineer — fixed in the same run.
+      **Partial** (2026-08-05): the same-run logic-failure route-back mechanism itself now
+      exists and is deterministically verified (`classify_verification_outcome`,
+      `_handle_verification_failure` in `harness/orchestrator/core.py`;
+      `tests/test_orchestrator_core.py`, `tests/test_route_back_protocol.py`) — a genuine
+      `logic_bug` verdict resumes the same Engineer/Quality Engineer for exactly one bounded
+      repair cycle, while infrastructure-flake and environment failures are confirmed to never
+      route back. **Not yet demonstrated by an actual planted-bug live `/work` run** — no live
+      run has exercised this path yet (see §10).
 - [ ] Completion-guardrail hook demonstrably blocks a run where verification evidence is
-      deleted.
+      deleted. **Partial** (2026-08-05): `completion_guardrail.py` deterministically blocks
+      exactly this scenario when its `main()` is invoked directly against a crafted fixture
+      (`tests/test_hooks.py::TestCompletionGuardrail::test_deleted_verification_report_after_prior_pass_blocks`)
+      — the assignment's canonical scenario, reproduced honestly. **Not yet demonstrated as a
+      live `Stop`-event block** in a real Claude Code conversation turn (see §10 for why, and
+      the cooperation-boundary caveat).
 - [ ] Orchestrator catches a simulated false "pushed" claim via `git ls-remote`.
 - [ ] Obsidian vault receives a run summary; `lessons-learned.md` gains ≤5 bullets; a second run
       visibly uses a lesson from the first.
@@ -996,6 +1076,238 @@ below tracked as open through both prior live attempts.
   This run closes the Core MVP's live end-to-end loop once, with real evidence -- it does
   not close the project.
 
+#### Hooks and same-run route-back milestone (2026-08-05)
+
+A follow-on milestone on top of `run-20260804-riskband-003`, closing several of the items
+"Live evidence (`run-20260804-riskband-003`) -- completed" listed as still open: ORCH-*
+request/result identity enforcement, the same-run Quality-Engineer logic-failure route-back
+to the Engineer, and three of the four hooks required by the assignment (skill-enforcement,
+pre-dispatch-check, completion-guardrail; post-agent cost tracking remains open). **None of
+this has yet been exercised by a new live `/work` run** -- every claim below is either
+deterministic-test evidence or, for two of the three hooks, live evidence captured against
+real Claude Code tool calls made directly in this session (not through a completed `/work`
+pipeline). This distinction is maintained precisely throughout this section; nothing here
+should be read as claiming a fourth live end-to-end run occurred.
+
+**Part 1 -- ORCH-* request/result identity enforcement.** `run-20260804-riskband-003`'s own
+retained evidence has a documented gap: its two orchestrator-owned independent
+re-verification commands (`ORCH-1`, `ORCH-2`) were mediated through the real, forked
+`test-runner` Skill and had `skill_invocation` policy events retained, but neither had a
+`check_command_identity` check run against its result, unlike `C-1`/`C-2`/`V-1`.
+`work/SKILL.md` standing rule 13 and the Phase 4 re-verification section now require
+`check_command_identity` for **every** orchestrator-owned test-runner request, `ORCH-*`
+included, before its result is trusted; a mismatch blocks completion (`kind:
+"orchestrator_command_identity_mismatch"` policy event) rather than being silently
+accepted. This is an instruction-level contract change to `work/SKILL.md` -- there is no
+`core.py` engine change for it, consistent with the Option C architecture (above): live
+dispatch and mediation run through `/work` itself, not through `core.run()`. Structurally
+verified by `tests/test_route_back_protocol.py::TestWorkSkillOrchestratorCommandIdentity`
+(6 tests). **Not yet demonstrated in a new live run** -- the next real `/work` execution is
+what would confirm `ORCH-1`/`ORCH-2` actually get `check_command_identity` calls in
+practice.
+
+**Part 2 -- bounded same-run logic-failure route-back.** `harness/orchestrator/core.py` no
+longer treats every `verification-report.json` `"fail"` verdict as terminal.
+`classify_verification_outcome()` independently re-derives whether a verdict is a genuine
+`logic_bug` (requires `final_verdict == "fail"`, `routed_back_to_engineer.routed == true`,
+and at least one `attempts[]` entry classified `logic_bug` -- all three, not the verdict
+string alone), an `infrastructure_flake` or `environment` `"inconclusive"` verdict (both
+always terminal, never routed -- the Quality Engineer's own bounded retry already resolves
+or exhausts a flake before any verdict reaches this function), or `insufficient_evidence` (a
+missing/malformed/blocked verification result -- also never routed). Only a genuine
+`logic_bug` is eligible for route-back, and `MAX_LOGIC_REPAIR_ATTEMPTS = 1` bounds it to
+exactly one cycle. `_handle_verification_failure()` drives the cycle: `agent_adapter.resume()`
+(never `start()`) on the *exact same* Engineer handle from this run's original
+Implementation dispatch, carrying the real Quality Engineer failure evidence verbatim; the
+resumed Engineer's new final report promotes to a **separate** canonical path
+(`implementation-report.repair-1.json`) via `evidence_io.promote_canonical()`'s existing
+collision guard, leaving the original `implementation-report.json` retained, untouched; then
+`resume()` (never `start()`) on the *exact same* Quality Engineer handle, whose new final
+report promotes to `verification-report.repair-1.json`, again leaving the original
+retained. A repaired `"pass"` updates `artifact_refs.implementation_report`/
+`artifact_refs.verification_report` to the repair-round paths for the rest of the run; a
+repeated `"fail"` on the repair round is terminal (`route_back_exhaustion` policy event) --
+no second repair cycle is ever attempted. Matching protocol sections were added to
+`engineer.md` ("Route-back repair protocol") and `quality-engineer.md` ("Re-verification
+protocol"), and to `work/SKILL.md` ("Same-run logic-failure route-back to the Engineer"),
+all requiring: TDD failing-test-first ordering re-applied to the repair (the same Step 5/6
+minimal-change-ladder and one-failing-test-first discipline as the original cycle,
+re-checked via `git status`/`git diff` before the repair's pre-test command runs); fresh,
+never-reused command ids for every repair-cycle command (`C-3`, `C-4`, `V-2`, ...); every
+repair-cycle command mediated through the same real, forked `test-runner` Skill with the
+same request/result identity checking; and a broken continuity during either resume treated
+as a **broken agent continuity** failure that blocks the run, never as license to dispatch a
+replacement agent and call it a continuation.
+
+Audited against this milestone's own checklist and confirmed clean, with no defects
+requiring correction:
+- Exactly one `start()` call per role for the whole run, repair round included
+  (`agent_adapter.start_count("engineer") == 1`, `== 1` for `quality_engineer` too) -- every
+  repair-cycle turn is a `resume()`.
+- Repair limit is exactly `MAX_LOGIC_REPAIR_ATTEMPTS = 1`; a second consecutive `logic_bug`
+  verdict on the repair round ends the run at `VERIFICATION_FAILED` with a
+  `route_back_exhaustion` policy event, never a second repair cycle.
+- The original `implementation-report.json`/`verification-report.json` are never deleted or
+  overwritten; the repair round's artifacts always land at the distinct `*.repair-1.json`
+  canonical paths, enforced by the pre-existing `EvidenceCollisionError` guard in
+  `evidence_io.promote_canonical()` (unchanged by this milestone, reused as-is).
+- `run-summary.json`'s `artifact_refs` correctly point at the repair-round paths after a
+  successful repair, and `objective_summary` states plainly that a repair cycle occurred
+  (verified by `test_logic_bug_routes_back_to_the_same_engineer_and_repairs_successfully`).
+- `infrastructure_flake`, `environment`, and "malformed or insufficient evidence" (a
+  self-reported `blocked` verification report) are each independently tested and confirmed
+  to never route back and never touch the Engineer a second time
+  (`test_infrastructure_flake_does_not_route_back_to_engineer`,
+  `test_environment_failure_does_not_route_back_to_engineer`,
+  `test_missing_or_invalid_verification_evidence_blocks_routing_rather_than_repairing`).
+- The repair round's implementation report is validated by the exact same schema and
+  semantic rules as the original round -- a repair whose pre-test command did not actually
+  fail (test-first ordering violated) is rejected exactly as it would be the first time
+  (`test_repair_implementation_report_must_preserve_test_first_ordering`).
+- Request/result identity checking (the `task_id`/`run_id`/`command_id`/`command`/
+  `working_directory` cross-check against the request the orchestrator itself built) applies
+  to repair-cycle commands automatically, because `_handle_verification_failure()` reuses
+  the same `_drive_staged_protocol()` helper the original round uses -- there is no separate,
+  unvalidated code path for repair-round commands.
+- The ordinary successful (no-repair) path is unchanged and still covered by its own
+  existing tests (`test_verification_pass_permits_completion`, and the rest of
+  `tests/test_orchestrator_core.py`'s pre-existing suite) -- none of them needed
+  modification for this milestone; the new route-back logic is purely additive at the
+  `"fail"` branch.
+- 34 tests in `tests/test_orchestrator_core.py` (the file's full suite, un-narrowed) and 43
+  structural tests in `tests/test_route_back_protocol.py` covering the
+  `engineer.md`/`quality-engineer.md`/`work/SKILL.md` prose contracts, all passing.
+- **Genuinely deterministic, not yet live.** No live `Agent`/`SendMessage` route-back
+  exchange has occurred -- the only exercised path is `core.run()` against
+  `tests/fakes/agent_adapter.py`'s scripted doubles, consistent with `core.py`'s documented
+  Option C boundary (a live route-back would run through `/work` + `live_cli.py`, exactly as
+  `run-20260804-riskband-003` did for the ordinary path, and that has not happened yet for
+  this feature).
+
+**Part 3 -- hooks.** Three of the assignment's required hooks are implemented at
+`.claude/hooks/` and registered in `.claude/settings.json` (validated as well-formed JSON):
+
+- `pre_dispatch_check.py` (`PreToolUse`, matcher `Agent`) -- refuses to dispatch
+  `architect`/`engineer`/`quality-engineer` unless the correct precondition artifact
+  (`scope.json` `status: "approved"`; `findings.json`; `implementation-report.json`
+  `status: "ready_for_verification"`) is already promoted, well-formed JSON, and
+  identity-matches (`task_id`/`run_id`) the dispatch prompt. Fails open on its own internal
+  errors (malformed hook stdin) -- never the single point of failure for real harness work.
+  **Live-verified**: two real `Agent` tool calls in this session were genuinely refused
+  before any subagent was created (a run with no promoted `findings.json`; a run with no
+  promoted `implementation-report.json`), at zero token/tool cost for the refused dispatch
+  itself -- `docs/hooks-permission-verification.md`. 14 deterministic tests
+  (`tests/test_hooks.py::TestPreDispatchCheck`).
+- `skill_enforcement.py` (`PreToolUse`, matcher `Bash`) -- blocks two specific,
+  previously-undefended bypasses `test-runner/SKILL.md` itself already names as open gaps: a
+  direct `Bash` call to `run_command.py` from the main (orchestrator) session (bypassing the
+  real `Skill` mechanism), and any `Bash` command that looks like a direct write into
+  `demo-repo/` (an orchestrator fallback around the Engineer's own `Edit`/`Write` boundary).
+  Distinguishes a legitimate forked `test-runner` Skill invocation from an orchestrator
+  bypass using the `agent_id` field's presence/absence in the hook payload -- this signal
+  was **empirically captured and verified live**, not assumed, via a throwaway diagnostic
+  hook before `skill_enforcement.py` was written (`docs/hooks-signal-verification.md`, real
+  captured payloads retained at `runs/hooks-diagnostic/diag-log-trimmed.jsonl`). Every
+  blocked event (and only blocked events) is appended, with a real timestamp, to the hook's
+  own ignored runtime log, `.claude/hooks/logs/skill-enforcement-events.jsonl` -- see
+  "Repository hygiene" below for why this is gitignored rather than committed directly.
+  **Live-verified**: a real direct-wrapper-bypass `Bash` call and a real `demo-repo/`
+  write-attempt `Bash` call were both genuinely refused in this session before the shell
+  ever ran them (independently confirmed afterward: `git status --short -- demo-repo`
+  stayed empty, `explanations.py` byte-for-byte unchanged); the real, forked `test-runner`
+  Skill invocation used to capture the signal evidence was **not** blocked, proving the
+  distinguishing signal works both ways in the same live session, not just in theory --
+  `docs/hooks-permission-verification.md`. 13 deterministic tests
+  (`tests/test_hooks.py::TestSkillEnforcement`). **Documented limitation, not overclaimed**:
+  the `demo-repo/` write check is a substring/regex heuristic (redirects, `sed -i`,
+  `cp`/`mv`/`rm`, a `python -c ... open(..., 'w')` pattern), not a sandboxed guarantee -- a
+  write disguised past this specific token list could still slip through, consistent with
+  `test-runner/SKILL.md`'s own already-documented trust-boundary honesty.
+- `completion_guardrail.py` (`Stop`) -- blocks the orchestrator's turn from ending on a
+  `/work` completion claim unless `verification-report.json` exists, parses, passes schema
+  and semantic validation, has `final_verdict: "pass"`, every canonical artifact
+  `run-summary.json`'s `artifact_refs` cites exists and identity-matches this run, and the
+  implementation report's `changed_files` are genuinely reflected in `git status
+  --porcelain` (this harness never commits, so a real change must still show as a live,
+  uncommitted working-tree modification). Resolves a repaired run's `*.repair-1.json`
+  canonical paths via `run-summary.json`'s own `artifact_refs`, not a hardcoded filename.
+  Only activates for a run that itself wrote `runs/<run_id>/.completion_claim.json` (per
+  `work/SKILL.md`'s Reporting section) -- every other conversation turn is untouched, and
+  `stop_hook_active` always short-circuits to allow, so this hook can never create an
+  infinite must-continue loop. 13 deterministic tests
+  (`tests/test_hooks.py::TestCompletionGuardrail`), exercised by invoking the real script's
+  `main()` directly against crafted `Stop` payloads and crafted `runs/<run_id>/` fixture
+  trees -- including the assignment's canonical "delete the verification evidence after a
+  prior pass" scenario. **Not live-proven as an actual `Stop`-event block against a real
+  Claude Code conversation turn** -- deliberately not attempted in this session, because
+  triggering it live against this very conversation risked leaving a bad
+  `.completion_claim.json` marker in place at the end of this session, which would then
+  block this very report from ending; `docs/hooks-permission-verification.md` states this
+  distinction plainly rather than implying equal live proof for all three hooks.
+- **Known cooperation boundary, stated honestly, not glossed over**:
+  `completion_guardrail.py` activates only when `/work` itself writes
+  `.completion_claim.json` before reporting completion. An orchestrator turn that skips
+  that write -- through a bug, an unusual code path, or a future prompt that omits the
+  instruction -- is not caught by this hook at all; the hook has nothing to react to. This
+  is a real, load-bearing limitation, not a hypothetical edge case, and it must not be
+  described as "impossible to bypass" or "unconditionally enforced." Closing it fully would
+  require a mechanism that does not depend on the orchestrator's own cooperation (e.g. a
+  `Stop` hook that unconditionally inspects `runs/` for the most recent run directory
+  regardless of any marker) -- deferred, not attempted in this milestone.
+- **Signal stability caveat**: `skill_enforcement.py`'s `agent_id`/`agent_type`-presence
+  signal was empirically observed against the Claude Code version installed at the time of
+  this milestone. Nothing here confirms this field's presence/absence is a documented,
+  stable contract across Claude Code versions -- a future version could change hook payload
+  shape without notice, silently defeating the bypass check (it would fail open, per
+  `_is_wrapper_bypass`'s `not agent_id` condition -- a version change is far more likely to
+  under-block than to falsely block real work, which is the safer failure direction, but it
+  is still a real version-sensitivity risk worth stating rather than treating this signal
+  as permanently guaranteed).
+- **Post-agent cost/token-tracking hook remains not started** -- the fourth hook this part
+  of the assignment names, out of scope for this milestone.
+- Repository hygiene, corrected 2026-08-05: `.gitignore` already covered `__pycache__/`
+  (confirmed via `git check-ignore`, so `.claude/hooks/__pycache__/*.pyc` is excluded
+  automatically, no change needed). `.claude/hooks/logs/skill-enforcement-events.jsonl`
+  was initially left un-gitignored and committed directly from its live runtime location
+  -- a real defect, since every future blocked event during ordinary harness operation
+  would then modify a tracked file and dirty the repository. This is fixed:
+  `.claude/hooks/logs/` is now listed in `.gitignore`, `skill_enforcement.py`'s own
+  `_record()` still creates that directory and file on demand with no code change
+  (`LOG_PATH.parent.mkdir(parents=True, exist_ok=True)`, empirically re-confirmed by
+  deleting the directory and re-triggering `_record()`), and the two blocked-event entries
+  this session's live demonstrations generated are preserved, unchanged, as committed
+  evidence at `runs/hooks-diagnostic/skill-enforcement-events.jsonl` -- a one-time verbatim
+  copy, not a live-updating file. Future real blocked events accumulate only in the
+  ignored runtime log; they do not retroactively alter the retained evidence copy. See
+  `docs/hooks-permission-verification.md`'s "Runtime log vs. retained evidence" section for
+  the full account. The throwaway `_diag_capture.py` diagnostic hook used to capture the
+  `docs/hooks-signal-verification.md` payloads was deleted before this audit, as its own
+  documentation states; confirmed absent from the working tree.
+
+**Validation performed during this audit (2026-08-05):** `python -m pytest
+tests/test_orchestrator_core.py -q` (34 passed), `python -m pytest
+tests/test_route_back_protocol.py -q` (43 passed), `python -m pytest tests/test_hooks.py -q`
+(40 passed), `python -m pytest tests -q` (442 passed, up from 350 in the previous committed
+milestone), `python -m pytest demo-repo/tests -q` (102 passed, unchanged), `git diff --check`
+(clean, only line-ending warnings), `git status --short -- demo-repo` (empty). One
+documentation-only defect was found and fixed during this audit:
+`docs/hooks-permission-verification.md` understated `TestPreDispatchCheck`'s and
+`TestSkillEnforcement`'s real test counts by one each (13/12 claimed vs. 14/13 actual) --
+corrected to match the real collected counts. No defects were found in
+`harness/orchestrator/core.py`'s route-back implementation or in the three hook scripts
+themselves.
+
+**Follow-up repository-hygiene correction (2026-08-05, same day):** this audit's own first
+pass left `.claude/hooks/logs/skill-enforcement-events.jsonl` committed directly from its
+live runtime location -- flagged and fixed immediately after: `.claude/hooks/logs/` is now
+`.gitignore`d, the two blocked-event entries it held are preserved as a verbatim, committed
+copy at `runs/hooks-diagnostic/skill-enforcement-events.jsonl`, and
+`skill_enforcement.py`'s own directory/file auto-creation was empirically re-confirmed to
+still work unchanged against the now-ignored path. See "Repository hygiene" above (Part 3)
+and `docs/hooks-permission-verification.md`'s "Runtime log vs. retained evidence" section
+for the full account. No route-back behavior, hook behavior, schemas, agent contracts, or
+historical `runs/run-*` evidence were touched by this correction.
+
 #### Remaining work
 
 1. ~~Build `/work` free-form mode as a main-session command/skill.~~ **Entry point and
@@ -1036,6 +1348,12 @@ below tracked as open through both prior live attempts.
    `run-20260803-riskband-001`/`run-20260804-riskband-002` `"blocked"`-verdict summaries
    remain retained as evidence of the earlier, unsuccessful attempts they honestly
    describe.
+8. Implement same-run logic-failure route-back, ORCH-* command identity enforcement, and the
+   pre-dispatch-check/skill-enforcement/completion-guardrail hooks. **Implemented and
+   deterministically verified** (2026-08-05) — see "Hooks and same-run route-back milestone
+   (2026-08-05)" above for the full account. **Not yet exercised by a live `/work` run**:
+   this remains the next thing a new live run would need to prove, including whether a
+   planted logic bug is actually routed back and repaired end-to-end.
 
 Populating the 50+ file demo repository (formerly item 1 of this list) is **COMPLETE** — see
 "Demo repository (`demo-repo/loanflow`)" below. Items 1–7 above are now all complete, closing
@@ -1131,6 +1449,13 @@ skill packs, required for the assignment's "≥4 skill packs" bar but not the Co
 false-push) demonstrations (§6 item 12). See "Live evidence (`run-20260804-riskband-003`) —
 completed" in §10 for exactly what this milestone did and did not close.
 
+**Update (2026-08-05):** three of the four hooks named in (2) above are now implemented and
+tested (pre-dispatch-check, skill-enforcement, completion-guardrail), along with the
+same-run logic-failure route-back loop and ORCH-* identity enforcement — see §10 "Hooks and
+same-run route-back milestone (2026-08-05)". Checkpoint/resume, the memory loop, the
+post-agent cost hook, and a live demonstration of route-back/hooks against a real `/work`
+run all remain open.
+
 ### Eight-day MVP planning target
 
 Planning target only, not a guarantee — goal is to close a working free-form-prompt MVP within
@@ -1162,7 +1487,11 @@ documentation may require additional time after the working MVP closes.
 6. ~~Live Claude Code adapter layer, real test-runner adapter, reasoning-backed Discovery
    adapter, and `/work` prompt mode.~~ **COMPLETE and live-verified** —
    `run-20260804-riskband-003`.
-7. Checkpoint, memory, and guardrail hooks. **Not started.**
+7. Checkpoint, memory, and guardrail hooks. **Partially complete** (2026-08-05):
+   pre-dispatch-check, skill-enforcement, and completion-guardrail hooks are implemented,
+   configured, and tested (see §10 "Hooks and same-run route-back milestone (2026-08-05)")
+   — live-verified for the two `PreToolUse` hooks, deterministic-only for the `Stop` hook.
+   Checkpoint/resume, the memory loop, and the post-agent cost hook remain **not started.**
 8. ~~First complete evidence-backed pipeline run.~~ **COMPLETE** — `run-20260804-riskband-003`,
    `final_verdict: "pass"`. See §10 "Live evidence (`run-20260804-riskband-003`) — completed."
 9. Deferred integrations and final assignment demonstrations (includes `github/`/`jira/` skill

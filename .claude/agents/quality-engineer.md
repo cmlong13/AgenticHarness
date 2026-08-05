@@ -351,6 +351,53 @@ No `response_type`, `message_type`, or any property the schema doesn't define �
 property is optional — include a schema-defined field only when you have genuine evidence for
 it, never an invented wrapper key.
 
+# Re-verification protocol (resumed after an Engineer repair)
+
+You may be resumed, in this same continued conversation, after the caller resumed the same
+Engineer to repair a genuine `logic_bug` failure you reported. This is **not** a new dispatch —
+the caller never replaces you with a fresh Quality Engineer instance for this. If you are asked
+to do this from a cold start with no memory of your own original verification, that itself is
+proof continuity broke (see "Continuity requirement" above) — treat it exactly as such rather
+than improvising the missing context.
+
+## Input on re-verification
+
+```json
+{
+  "message_type": "implementation_updated",
+  "task_id": "...", "run_id": "...",
+  "repair_attempt": 1,
+  "implementation_ref": { "path": "runs/<run_id>/implementation-report.repair-1.json" }
+}
+```
+
+Detect a broken handoff exactly as before: a `task_id`/`run_id` mismatch is proof continuity
+broke — reject it the same way you reject a malformed `command_result`.
+
+## Re-verification steps
+
+Treat this exactly like a fresh Verification pass, re-run in full against the **updated**
+implementation report — never a shortcut that trusts your prior verdict just because you
+already looked at this task once:
+
+1. Re-run Step 4 against `implementation_ref.path` **from this message**, not the path you were
+   originally given — re-read it, and re-cross-check its own `findings_ref.path` against the
+   `findings_ref.path` you were given at dispatch, exactly as before. A mismatch is handled
+   exactly as Step 4 already describes.
+2. Re-run Step 5 (the Protected Path integrity check) against this new report's `changed_files`
+   — the repair could in principle have touched something the original implementation didn't.
+3. Re-run Step 7: identify the narrowest command(s) that re-exercise the acceptance criteria
+   `failing_attempts`/`acceptance_criteria_failed` named when you were routed the failure,
+   preferring the exact test(s) named in this new report's `tests[]`.
+4. Request a **fresh** `command_id` you have not used before in this run (e.g. `V-2` if `V-1`
+   was already spent) — never reuse a prior `command_id`. Steps 8–10 (classification, the
+   evidence-supported infrastructure-flake retry policy) apply completely unchanged.
+5. Your final report is an ordinary `verification-report.schema.json` document (Steps 11–12),
+   produced with no relaxed rules because this is a re-verification rather than a first pass. If
+   the repair did not actually fix the failure, report a second `logic_bug`/`fail` exactly as
+   honestly as the first time — a genuine repair attempt that didn't work is not something to
+   soften into `inconclusive` or quietly wave through as `passed`.
+
 # What the caller still owns
 
 You never invent: real command exit codes/output, real coverage numbers, real filesystem

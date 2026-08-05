@@ -63,6 +63,19 @@ $ARGUMENTS
     `harness/orchestrator/paths.py` -- never restate it by hand; call `live_cli.py`.
 12. Never commit or push. No ticket in this milestone authorizes it. A future ticket
     that explicitly authorizes a commit/push may change this -- this one does not.
+13. Every orchestrator-owned test-runner request -- including the orchestrator's own
+    independent re-verification commands (`ORCH-1`, `ORCH-2`, ...), not only
+    staged-agent-requested commands (`C-*`, `V-*`) -- receives the same
+    `check_command_identity` validation, via `live_cli.py`, before its result is trusted.
+    This closes a documented evidence gap: `run-20260804-riskband-003` (retained,
+    unmodified) invoked the test-runner Skill for `ORCH-1` and `ORCH-2` and retained a
+    `skill_invocation` policy event for each, but never ran `check_command_identity` on
+    either result, unlike `C-1`/`C-2`/`V-1` -- see `PROJECT_SPEC.md`'s "Live evidence
+    (`run-20260804-riskband-003`)" section. A mismatch on an ORCH-* result blocks
+    completion exactly as a mismatch on a staged-agent command would: retain a policy
+    event (`kind: "orchestrator_command_identity_mismatch"`) naming the command id and
+    the mismatched fields, and do not report the run `pass`. Never fabricate a matching
+    result or locally repair a mismatch to make it look clean.
 
 # Parsing $ARGUMENTS
 
@@ -391,14 +404,123 @@ carries leading/trailing prose, classify and handle it via "Quality Engineer tra
 repair" below -- do **not** treat it as merely "the same protocol as the Engineer's" by
 informal analogy; the rules below are this phase's own explicit, authoritative protocol.
 
-After a `pass`/`fail`/`inconclusive` verdict, independently re-verify before repeating
-it to the user: re-run the same narrow command yourself through the Skill, and run
+After a `pass`/`fail`/`inconclusive` verdict, independently re-verify before repeating it
+to the user: re-run the same narrow command yourself through the Skill (`ORCH-1`) and,
+per scope.json's task graph, run the full demo-repo suite as a health check (`ORCH-2`).
+For **each** ORCH-* command: build the canonical request exactly as for any Skill
+invocation, retain a `skill_invocation` policy event, and -- per Standing rule 13 --
+call `check_command_identity` between the request you built and the result the Skill
+returned, exactly as you already do for `C-1`/`C-2`/`V-1`. A mismatch on an ORCH-*
+command blocks completion honestly rather than being silently accepted. Also run
 `git status`/`git diff --stat -- demo-repo` to confirm `changed_files` matches reality.
 Never report "verification passed" solely because the Quality Engineer said so.
 
-This milestone does not implement automatic route-back to the Engineer on a `logic_bug`
-verdict (deferred per `PROJECT_SPEC.md` §4 "Later integrations" / this ticket's Scope
-restrictions) -- a `fail` verdict ends the run and is reported honestly as such.
+## Same-run logic-failure route-back to the Engineer
+
+A `fail` verdict is not automatically terminal. Classify it first, then act:
+
+1. **Classify the verdict before doing anything else.** Read `final_verdict` and
+   `attempts[]` from the promoted `verification-report.json`:
+   - `final_verdict: "fail"` with `routed_back_to_engineer.routed: true` and at least one
+     `attempts[]` entry classified `logic_bug` -- per `harness/evidence.py`'s own
+     semantic rule, a schema-valid `fail` verdict can only exist in this shape -- is a
+     **genuine logic bug**. This is the only case eligible for route-back.
+   - `final_verdict: "inconclusive"` backed by an unresolved `infrastructure_flake`
+     attempt is an **infrastructure flake**. `quality-engineer.md`'s own bounded retry
+     (max 2, evidence-supported, within the *same* Quality Engineer turn) already
+     covers this -- it is resolved or exhausted before a final verdict is ever reported
+     to you. Never re-route an infrastructure flake to the Engineer; if it is still
+     unresolved by the time you see a verdict, treat it exactly like the `"inconclusive"`
+     handling already documented above (terminal, no route-back).
+   - `final_verdict: "inconclusive"` backed by an `environment` attempt is an
+     **environment failure**. Never route this to the Engineer and never retry it --
+     retrying does not fix a broken environment. Terminal, exactly as documented above.
+   - Anything else -- the Verification phase never produced a validly promoted
+     `verification-report.json` at all (a transport failure exhausted its one
+     correction, a schema/semantic validation failure, a broken continuity, a
+     `command_rejected` escalation) -- is **malformed or insufficient evidence**. There
+     is no real verdict to act on. Never treat this as a logic bug and never route it
+     back; it already blocks the phase via the existing rules above
+     (`state: "verification_blocked"`).
+   - `retain_policy_event` (`kind: "logic_failure_detected"`) once you have confirmed the
+     genuine-logic-bug case, naming the `verification-report.json` path and the failing
+     `attempts[]`/`acceptance_criteria_results[]` ids. Do this only for the genuine
+     logic-bug case -- it is not a generic "verification failed" event.
+2. **Route back only a genuine logic bug, at most once.** `MAX_LOGIC_REPAIR_ATTEMPTS = 1`
+   for this milestone's demonstration -- exactly one logic-repair cycle is permitted per
+   run. If a logic bug is detected and no repair attempt has been used yet:
+   - `retain_policy_event` (`kind: "engineer_route_back"`) naming the repair attempt
+     number (`1`), the same Engineer agent id captured at this run's `agent_dispatch`
+     policy event for the Implementation phase, and the `verification-report.json`
+     reference.
+   - `SendMessage` to that **exact same Engineer agent id** -- never a new `Agent` call --
+     carrying the real Quality Engineer failure evidence: the failing `attempts[]`
+     entries (command, exit code, output reference, classification) and the failed
+     `acceptance_criteria_results[]` ids from the promoted `verification-report.json`.
+     Never summarize, soften, or partially redact this evidence -- the Engineer must see
+     exactly what the Quality Engineer actually observed.
+   - Wait for that same agent's reply before proceeding, exactly as the staged
+     continuation protocol requires. If the same agent id cannot be resumed, this is a
+     **broken agent continuity** failure: `retain_policy_event` (`kind:
+     "continuity_broken"`) and block the run (`state: "implementation_blocked"`) --
+     never dispatch a replacement Engineer and call it a continuation.
+   - The resumed Engineer is expected to write or update one failing regression test
+     first, per its own contract (see "Engineer route-back repair protocol" in
+     `engineer.md`), before making any correction. Apply the same "Mandatory TDD
+     orchestration check" from Phase 3 to this repair's pre-test command: independently
+     confirm via `git status`/`git diff --stat -- demo-repo` that only test files changed
+     before the repair's pre-test command runs, and that the failure is the expected
+     one, not an accident.
+   - Mediate every repair-cycle command (`C-3`, `C-4`, ... -- fresh command ids, never
+     reused) through the real, forked `test-runner` Skill exactly as in Phase 3, with the
+     same request/result identity checking.
+   - On the Engineer's new final report: `retain_attempt`, `validate_artifact`, then
+     `promote_artifact` (`phase: "implementation"`) to a **new** canonical path this
+     repair round owns exclusively (e.g. `implementation-report.repair-1.json` --
+     `promote_artifact`'s collision guard refuses to silently overwrite the original
+     `implementation-report.json`, which remains retained, untouched, as the pre-repair
+     evidence). Update your own working notion of `artifact_refs.implementation_report`
+     to this new path for the rest of this run, but never delete or rewrite the original.
+     Independently re-check the repair's `changed_files` against the Protected Path list
+     yourself, exactly as in Phase 3.
+3. **Re-verify with the exact same Quality Engineer.** Once the repair's implementation
+   report is promoted:
+   - `retain_policy_event` (`kind: "re_verification"`) naming the repair attempt number
+     and the same Quality Engineer agent id captured at this run's `agent_dispatch`
+     policy event for the Verification phase.
+   - `SendMessage` to that **exact same Quality Engineer agent id** -- never a new
+     `Agent` call -- with the updated `implementation_ref.path` (the repair round's new
+     canonical implementation report). Ask it to re-run its own Steps 3-12 against this
+     updated implementation report, in this same continued conversation.
+   - Wait for that same agent's reply. If the same agent id cannot be resumed, this is
+     again a **broken agent continuity** failure: `retain_policy_event` (`kind:
+     "continuity_broken"`) and block the run (`state: "verification_blocked"`) -- never
+     dispatch a replacement Quality Engineer.
+   - Mediate every re-verification command (`V-2`, ... -- a fresh command id) through the
+     real, forked `test-runner` Skill, exactly as in Phase 4 above.
+   - On the final re-verification report: `retain_attempt`, `validate_artifact`, then
+     `promote_artifact` (`phase: "verification"`) to a new canonical path this repair
+     round owns exclusively (e.g. `verification-report.repair-1.json`), leaving the
+     original `verification-report.json` retained, untouched, as the pre-repair evidence.
+     Update `artifact_refs.verification_report` to this new path.
+4. **Reach a final, honest terminal outcome.** Classify the repair round's verdict exactly
+   as step 1:
+   - `"pass"` -- every criterion now passes: proceed to `state: "completed"`, and say
+     plainly in your final report that this run required one logic-bug repair cycle,
+     citing both the original and the repaired `verification-report.json` paths.
+   - `"fail"` again with a genuine logic bug -- the repair budget (`1`) is now exhausted.
+     `retain_policy_event` (`kind: "route_back_exhaustion"`) naming the exhausted budget
+     and both verification-report paths, and end the run honestly
+     (`state: "verification_failed"`). Do not attempt a second repair cycle, and do not
+     soften this into anything but a real failure.
+   - Infrastructure flake / environment / malformed-or-insufficient-evidence on the
+     repair round -- terminal exactly as step 1 describes for the original round; the
+     one-repair budget was already spent on a genuine logic bug and is not reset by a
+     different kind of failure appearing afterward.
+5. Independently re-verify the repair's outcome exactly as the top of this section
+   requires (`ORCH-1`/`ORCH-2`, `check_command_identity`, `git status`/`git diff`) before
+   reporting anything to the user -- a repaired run earns no less scrutiny than a
+   first-pass one.
 
 ## Quality Engineer transport repair (Verification phase, at most one correction total)
 
@@ -587,11 +709,32 @@ the fork itself is **not yet live-verified** by an actual `/work` run (see
 
 # Reporting
 
+## Completion-guardrail marker (required before reporting any run as complete)
+
+Before reporting a run as complete to the user -- `state: "completed"` only, never a
+blocked/refused/inconclusive outcome, which are reported directly with no marker -- write
+`runs/<run_id>/.completion_claim.json` (via `Write`), containing exactly
+`{"task_id": "<task_id>", "run_id": "<run_id>"}`. This is what
+`.claude/hooks/completion_guardrail.py` (a `Stop` hook) uses to know which run to
+independently re-validate before this turn is allowed to end -- it does nothing for any
+turn that never writes this marker, so it never interferes with unrelated conversation.
+If the hook finds a problem (missing/invalid/deleted verification evidence, a non-`pass`
+verdict, a canonical-artifact task/run mismatch, or a real Git-reality conflict with the
+implementation report's `changed_files`), it blocks this turn from ending and reports the
+exact reason -- treat that exactly as seriously as any other independent check failing:
+the run is not actually complete, regardless of what was about to be reported. Do not
+delete or hand-edit this marker yourself to work around a block; only a genuinely passing
+re-check clears it (the hook removes it itself once satisfied).
+
+## What to state, every time
+
 State plainly, every time:
 - Which phases actually ran.
 - Which canonical artifacts exist and validated, with their paths.
 - What independent checks you personally ran and what they showed (not what an agent
   claimed).
+- Whether this run required a same-run logic-bug repair cycle (Part 2), and if so, both
+  the original and repaired `implementation-report`/`verification-report` paths.
 - For a dry run: that Implementation and Verification were intentionally not attempted,
   and that this is not a completed pipeline run.
 - Any evidence gap. If required evidence is missing, say the run cannot be called

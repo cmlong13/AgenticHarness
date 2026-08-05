@@ -285,6 +285,195 @@ def _happy_command_results() -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Same-run logic-failure route-back fixtures (Part 2)
+# ---------------------------------------------------------------------------
+
+
+def _engineer_repair_sequence(*, finding_id="F-1", pre_exit_code=1, post_command_id="C-4") -> list[str]:
+    """A second Engineer cycle, driven entirely by resume() (never start()), fixing the
+    logic bug the Quality Engineer reported. Structurally identical in shape to
+    _engineer_sequence(), with fresh command ids (C-3/C-4) so retained evidence never
+    collides with the original round's C-1/C-2."""
+    pre = {
+        "response_type": "pre_test_requested",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "test_created": {
+            "test_file": f"{TARGET_REPO_PATH}/tests/test_pagination.py",
+            "test_name": "test_last_page_boundary_regression",
+            "status": "added",
+        },
+        "requested_command": {
+            "id": "C-3",
+            "command": "python -m pytest tests/test_pagination.py -k regression",
+            "working_directory": TARGET_REPO_PATH,
+            "expected_outcome": "fail",
+            "expected_failure_reason": "reproduces the logic bug the Quality Engineer reported",
+        },
+        "findings_relied_on": [finding_id],
+        "minimal_change_rung_plan": 2,
+    }
+    post = {
+        "response_type": "post_test_requested",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "pre_test_confirmation": {
+            "command_id": "C-3",
+            "reported_exit_code": pre_exit_code,
+            "failure_reason_confirmed": True,
+            "confirmation_rationale": "reproduces the reported logic bug",
+        },
+        "changed_files": _engineer_changed_files(),
+        "minimal_change_rung": 2,
+        "minimal_change_rationale": "Corrected the boundary arithmetic the Quality Engineer's failing attempt exposed.",
+        "tests": [
+            {
+                "test_file": f"{TARGET_REPO_PATH}/tests/test_pagination.py",
+                "test_name": "test_last_page_boundary_regression",
+                "status": "added",
+            }
+        ],
+        "dependency_changes": [],
+        "requested_command": {
+            "id": post_command_id,
+            "command": "python -m pytest tests/test_pagination.py",
+            "working_directory": TARGET_REPO_PATH,
+            "expected_outcome": "pass",
+        },
+    }
+    finalization = {
+        "response_type": "finalization_evidence_requested",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "changed_files_known": _engineer_changed_files(),
+        "note": "Supply real lines_added/lines_removed.",
+    }
+    final = {
+        "schema_version": "1.0",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "created_at": CREATED_AT,
+        "scope_ref": {"path": SCOPE_REF},
+        "findings_ref": {"path": FINDINGS_REF, "finding_ids": [finding_id]},
+        "minimal_change_rung": 2,
+        "minimal_change_rationale": "Corrected the boundary arithmetic the Quality Engineer's failing attempt exposed.",
+        "changed_files": [
+            {"path": f"{TARGET_REPO_PATH}/src/pagination.py", "change_type": "modified", "lines_added": 1, "lines_removed": 1},
+            {"path": f"{TARGET_REPO_PATH}/tests/test_pagination.py", "change_type": "modified", "lines_added": 6, "lines_removed": 0},
+        ],
+        "diff_ref": f"runs/{RUN_ID}/diff.repair-1.patch",
+        "commands": [
+            {
+                "id": "C-3",
+                "stage": "pre_implementation",
+                "command": "python -m pytest tests/test_pagination.py -k regression",
+                "exit_code": pre_exit_code,
+                "output_ref": f"runs/{RUN_ID}/logs/C-3.log",
+            },
+            {
+                "id": post_command_id,
+                "stage": "post_implementation",
+                "command": "python -m pytest tests/test_pagination.py",
+                "exit_code": 0,
+                "output_ref": f"runs/{RUN_ID}/logs/{post_command_id}.log",
+            },
+        ],
+        "test_first_evidence": {
+            "pre_implementation_command_id": "C-3",
+            "post_implementation_command_id": post_command_id,
+        },
+        "tests": [
+            {
+                "test_file": f"{TARGET_REPO_PATH}/tests/test_pagination.py",
+                "test_name": "test_last_page_boundary_regression",
+                "status": "added",
+            }
+        ],
+        "dependency_changes": [],
+        "status": "ready_for_verification",
+    }
+    return [json.dumps(pre), json.dumps(post), json.dumps(finalization), json.dumps(final)]
+
+
+def _qe_repair_sequence(*, verdict="pass", command_id="V-2", criteria_ids=("AC-1",)) -> list[str]:
+    """A second Quality Engineer turn, driven entirely by resume() (never start()),
+    re-verifying the repaired implementation report."""
+    attempt = {
+        "response_type": "attempt_requested",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "requested_command": {
+            "id": command_id,
+            "command": "python -m pytest tests/test_pagination.py",
+            "working_directory": TARGET_REPO_PATH,
+            "criteria_ids_targeted": list(criteria_ids),
+            "rationale": "re-verify pagination tests after the Engineer's logic-bug repair",
+        },
+    }
+    if verdict == "pass":
+        exit_code, classification, result = 0, "pass", "passed"
+    else:  # "fail" -- the repair did not resolve the logic bug
+        exit_code, classification, result = 1, "logic_bug", "failed"
+
+    final = {
+        "schema_version": "1.0",
+        "task_id": TASK_ID,
+        "run_id": RUN_ID,
+        "created_at": CREATED_AT,
+        "scope_ref": {"path": SCOPE_REF},
+        "implementation_ref": {"path": f"runs/{RUN_ID}/implementation-report.repair-1.json"},
+        "attempts": [
+            {
+                "id": command_id,
+                "command": "python -m pytest tests/test_pagination.py",
+                "exit_code": exit_code,
+                "classification": classification,
+                "output_ref": f"runs/{RUN_ID}/logs/{command_id}.log",
+                "retried": False,
+            }
+        ],
+        "retry_policy": {"max_retries": 2},
+        "acceptance_criteria_results": [
+            {
+                "criteria_id": cid,
+                "result": result,
+                "attempt_refs": [command_id],
+                "evidence_summary": f"pagination tests re-exercised via {command_id} after repair",
+            }
+            for cid in criteria_ids
+        ],
+        "final_verdict": verdict,
+        "routed_back_to_engineer": (
+            {"routed": True, "reason": f"AC-1 failed again: logic_bug on {command_id}"}
+            if verdict == "fail"
+            else {"routed": False}
+        ),
+    }
+    return [json.dumps(attempt), json.dumps(final)]
+
+
+def _repair_command_results(*, pre_exit_code=1, post_command_id="C-4", reverify_command_id="V-2", reverify_exit_code=0) -> dict:
+    return {
+        "C-3": _command_result(
+            "C-3", "python -m pytest tests/test_pagination.py -k regression", TARGET_REPO_PATH, pre_exit_code
+        ),
+        post_command_id: _command_result(
+            post_command_id, "python -m pytest tests/test_pagination.py", TARGET_REPO_PATH, 0
+        ),
+        reverify_command_id: _command_result(
+            reverify_command_id, "python -m pytest tests/test_pagination.py", TARGET_REPO_PATH, reverify_exit_code
+        ),
+    }
+
+
+def _policy_events(result) -> list[dict]:
+    log_path = result.run_dir / "logs" / "policy-events.jsonl"
+    if not log_path.exists():
+        return []
+    return [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
 def _run(root, discovery_adapter, agent_adapter, test_runner_adapter, **overrides):
     kwargs = dict(
         raw_prompt="Fix off-by-one in pagination helper",
@@ -867,6 +1056,13 @@ def test_verification_pass_permits_completion(tmp_path):
 
 
 def test_verification_fail_is_terminal_and_does_not_permit_completion(tmp_path):
+    """A genuine logic_bug 'fail' verdict now routes back for exactly one bounded repair
+    cycle (Part 2) instead of being immediately terminal -- see the
+    "Same-run logic-failure route-back" tests below for the repair cycle itself. Without a
+    scripted repair-cycle reply, the resumed Engineer's queue is exhausted, which the
+    orchestrator must treat as a broken continuity block, never as license to fabricate a
+    result or silently terminate as a plain "fail" -- confirming route-back really is
+    attempted rather than silently skipped."""
     _make_fixture_repo(tmp_path)
     discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
     agent_adapter = ScriptedAgentAdapter(
@@ -880,12 +1076,311 @@ def test_verification_fail_is_terminal_and_does_not_permit_completion(tmp_path):
 
     result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
 
+    assert result.state == State.IMPLEMENTATION_BLOCKED
+    assert result.final_verdict != "pass"
+    assert "repair attempt 1" in result.reason.lower()
+    events = _policy_events(result)
+    assert any(e["kind"] == "logic_failure_detected" for e in events)
+    assert any(e["kind"] == "engineer_route_back" for e in events)
+    assert any(e["kind"] == "continuity_broken" for e in events)
+    # Never a replacement Engineer -- exactly one start(), the route-back only ever resumes it.
+    assert agent_adapter.start_count("engineer") == 1
+    _assert_valid_run_summary(result)
+
+
+# ---------------------------------------------------------------------------
+# Same-run logic-failure route-back (Part 2)
+# ---------------------------------------------------------------------------
+
+
+def test_classify_verification_outcome_distinguishes_all_four_categories():
+    pass_doc = json.loads(_qe_sequence(verdict="pass")[1])
+    fail_doc = json.loads(_qe_sequence(verdict="fail")[1])
+    inconclusive_environment_doc = json.loads(_qe_sequence(verdict="inconclusive")[1])
+    inconclusive_flake_doc = dict(inconclusive_environment_doc)
+    inconclusive_flake_doc["attempts"] = [dict(inconclusive_environment_doc["attempts"][0], classification="infrastructure_flake")]
+
+    assert core.classify_verification_outcome(fail_doc) == "logic_bug"
+    assert core.classify_verification_outcome(inconclusive_environment_doc) == "environment"
+    assert core.classify_verification_outcome(inconclusive_flake_doc) == "infrastructure_flake"
+    assert core.classify_verification_outcome(None) == "insufficient_evidence"
+    assert core.classify_verification_outcome({}) == "insufficient_evidence"
+    # Never called for "pass" in production code, but must not misclassify it as a logic bug.
+    assert core.classify_verification_outcome(pass_doc) == "insufficient_evidence"
+
+
+def test_logic_bug_routes_back_to_the_same_engineer_and_repairs_successfully(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence() + _engineer_repair_sequence(),
+            "quality_engineer": _qe_sequence(verdict="fail") + _qe_repair_sequence(verdict="pass"),
+        }
+    )
+    command_results = dict(_happy_command_results())
+    command_results.update(_repair_command_results())
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=command_results, diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.COMPLETED
+    assert result.final_verdict == "pass"
+
+    # Never a replacement agent -- exactly one start() per role, the repair cycle only resumes.
+    assert agent_adapter.start_count("engineer") == 1
+    assert agent_adapter.start_count("quality_engineer") == 1
+    engineer_handles = set(agent_adapter.handles_used("engineer"))
+    qe_handles = set(agent_adapter.handles_used("quality_engineer"))
+    assert len(engineer_handles) == 1
+    assert len(qe_handles) == 1
+
+    # Test-runner mediation remains mandatory through the repair cycle too.
+    invoked_ids = {r["command_id"] for r in test_runner_adapter.invoked_requests}
+    assert {"C-1", "C-2", "V-1", "C-3", "C-4", "V-2"} <= invoked_ids
+
+    # The repair round's canonical artifacts are retained separately from the originals --
+    # neither original is silently overwritten -- and the run summary cites the final ones.
+    assert (result.run_dir / "implementation-report.json").exists()
+    assert (result.run_dir / "verification-report.json").exists()
+    assert (result.run_dir / "implementation-report.repair-1.json").exists()
+    assert (result.run_dir / "verification-report.repair-1.json").exists()
+    assert result.artifact_refs["implementation_report"].endswith("implementation-report.repair-1.json")
+    assert result.artifact_refs["verification_report"].endswith("verification-report.repair-1.json")
+
+    # Policy events for every required repair-cycle milestone.
+    events = _policy_events(result)
+    kinds = [e["kind"] for e in events]
+    assert "logic_failure_detected" in kinds
+    assert "engineer_route_back" in kinds
+    assert "re_verification" in kinds
+    route_back_event = next(e for e in events if e["kind"] == "engineer_route_back")
+    assert route_back_event["repair_attempt"] == 1
+    assert "route_back_exhaustion" not in kinds  # never exhausted on a successful first repair
+    assert "continuity_broken" not in kinds
+
+    # The final summary must accurately record that a repair cycle occurred, not read as an
+    # unqualified first-pass success.
+    summary = _assert_valid_run_summary(result)
+    assert summary["final_verdict"] == "pass"
+    assert "repair" in summary["objective_summary"].lower()
+    assert summary["artifact_refs"]["implementation_report"].endswith("implementation-report.repair-1.json")
+    assert summary["artifact_refs"]["verification_report"].endswith("verification-report.repair-1.json")
+
+
+def test_logic_bug_repair_count_is_bounded_and_exhaustion_ends_honestly(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence() + _engineer_repair_sequence(),
+            # The repair does not resolve the logic bug -- the Quality Engineer fails it again.
+            "quality_engineer": _qe_sequence(verdict="fail") + _qe_repair_sequence(verdict="fail"),
+        }
+    )
+    command_results = dict(_happy_command_results())
+    command_results.update(_repair_command_results(reverify_exit_code=1))
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=command_results, diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
     assert result.state == State.VERIFICATION_FAILED
     assert result.final_verdict == "fail"
     assert result.state != State.COMPLETED
-    # One-pass MVP: no automatic route-back, so the Engineer is never dispatched a second time.
+
+    # Exactly one repair attempt was made -- the budget (MAX_LOGIC_REPAIR_ATTEMPTS == 1) is
+    # never exceeded, and no second repair cycle (a third Engineer/QE resume round) occurs.
+    assert core.MAX_LOGIC_REPAIR_ATTEMPTS == 1
+    events = _policy_events(result)
+    kinds = [e["kind"] for e in events]
+    assert kinds.count("engineer_route_back") == 1
+    assert "route_back_exhaustion" in kinds
     assert agent_adapter.start_count("engineer") == 1
-    _assert_valid_run_summary(result)
+    assert agent_adapter.start_count("quality_engineer") == 1
+
+    # Both rounds' verification reports survive as honest evidence.
+    assert (result.run_dir / "verification-report.json").exists()
+    assert (result.run_dir / "verification-report.repair-1.json").exists()
+
+    summary = _assert_valid_run_summary(result)
+    assert summary["final_verdict"] == "fail"
+    assert "repair" in summary["objective_summary"].lower()
+
+
+def test_infrastructure_flake_does_not_route_back_to_engineer(tmp_path):
+    _make_fixture_repo(tmp_path)
+    flake_report = {
+        "schema_version": "1.0", "task_id": TASK_ID, "run_id": RUN_ID, "created_at": CREATED_AT,
+        "scope_ref": {"path": SCOPE_REF}, "implementation_ref": {"path": IMPLEMENTATION_REF},
+        "attempts": [
+            {
+                "id": "V-1", "command": "python -m pytest tests/test_pagination.py", "exit_code": 1,
+                "classification": "infrastructure_flake", "output_ref": f"runs/{RUN_ID}/logs/V-1.log", "retried": False,
+            }
+        ],
+        "retry_policy": {"max_retries": 2},
+        "acceptance_criteria_results": [
+            {"criteria_id": "AC-1", "result": "blocked", "attempt_refs": ["V-1"], "evidence_summary": "unresolved flake"}
+        ],
+        "final_verdict": "inconclusive",
+        "routed_back_to_engineer": {"routed": False},
+    }
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(),
+            "quality_engineer": [_qe_sequence()[0], json.dumps(flake_report)],
+        }
+    )
+    command_results = dict(_happy_command_results())
+    command_results["V-1"] = _command_result("V-1", "python -m pytest tests/test_pagination.py", TARGET_REPO_PATH, 1)
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=command_results, diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.VERIFICATION_INCONCLUSIVE
+    assert result.final_verdict == "inconclusive"
+    assert agent_adapter.start_count("engineer") == 1
+    engineer_resumes = [c for c in agent_adapter.calls if c[0] == "resume" and c[1] == "engineer"]
+    assert len(engineer_resumes) == 3  # only the original pre/post/finalization staged turns
+    events = _policy_events(result)
+    assert not any(e["kind"] == "engineer_route_back" for e in events)
+    assert not any(e["kind"] == "logic_failure_detected" for e in events)
+
+
+def test_environment_failure_does_not_route_back_to_engineer(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(),
+            "quality_engineer": _qe_sequence(verdict="inconclusive"),
+        }
+    )
+    command_results = dict(_happy_command_results())
+    command_results["V-1"] = _command_result("V-1", "python -m pytest tests/test_pagination.py", TARGET_REPO_PATH, 1)
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=command_results, diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.VERIFICATION_INCONCLUSIVE
+    assert result.final_verdict == "inconclusive"
+    assert agent_adapter.start_count("engineer") == 1
+    engineer_resumes = [c for c in agent_adapter.calls if c[0] == "resume" and c[1] == "engineer"]
+    assert len(engineer_resumes) == 3
+    events = _policy_events(result)
+    assert not any(e["kind"] == "engineer_route_back" for e in events)
+    assert not any(e["kind"] == "logic_failure_detected" for e in events)
+
+
+def test_missing_or_invalid_verification_evidence_blocks_routing_rather_than_repairing(tmp_path):
+    """A verification phase that never produces a validly promoted final artifact at all
+    (here: a schema/semantically-valid self-reported 'blocked' report) is 'malformed or
+    insufficient evidence', per classify_verification_outcome -- never treated as a logic
+    bug, never routed back."""
+    _make_fixture_repo(tmp_path)
+    blocked_report = {
+        "schema_version": "1.0", "task_id": TASK_ID, "run_id": RUN_ID, "created_at": CREATED_AT,
+        "scope_ref": {"path": SCOPE_REF}, "implementation_ref": {"path": IMPLEMENTATION_REF},
+        "final_verdict": "blocked", "blocked_reason": "command safety denylist violation requested by caller",
+    }
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(),
+            "quality_engineer": [_qe_sequence()[0], json.dumps(blocked_report)],
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.VERIFICATION_BLOCKED
+    assert agent_adapter.start_count("engineer") == 1
+    engineer_resumes = [c for c in agent_adapter.calls if c[0] == "resume" and c[1] == "engineer"]
+    assert len(engineer_resumes) == 3  # never resumed for a route-back that never happened
+    events = _policy_events(result)
+    assert not any(e["kind"] == "engineer_route_back" for e in events)
+
+
+def test_repair_implementation_report_must_preserve_test_first_ordering(tmp_path):
+    """The repair round is validated by the exact same schema/semantic rules as the
+    original round -- a repair report whose pre-implementation command did not actually
+    fail (test-first ordering violated) is rejected exactly like it would be the first
+    time, never waved through because it's "just a repair"."""
+    _make_fixture_repo(tmp_path)
+    engineer_repair_turns = _engineer_repair_sequence(pre_exit_code=0)  # pre-test "failure" that didn't fail
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence() + engineer_repair_turns,
+            "quality_engineer": _qe_sequence(verdict="fail"),
+        }
+    )
+    command_results = dict(_happy_command_results())
+    command_results.update(_repair_command_results(pre_exit_code=0))
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=command_results, diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.IMPLEMENTATION_BLOCKED
+    assert "semantic validation failed" in result.reason.lower() or "nonzero" in result.reason.lower()
+    assert not (result.run_dir / "implementation-report.repair-1.json").exists()
+
+
+def test_replacement_engineer_during_repair_is_never_dispatched_as_continuation(tmp_path):
+    """If the Engineer handle cannot be resumed for the route-back, the run blocks --
+    it must never fall back to a fresh Agent dispatch and present it as a continuation."""
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence() + [UNRESUMABLE],
+            "quality_engineer": _qe_sequence(verdict="fail"),
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.IMPLEMENTATION_BLOCKED
+    assert "lost continuity" in result.reason.lower()
+    assert agent_adapter.start_count("engineer") == 1  # never restarted with a fresh instance
+    events = _policy_events(result)
+    assert any(e["kind"] == "continuity_broken" and e.get("phase") == "implementation" for e in events)
+
+
+def test_replacement_quality_engineer_during_reverification_is_never_dispatched_as_continuation(tmp_path):
+    """Same guarantee for the re-verification leg: if the Quality Engineer handle cannot
+    be resumed after a successful repair, the run blocks rather than dispatching a fresh
+    Quality Engineer and calling it a continuation."""
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence() + _engineer_repair_sequence(),
+            "quality_engineer": _qe_sequence(verdict="fail") + [UNRESUMABLE],
+        }
+    )
+    command_results = dict(_happy_command_results())
+    command_results.update(_repair_command_results())
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=command_results, diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+
+    assert result.state == State.VERIFICATION_BLOCKED
+    assert "lost continuity" in result.reason.lower()
+    assert agent_adapter.start_count("quality_engineer") == 1
+    events = _policy_events(result)
+    assert any(e["kind"] == "continuity_broken" and e.get("phase") == "verification" for e in events)
 
 
 def test_verification_blocked_is_terminal(tmp_path):
