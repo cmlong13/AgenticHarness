@@ -1,0 +1,11 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260805-latefee-005",
+  "kind": "re_verification",
+  "payload": {
+    "repair_attempt": 1,
+    "quality_engineer_agent_id": "a476bba2ae25e5638",
+    "implementation_repair_report_path": "runs/run-20260805-latefee-005/implementation-report.repair-1.json",
+    "description": "Resuming the exact same Quality Engineer agent id (a476bba2ae25e5638) via SendMessage -- never a new Agent call -- to re-verify against the repair round's updated implementation report."
+  }
+}

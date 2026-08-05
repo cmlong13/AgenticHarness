@@ -1,0 +1,10 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260805-latefee-005",
+  "kind": "transport_parse_failure",
+  "payload": {
+    "phase": "implementation",
+    "attempt_ref": "runs/run-20260805-latefee-005/attempts/implementation-6.raw.txt",
+    "description": "Engineer's finalization_evidence_requested reply (repair-cycle turn) carried leading prose ('All four tests pass now, including the previously-failing regression fixture. Requesting finalization evidence for this repair cycle's changed files.') before the JSON object, violating engineer.md's 'no leading or trailing prose' contract. This is the first transport failure of this Implementation phase (round 1's three turns were all clean); the one-correction-per-phase budget was unused until now."
+  }
+}

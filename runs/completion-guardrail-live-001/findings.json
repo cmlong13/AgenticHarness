@@ -1,0 +1,37 @@
+{
+  "schema_version": "1.0",
+  "task_id": "DEMO-COMPLETION-GUARDRAIL-1",
+  "run_id": "completion-guardrail-live-001",
+  "created_at": "2026-08-05T00:00:00Z",
+  "scope_ref": {
+    "path": "runs/completion-guardrail-live-001/scope.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "classify_dti() and classify_ltv() use inclusive <= boundary comparisons against basis-point thresholds",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 22,
+          "end_line": 27,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "No existing test exercises the exact basis-point boundary value for classify_dti()",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "grep",
+          "query": "def test_.*boundary",
+          "scope": "demo-repo/tests/unit/test_risk_bands.py",
+          "result": "no matches for an explicit boundary-value test"
+        }
+      ]
+    }
+  ]
+}

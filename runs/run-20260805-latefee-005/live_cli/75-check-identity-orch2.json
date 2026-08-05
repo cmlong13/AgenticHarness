@@ -1,0 +1,17 @@
+{
+  "operation": "check_command_identity",
+  "request": {
+    "task_id": "T-LATEFEE2",
+    "run_id": "run-20260805-latefee-005",
+    "command_id": "ORCH-2",
+    "command": "python -m pytest tests -q",
+    "working_directory": "demo-repo"
+  },
+  "result": {
+    "task_id": "T-LATEFEE2",
+    "run_id": "run-20260805-latefee-005",
+    "command_id": "ORCH-2",
+    "command": "python -m pytest tests -q",
+    "working_directory": "demo-repo"
+  }
+}

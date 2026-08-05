@@ -1,0 +1,76 @@
+diff --git a/demo-repo/src/loanflow/late_fee_tier.py b/demo-repo/src/loanflow/late_fee_tier.py
+index 72b9ee4..f0a5e2a 100644
+--- a/demo-repo/src/loanflow/late_fee_tier.py (pre-run-005 stray content, from the blocked run-20260805-latefee-004 attempt)
++++ b/demo-repo/src/loanflow/late_fee_tier.py (this run's first implementation pass)
+@@ -1,13 +1,21 @@
+ """Late-fee tier classification.
+
+-See demo-repo/docs/late-fee-tier-policy.md for the documented tier boundaries.
+-Per that document's own disclosed-mismatch notice and this task's binding
+-regression fixture (demo-repo/tests/unit/test_late_fee_tier_regression.py),
+-this task's actual required behavior places day 30 in the SEVERE tier (not
+-day 31, as the document's literal wording states in isolation).
++First implementation pass (task T-LATEFEE2, run run-20260805-latefee-005):
++per this run's scope.json constraints, this module follows the LITERAL
++wording of demo-repo/docs/late-fee-tier-policy.md exactly -- grace 0-5
++(inclusive), standard 6-30 (inclusive), severe strictly more than 30 days
++past due. Day 30 itself is "standard", not "severe".
++
++This is disclosed and intentional: demo-repo/tests/unit/test_late_fee_tier_regression.py
++(a pre-existing, out-of-scope fixture) asserts day 30 == "severe" and is
++expected to fail against this first pass -- see that file's docstring and the
++policy document's own notice for why. A later, same-run repair pass is
++expected to adjust this module's SEVERE boundary after that failure is
++reported by Verification.
+
+ Follows the same validate-first-then-compare-thresholds convention as
+-classify_credit_score in demo-repo/src/loanflow/risk_bands.py.
++classify_credit_score in demo-repo/src/loanflow/risk_bands.py, reusing
++loanflow.errors.ValidationError for invalid input.
+ """
+ from __future__ import annotations
+
+@@ -19,6 +27,6 @@ def classify_late_fee_tier(days_past_due: int) -> str:
+         raise ValidationError("days_past_due must not be negative")
+     if days_past_due <= 5:
+         return "grace"
+-    if days_past_due < 30:
++    if days_past_due <= 30:
+         return "standard"
+     return "severe"
+diff --git a/demo-repo/tests/unit/test_late_fee_tier.py b/demo-repo/tests/unit/test_late_fee_tier.py
+index d970be0..3b342bc 100644
+--- a/demo-repo/tests/unit/test_late_fee_tier.py (pre-run-005 stray content, from the blocked run-20260805-latefee-004 attempt)
++++ b/demo-repo/tests/unit/test_late_fee_tier.py (this run's first implementation pass)
+@@ -1,10 +1,17 @@
+ """Unit tests for loanflow.late_fee_tier.classify_late_fee_tier.
+
+-Boundary values follow this task's actual required behavior (day 30 is SEVERE,
+-day 29 is STANDARD), independently pinned by the pre-existing regression fixture
+-demo-repo/tests/unit/test_late_fee_tier_regression.py -- see that file's own
+-docstring and demo-repo/docs/late-fee-tier-policy.md's disclosed-mismatch notice
+-for why this differs by one day from the policy document's literal SEVERE wording.
++First implementation pass (task T-LATEFEE2, run run-20260805-latefee-005):
++per this run's scope.json constraints, these boundary values follow the
++LITERAL wording of demo-repo/docs/late-fee-tier-policy.md exactly --
++grace 0-5 inclusive, standard 6-30 inclusive, severe strictly more than 30
++(day 30 itself is "standard", not "severe").
++
++This is disclosed and intentional: demo-repo/tests/unit/test_late_fee_tier_regression.py
++(a pre-existing, out-of-scope fixture) asserts the opposite for day 30 and is
++expected to fail against this first pass -- see that file's docstring and the
++policy document's own notice. This file (the Engineer's own AC-1 test) is not
++expected to be edited during the later repair pass; only the production module
++demo-repo/src/loanflow/late_fee_tier.py changes during repair.
+ """
+ from __future__ import annotations
+
+@@ -20,7 +27,7 @@ def test_late_fee_tier_boundaries() -> None:
+         5: "grace",
+         6: "standard",
+         29: "standard",
+-        30: "severe",
++        30: "standard",
+         31: "severe",
+     }
+     for days_past_due, expected in boundary_cases.items():

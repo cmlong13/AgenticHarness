@@ -1,0 +1,52 @@
+{
+  "schema_version": "1.0",
+  "task_id": "DEMO-COMPLETION-GUARDRAIL-1",
+  "run_id": "completion-guardrail-live-001",
+  "created_at": "2026-08-05T00:00:00Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "[FIXTURE -- not a real task] Demonstrate live that the real Claude Code Stop hook (.claude/hooks/completion_guardrail.py) blocks a completion claim when required verification evidence is missing."
+  },
+  "objective": "Dedicated, self-contained fixture for live-demonstrating the completion-guardrail Stop hook. No real change is made to demo-repo; risk_bands.py is cited read-only as a plausible in-scope file for internal consistency.",
+  "in_scope": [
+    "demo-repo/src/loanflow/risk_bands.py",
+    "demo-repo/tests/unit/test_risk_bands.py"
+  ],
+  "out_of_scope": [
+    "demo-repo/src/loanflow/late_fee_tier.py"
+  ],
+  "constraints": [
+    "Fixture only -- demonstration evidence, not a real production change."
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "Verification evidence exists and shows a passing result before it is moved aside to create the deliberately invalid state this fixture demonstrates the Stop hook blocking."
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-1",
+      "description": "Research risk_bands.py rounding",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-2",
+      "description": "(Fixture) implement",
+      "phase": "implementation",
+      "depends_on": [
+        "N-1"
+      ]
+    },
+    {
+      "id": "N-3",
+      "description": "(Fixture) verify",
+      "phase": "verification",
+      "depends_on": [
+        "N-2"
+      ]
+    }
+  ],
+  "status": "approved"
+}

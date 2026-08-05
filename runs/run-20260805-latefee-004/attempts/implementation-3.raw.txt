@@ -1,0 +1,30 @@
+```json
+{
+  "response_type": "post_test_requested",
+  "task_id": "T-LATEFEE",
+  "run_id": "run-20260805-latefee-004",
+  "pre_test_confirmation": {
+    "command_id": "C-1",
+    "reported_exit_code": 2,
+    "failure_reason_confirmed": true,
+    "confirmation_rationale": "Caller reported ModuleNotFoundError: No module named 'loanflow.late_fee_tier' during collection, exactly matching the expected pre-implementation failure reason."
+  },
+  "changed_files": [
+    { "path": "demo-repo/src/loanflow/late_fee_tier.py", "change_type": "added" },
+    { "path": "demo-repo/tests/unit/test_late_fee_tier.py", "change_type": "added" }
+  ],
+  "minimal_change_rung": 2,
+  "minimal_change_rationale": "Reused the existing validate-first-then-compare-thresholds pattern from classify_credit_score in risk_bands.py and the ValidationError exception type already defined in errors.py; no new dependency or novel pattern was needed.",
+  "tests": [
+    { "test_file": "demo-repo/tests/unit/test_late_fee_tier.py", "test_name": "test_late_fee_tier_boundaries", "status": "added" },
+    { "test_file": "demo-repo/tests/unit/test_late_fee_tier.py", "test_name": "test_negative_days_past_due_is_rejected", "status": "added" }
+  ],
+  "dependency_changes": [],
+  "requested_command": {
+    "id": "C-2",
+    "command": "python -m pytest tests/unit/test_late_fee_tier.py tests/unit/test_late_fee_tier_regression.py -v",
+    "working_directory": "demo-repo",
+    "expected_outcome": "pass"
+  }
+}
+```

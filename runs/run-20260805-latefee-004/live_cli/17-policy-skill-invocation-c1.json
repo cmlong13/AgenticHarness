@@ -1,0 +1,13 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260805-latefee-004",
+  "kind": "skill_invocation",
+  "payload": {
+    "command_id": "C-1",
+    "skill": "test-runner",
+    "invoked_via": "Skill tool",
+    "context": "fork",
+    "background": false,
+    "request_path": "runs/run-20260805-latefee-004/requests/C-1.json"
+  }
+}

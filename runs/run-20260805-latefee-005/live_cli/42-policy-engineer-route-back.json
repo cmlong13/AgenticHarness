@@ -1,0 +1,11 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260805-latefee-005",
+  "kind": "engineer_route_back",
+  "payload": {
+    "repair_attempt": 1,
+    "engineer_agent_id": "a7ec78b1632a775ed",
+    "verification_report_path": "runs/run-20260805-latefee-005/verification-report.json",
+    "description": "Routing the genuine logic_bug (AC-2, attempt V-2) back to the exact same Engineer agent id (a7ec78b1632a775ed) captured at this run's implementation agent_dispatch policy event, via SendMessage -- never a new Agent call."
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "operation": "check_command_identity",
+  "request": {
+    "task_id": "T-LATEFEE2",
+    "run_id": "run-20260805-latefee-005",
+    "command_id": "V-2",
+    "command": "python -m pytest tests/unit/test_late_fee_tier_regression.py -v",
+    "working_directory": "demo-repo"
+  },
+  "result": {
+    "task_id": "T-LATEFEE2",
+    "run_id": "run-20260805-latefee-005",
+    "command_id": "V-2",
+    "command": "python -m pytest tests/unit/test_late_fee_tier_regression.py -v",
+    "working_directory": "demo-repo"
+  }
+}

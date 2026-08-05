@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LATEFEE2",
+  "run_id": "run-20260805-latefee-005",
+  "created_at": "2026-08-05T17:56:30Z",
+  "scope_ref": { "path": "runs/run-20260805-latefee-005/scope.json" },
+  "implementation_ref": { "path": "runs/run-20260805-latefee-005/implementation-report.json" },
+  "attempts": [
+    {
+      "id": "V-1",
+      "command": "python -m pytest tests/unit/test_late_fee_tier.py -v",
+      "exit_code": 0,
+      "classification": "pass",
+      "output_ref": "runs/run-20260805-latefee-005/logs/V-1.log",
+      "retried": false
+    },
+    {
+      "id": "V-2",
+      "command": "python -m pytest tests/unit/test_late_fee_tier_regression.py -v",
+      "exit_code": 1,
+      "classification": "logic_bug",
+      "output_ref": "runs/run-20260805-latefee-005/logs/V-2.log",
+      "retried": false
+    }
+  ],
+  "retry_policy": { "max_retries": 2 },
+  "acceptance_criteria_results": [
+    {
+      "criteria_id": "AC-1",
+      "result": "passed",
+      "attempt_refs": ["V-1"],
+      "evidence_summary": "python -m pytest tests/unit/test_late_fee_tier.py -v (working_directory demo-repo) exited 0: both test_late_fee_tier_boundaries and test_negative_days_past_due_is_rejected passed, independently confirming the three tiers (grace 0-5, standard 6-30, severe >30) and the ValidationError raised for negative days_past_due, per the Engineer's own new unit tests."
+    },
+    {
+      "criteria_id": "AC-2",
+      "result": "failed",
+      "attempt_refs": ["V-2"],
+      "evidence_summary": "python -m pytest tests/unit/test_late_fee_tier_regression.py -v (working_directory demo-repo) exited 1: test_day_30_is_severe_not_standard failed with AssertionError: assert 'standard' == 'severe' (classify_late_fee_tier(30) currently returns 'standard' per the literal-policy-document first pass, but the unmodified, out-of-scope regression fixture requires 'severe'); test_day_29_is_still_standard passed. This is a genuine, reproducible logic failure against the pre-existing fixture, matching this task's disclosed design for the first implementation pass -- AC-2 is not satisfied yet and requires the same-run repair cycle."
+    }
+  ],
+  "final_verdict": "fail",
+  "routed_back_to_engineer": {
+    "routed": true,
+    "reason": "AC-2 failed: attempt V-2 (python -m pytest tests/unit/test_late_fee_tier_regression.py -v) is classified logic_bug -- classify_late_fee_tier(30) returns 'standard' but the binding, unmodified regression fixture test_late_fee_tier_regression.py::test_day_30_is_severe_not_standard requires 'severe'. The SEVERE-tier boundary in demo-repo/src/loanflow/late_fee_tier.py needs its comparison adjusted (e.g. days_past_due < 30 rather than <= 30 for the standard/severe cutoff) so day 30 classifies as severe, without touching the out-of-scope regression fixture or the Engineer's own AC-1 test file per this task's constraints."
+  }
+}

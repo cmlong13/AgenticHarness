@@ -1,0 +1,19 @@
+{
+  "response_type": "pre_test_requested",
+  "task_id": "T-LATEFEE2",
+  "run_id": "run-20260805-latefee-005",
+  "test_created": {
+    "test_file": "demo-repo/tests/unit/test_late_fee_tier.py",
+    "test_name": "test_late_fee_tier_boundaries",
+    "status": "modified"
+  },
+  "requested_command": {
+    "id": "C-3",
+    "command": "python -m pytest tests/unit/test_late_fee_tier.py -v",
+    "working_directory": "demo-repo",
+    "expected_outcome": "fail",
+    "expected_failure_reason": "The current production code (demo-repo/src/loanflow/late_fee_tier.py) still uses `if days_past_due <= 30: return \"standard\"` from the first pass, so classify_late_fee_tier(30) returns 'standard'; this repair-pass test now asserts 'severe' for day 30 (matching the pre-existing, out-of-scope regression fixture's binding bar per the Quality Engineer's reported logic_bug), so test_late_fee_tier_boundaries should fail on the day-30 assertion."
+  },
+  "findings_relied_on": ["F-1", "F-4", "F-5", "F-9"],
+  "minimal_change_rung_plan": 2
+}

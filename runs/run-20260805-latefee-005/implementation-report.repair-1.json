@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LATEFEE2",
+  "run_id": "run-20260805-latefee-005",
+  "created_at": "2026-08-05T17:56:30Z",
+  "scope_ref": {
+    "path": "runs/run-20260805-latefee-005/scope.json"
+  },
+  "findings_ref": {
+    "path": "runs/run-20260805-latefee-005/findings.json",
+    "finding_ids": [
+      "F-1",
+      "F-4",
+      "F-5",
+      "F-9"
+    ]
+  },
+  "minimal_change_rung": 2,
+  "minimal_change_rationale": "Reused the existing validate-first-then-compare-thresholds convention from classify_credit_score in risk_bands.py (F-4) and the existing loanflow.errors.ValidationError exception type (F-5) across both passes; the repair cycle's corrective edit was a single comparison-operator change (`<= 30` to `< 30`) in the existing conditional chain, narrowing STANDARD to 6-29 so day 30 classifies as SEVERE per the regression fixture's binding bar -- no new helper, dependency, or exception type was needed at any point.",
+  "changed_files": [
+    {
+      "path": "demo-repo/src/loanflow/late_fee_tier.py",
+      "change_type": "modified",
+      "lines_added": 10,
+      "lines_removed": 6
+    },
+    {
+      "path": "demo-repo/tests/unit/test_late_fee_tier.py",
+      "change_type": "modified",
+      "lines_added": 7,
+      "lines_removed": 5
+    }
+  ],
+  "diff_ref": "runs/run-20260805-latefee-005/diff.repair-1.patch",
+  "commands": [
+    {
+      "id": "C-1",
+      "stage": "pre_implementation",
+      "command": "python -m pytest tests/unit/test_late_fee_tier.py -v",
+      "exit_code": 1,
+      "output_ref": "runs/run-20260805-latefee-005/logs/C-1.log"
+    },
+    {
+      "id": "C-2",
+      "stage": "post_implementation",
+      "command": "python -m pytest tests/unit/test_late_fee_tier.py -v",
+      "exit_code": 0,
+      "output_ref": "runs/run-20260805-latefee-005/logs/C-2.log"
+    },
+    {
+      "id": "C-3",
+      "stage": "pre_implementation",
+      "command": "python -m pytest tests/unit/test_late_fee_tier.py -v",
+      "exit_code": 1,
+      "output_ref": "runs/run-20260805-latefee-005/logs/C-3.log"
+    },
+    {
+      "id": "C-4",
+      "stage": "post_implementation",
+      "command": "python -m pytest tests/unit/test_late_fee_tier.py tests/unit/test_late_fee_tier_regression.py -v",
+      "exit_code": 0,
+      "output_ref": "runs/run-20260805-latefee-005/logs/C-4.log"
+    }
+  ],
+  "test_first_evidence": {
+    "pre_implementation_command_id": "C-3",
+    "post_implementation_command_id": "C-4"
+  },
+  "tests": [
+    {
+      "test_file": "demo-repo/tests/unit/test_late_fee_tier.py",
+      "test_name": "test_late_fee_tier_boundaries",
+      "status": "modified"
+    },
+    {
+      "test_file": "demo-repo/tests/unit/test_late_fee_tier.py",
+      "test_name": "test_negative_days_past_due_is_rejected",
+      "status": "modified"
+    }
+  ],
+  "dependency_changes": [],
+  "status": "ready_for_verification"
+}

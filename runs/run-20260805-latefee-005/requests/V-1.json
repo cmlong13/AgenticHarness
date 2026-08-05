@@ -1,0 +1,9 @@
+{
+  "task_id": "T-LATEFEE2",
+  "run_id": "run-20260805-latefee-005",
+  "command_id": "V-1",
+  "command": "python -m pytest tests/unit/test_late_fee_tier.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Independent verification of AC-1: re-run the Engineer's own new/modified unit tests for classify_late_fee_tier."
+}

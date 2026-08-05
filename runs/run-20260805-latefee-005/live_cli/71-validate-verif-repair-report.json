@@ -1,0 +1,6 @@
+{
+  "operation": "validate_artifact",
+  "phase": "verification",
+  "doc_ref": "runs/run-20260805-latefee-005/live_cli/69-qe-repair-final-report.json",
+  "context_refs": { "scope": "runs/run-20260805-latefee-005/scope.json" }
+}

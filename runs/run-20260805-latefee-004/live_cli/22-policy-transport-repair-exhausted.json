@@ -1,0 +1,12 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260805-latefee-004",
+  "kind": "transport_repair_exhausted",
+  "payload": {
+    "phase": "implementation",
+    "description": "The single permitted transport-only correction for this Implementation phase was already used on the first (pre_test_requested) fenced reply. A second Markdown-fenced reply occurred on the post_test_requested turn. Per work/SKILL.md's explicit budget rule ('the one and only correction attempt permitted for this Implementation phase, regardless of which turn triggered it'), no second correction request was sent. The Implementation phase is blocked as a result -- not because the Engineer's underlying implementation work was judged deficient (it was never validated), but because the wire-format contract was violated a second time after the phase's single repair budget was already spent.",
+    "budget": 1,
+    "spent_on": "implementation-1.raw.txt (pre_test_requested)",
+    "exhausted_on": "implementation-3.raw.txt (post_test_requested)"
+  }
+}

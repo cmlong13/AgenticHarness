@@ -1,0 +1,151 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LATEFEE",
+  "run_id": "run-20260805-latefee-004",
+  "created_at": "2026-08-05T17:41:43Z",
+  "scope_ref": { "path": "runs/run-20260805-latefee-004/scope.json" },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "demo-repo/docs/late-fee-tier-policy.md literally defines the three tiers as: grace = 0-5 days past due inclusive; standard = 6-30 days past due inclusive; severe = strictly more than 30 days past due (days_past_due > 30).",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/docs/late-fee-tier-policy.md",
+          "start_line": 17,
+          "end_line": 23,
+          "evidence_tier": "comment",
+          "excerpt": "grace: 0 to 5 inclusive; standard: 6 to 30 inclusive; severe: days_past_due > 30; negative is invalid input"
+        }
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "The policy document contains its own explicit notice disclosing that its literal SEVERE-tier boundary wording is one day later than this task's actual required behavior, and that the regression fixture is the binding source of truth for that boundary.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/docs/late-fee-tier-policy.md",
+          "start_line": 3,
+          "end_line": 13,
+          "evidence_tier": "comment"
+        }
+      ]
+    },
+    {
+      "id": "F-3",
+      "claim": "The pre-existing regression fixture demo-repo/tests/unit/test_late_fee_tier_regression.py asserts classify_late_fee_tier(30) == 'severe' and classify_late_fee_tier(29) == 'standard'.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_late_fee_tier_regression.py",
+          "start_line": 20,
+          "end_line": 29,
+          "evidence_tier": "test_assertion",
+          "excerpt": "def test_day_30_is_severe_not_standard(): assert classify_late_fee_tier(30) == 'severe' ... def test_day_29_is_still_standard(): assert classify_late_fee_tier(29) == 'standard'"
+        }
+      ]
+    },
+    {
+      "id": "F-4",
+      "claim": "The policy document requires the interface classify_late_fee_tier(days_past_due: int) -> str, implemented in a new isolated module, returning exactly one of 'grace'/'standard'/'severe', and raising loanflow.errors.ValidationError for a negative days_past_due, explicitly citing classify_credit_score in risk_bands.py as the convention to reuse rather than introducing a new exception type.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/docs/late-fee-tier-policy.md",
+          "start_line": 25,
+          "end_line": 32,
+          "evidence_tier": "comment"
+        }
+      ]
+    },
+    {
+      "id": "F-5",
+      "claim": "The existing repository convention for a boundary-classification function's invalid-input handling (classify_credit_score in risk_bands.py) validates the input range first and raises loanflow.errors.ValidationError before performing threshold comparisons.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 45,
+          "end_line": 54,
+          "evidence_tier": "executable_code",
+          "excerpt": "def classify_credit_score(score: int) -> CreditBucket: if not (300 <= score <= 850): raise ValidationError(...); if score < 580: return CreditBucket.POOR; ..."
+        }
+      ]
+    },
+    {
+      "id": "F-6",
+      "claim": "loanflow.errors.ValidationError is defined as a subclass of LoanflowError(Exception), intended to be raised when input data fails a domain validation rule.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/errors.py",
+          "start_line": 10,
+          "end_line": 15,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-7",
+      "claim": "The existing test convention for boundary-classification functions (test_risk_bands.py) verifies invalid-input rejection with pytest.raises(ValidationError) and verifies tier boundaries via explicit paired boundary-value assertions (e.g. a dict of {input: expected_tier} covering the value just below and just at each threshold).",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 37,
+          "end_line": 51,
+          "evidence_tier": "test_assertion"
+        }
+      ]
+    },
+    {
+      "id": "F-8",
+      "claim": "Neither demo-repo/src/loanflow/late_fee_tier.py nor demo-repo/tests/unit/test_late_fee_tier.py exist yet in the repository (the pre-implementation state described in the regression fixture's own docstring).",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "glob",
+          "query": "demo-repo/src/loanflow/late_fee_tier.py",
+          "scope": "demo-repo/src/loanflow/",
+          "result": "no file matched"
+        },
+        {
+          "method": "glob",
+          "query": "demo-repo/tests/unit/test_late_fee_tier.py",
+          "scope": "demo-repo/tests/unit/",
+          "result": "no file matched"
+        },
+        {
+          "method": "glob",
+          "query": "demo-repo/src/loanflow/*.py",
+          "scope": "demo-repo/src/loanflow/",
+          "result": "22 files listed, none named late_fee_tier.py"
+        }
+      ]
+    },
+    {
+      "id": "F-9",
+      "claim": "No existing source file in demo-repo/src/loanflow references 'days_past_due' or 'late_fee' anywhere, confirming the late-fee-tier classifier is genuinely new and isolated rather than duplicating or overlapping existing logic.",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "grep",
+          "query": "days_past_due|late_fee",
+          "scope": "demo-repo/src",
+          "result": "no matches in any source file"
+        }
+      ]
+    },
+    {
+      "id": "F-10",
+      "claim": "Applying the policy document's literal SEVERE-tier wording (severe only when days_past_due > 30, meaning day 30 falls in 'standard') to day 30 would classify it as 'standard', directly contradicting the regression fixture's binding requirement that day 30 be classified 'severe' -- confirming the disclosed one-day mismatch between the document and the actual required behavior.",
+      "classification": "inferred",
+      "supporting_finding_ids": ["F-1", "F-3"],
+      "reasoning": "F-1 establishes the document's literal boundary rule places day 30 in the 'standard' tier (severe requires days_past_due > 30, i.e. 31+). F-3 establishes the regression fixture requires classify_late_fee_tier(30) == 'severe'. Applying F-1's literal rule to the input value 30 yields 'standard', which is the logical negation of what F-3 requires for that same input, so the two sources are in direct conflict for that specific boundary value."
+    }
+  ],
+  "open_questions": [
+    "The concrete implementation of classify_late_fee_tier (the exact boundary conditions, control flow, and reconciliation of the disclosed one-day document/regression mismatch) and the authoring of demo-repo/tests/unit/test_late_fee_tier.py are implementation-phase work assigned to the Engineer per this task's task_graph (N-2/N-3) -- outside the Architect's research-only role, and not something this report specifies."
+  ]
+}

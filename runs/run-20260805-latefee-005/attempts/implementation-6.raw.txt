@@ -1,0 +1,12 @@
+All four tests pass now, including the previously-failing regression fixture. Requesting finalization evidence for this repair cycle's changed files.
+
+{
+  "response_type": "finalization_evidence_requested",
+  "task_id": "T-LATEFEE2",
+  "run_id": "run-20260805-latefee-005",
+  "changed_files_known": [
+    { "path": "demo-repo/src/loanflow/late_fee_tier.py", "change_type": "modified" },
+    { "path": "demo-repo/tests/unit/test_late_fee_tier.py", "change_type": "modified" }
+  ],
+  "note": "Supply real lines_added/lines_removed per path (and diff_ref if available) for exactly this file set, reflecting this repair cycle's cumulative diff against the pre-run baseline."
+}

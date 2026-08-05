@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LATEFEE2",
+  "run_id": "run-20260805-latefee-005",
+  "created_at": "2026-08-05T17:56:30Z",
+  "scope_ref": {
+    "path": "runs/run-20260805-latefee-005/scope.json"
+  },
+  "implementation_ref": {
+    "path": "runs/run-20260805-latefee-005/implementation-report.repair-1.json"
+  },
+  "attempts": [
+    {
+      "id": "V-3",
+      "command": "python -m pytest tests/unit/test_late_fee_tier.py -v",
+      "exit_code": 0,
+      "classification": "pass",
+      "output_ref": "runs/run-20260805-latefee-005/logs/V-3.log",
+      "retried": false
+    },
+    {
+      "id": "V-4",
+      "command": "python -m pytest tests/unit/test_late_fee_tier_regression.py -v",
+      "exit_code": 0,
+      "classification": "pass",
+      "output_ref": "runs/run-20260805-latefee-005/logs/V-4.log",
+      "retried": false
+    }
+  ],
+  "retry_policy": {
+    "max_retries": 2
+  },
+  "acceptance_criteria_results": [
+    {
+      "criteria_id": "AC-1",
+      "result": "passed",
+      "attempt_refs": [
+        "V-3"
+      ],
+      "evidence_summary": "python -m pytest tests/unit/test_late_fee_tier.py -v (working_directory demo-repo) exited 0 after the repair pass: both test_late_fee_tier_boundaries (now asserting day 30 == 'severe', updated to match the repaired boundary) and test_negative_days_past_due_is_rejected passed, independently confirming the three tiers and the ValidationError raised for negative days_past_due."
+    },
+    {
+      "criteria_id": "AC-2",
+      "result": "passed",
+      "attempt_refs": [
+        "V-4"
+      ],
+      "evidence_summary": "python -m pytest tests/unit/test_late_fee_tier_regression.py -v (working_directory demo-repo) exited 0 after the repair pass: both test_day_30_is_severe_not_standard and test_day_29_is_still_standard passed against the unmodified, out-of-scope regression fixture, independently confirming the repair's comparison-operator change (days_past_due < 30 for standard, narrowing STANDARD to 6-29) resolves the previously observed logic_bug (attempt V-2, first verification pass) without touching the fixture itself."
+    }
+  ],
+  "final_verdict": "pass",
+  "routed_back_to_engineer": {
+    "routed": false
+  }
+}

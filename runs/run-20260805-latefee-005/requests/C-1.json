@@ -1,0 +1,9 @@
+{
+  "task_id": "T-LATEFEE2",
+  "run_id": "run-20260805-latefee-005",
+  "command_id": "C-1",
+  "command": "python -m pytest tests/unit/test_late_fee_tier.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Pre-implementation TDD evidence: confirm the Engineer's rewritten test_late_fee_tier.py (asserting the disclosed literal-policy-document boundary) fails against the current stray on-disk implementation, before any production code change is made this run."
+}

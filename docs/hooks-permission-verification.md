@@ -131,6 +131,70 @@ in the ignored runtime log at `.claude/hooks/logs/skill-enforcement-events.jsonl
 not retroactively change the retained evidence copy, and the retained copy will not
 silently grow as the harness keeps running.
 
+## 4. Live Stop-hook demonstration (`completion-guardrail-live-001`, 2026-08-05)
+
+The limitation stated in §3 above -- `completion_guardrail.py`'s live end-of-turn `Stop`
+trigger not independently observed in this session, for the stated safety reason -- was
+closed by a follow-up demonstration the same day, using a dedicated, disposable fixture run
+instead of this session's own conversation turn (sidestepping the exact risk §3 declined to
+take).
+
+**Fixture:** `runs/completion-guardrail-live-001/` (task_id `DEMO-COMPLETION-GUARDRAIL-1`,
+run_id `completion-guardrail-live-001`). Schema- and semantically-valid `scope.json`,
+`findings.json`, `implementation-report.json`. A genuine, schema-valid,
+`final_verdict: "pass"` `verification-report.json` was written and validated first, then
+moved aside (not deleted) to `verification-report.json.moved-aside`, so the canonical path
+is genuinely missing. `run-summary.json` claims `final_verdict: "pass"`.
+`.completion_claim.json` -- `{"task_id": "DEMO-COMPLETION-GUARDRAIL-1", "run_id":
+"completion-guardrail-live-001"}` -- was written last, matching the exact marker
+`work/SKILL.md`'s Reporting step writes before claiming a run complete.
+
+**Real `Stop` event:** the assistant's turn was ended (no further tool calls) with the
+marker in place, letting Claude Code invoke the actually-registered
+`.claude/hooks/completion_guardrail.py` `Stop` hook -- not a simulated call to its `main()`.
+
+**Exact block message (verbatim, delivered by the Claude Code harness as "Stop hook
+feedback"):**
+```
+[python .claude/hooks/completion_guardrail.py]: completion-guardrail: this run cannot be reported complete:
+- run_id='completion-guardrail-live-001': runs/completion-guardrail-live-001/verification-report.json is missing (deleted or never produced).
+```
+This is check #1 in the hook's own docstring -- the specific missing-verification reason,
+not a generic refusal.
+
+**Turn continued:** the blocked `Stop` event caused Claude Code to re-invoke the assistant
+with the hook's stderr fed back instead of letting the turn end -- direct proof `Stop` was
+denied, not merely that the script would return exit code 2 in isolation.
+
+**Cleanup:** `.completion_claim.json` was renamed to `.completion_claim.json.consumed`
+(content byte-for-byte unchanged) immediately after capturing the evidence above, so no
+future turn in this session is blocked by this fixture. The underlying invalid condition --
+`verification-report.json` absent from its canonical path -- was deliberately left as-is
+rather than "fixed," since restoring it would erase the exact condition this fixture exists
+to demonstrate. Confirmed via `Get-ChildItem runs -Recurse -Force -Filter
+".completion_claim.json"`: no output, i.e. no active marker remains anywhere under `runs/`.
+
+**Full account retained at:**
+`runs/completion-guardrail-live-001/STOP-HOOK-LIVE-BLOCK-EVIDENCE.md` (the primary evidence
+document, written in the continuation turn the block produced) and
+`runs/completion-guardrail-live-001/CLEANUP-NOTE.md` (the cleanup action and its
+justification). The moved-aside genuine-pass report
+(`runs/completion-guardrail-live-001/verification-report.json.moved-aside`) and the consumed
+marker (`runs/completion-guardrail-live-001/.completion_claim.json.consumed`) remain in
+place as retained evidence of exactly what was demonstrated.
+
+**Scope of this proof, stated precisely:** this closes the missing-`verification-report.json`
+branch specifically (check #1 in the hook's docstring) -- the assignment's canonical "delete
+the verification evidence" scenario. It does **not** separately live-prove the hook's other
+four check branches (invalid JSON, non-`pass` verdict, canonical-artifact `run-summary.json`
+identity mismatch, Git-reality conflict against `changed_files`), which remain
+deterministic-only per §3 above. It does not prove this hook, or any of the other two hooks,
+firing inside an actual completed `/work` run -- no `/work` pipeline was executed for this
+demonstration. It does not change the known cooperation boundary: `completion_guardrail.py`
+activates only when `/work` itself writes `.completion_claim.json` before reporting
+completion; an orchestrator turn that never writes that marker is still not caught by this
+hook.
+
 ## What "technically enforced" means here, precisely
 
 All three hooks are real Python scripts executed by Claude Code's own hook runner via
@@ -138,7 +202,8 @@ All three hooks are real Python scripts executed by Claude Code's own hook runne
 and `skill_enforcement.py` were both proven live, in this same session, to actually
 intercept and refuse a real tool call before it ran, with retained evidence of the refusal
 independent of anything this document claims. `completion_guardrail.py`'s blocking logic is
-proven against the real script; its live end-of-turn trigger is inferred from Claude Code's
-documented `Stop`-hook contract (exit code 2 forces continuation) rather than independently
-observed this session, for the safety reason above -- this is stated plainly rather than
-implied to be equally live-verified.
+proven against the real script directly (§3) and, for its missing-verification-evidence
+branch, against a real live `Stop` event too (§4 above); its other four branches remain
+proven only against the real script directly, not independently observed as live `Stop`-event
+blocks -- this distinction is stated plainly rather than implied to be equally live-verified
+across all branches.

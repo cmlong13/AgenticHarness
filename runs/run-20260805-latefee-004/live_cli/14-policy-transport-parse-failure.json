@@ -1,0 +1,10 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260805-latefee-004",
+  "kind": "transport_parse_failure",
+  "payload": {
+    "phase": "implementation",
+    "attempt_ref": "runs/run-20260805-latefee-004/attempts/implementation-1.raw.txt",
+    "description": "Engineer's first pre_test_requested reply was wrapped in a Markdown ```json code fence, violating engineer.md's 'exactly one raw JSON object, no fence, no prose' contract. Content itself was otherwise well-formed."
+  }
+}

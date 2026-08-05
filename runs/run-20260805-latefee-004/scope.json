@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LATEFEE",
+  "run_id": "run-20260805-latefee-004",
+  "created_at": "2026-08-05T17:41:43Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "Controlled harness demonstration: implement a new, isolated late-fee tier classifier per demo-repo/docs/late-fee-tier-policy.md, satisfying both the Engineer's own tests and the pre-existing regression fixture demo-repo/tests/unit/test_late_fee_tier_regression.py. This is a disclosed planted-defect demonstration of the same-run logic-repair loop (see PROJECT_SPEC.md / ASSIGNMENT.md)."
+  },
+  "objective": "Implement loanflow.late_fee_tier.classify_late_fee_tier(days_past_due) -> str in a new, isolated module, per the boundary rules documented in demo-repo/docs/late-fee-tier-policy.md, so it can later be wired into late-fee calculation. This is a controlled, disclosed harness demonstration task (task T-LATEFEE, run run-20260805-latefee-004): docs/late-fee-tier-policy.md's literal wording of the SEVERE-tier boundary deliberately differs, by exactly one day, from this task's actual required behavior, which is independently pinned by the pre-existing regression fixture demo-repo/tests/unit/test_late_fee_tier_regression.py (already present in the repository, out of scope for editing). This mismatch is a disclosed, controlled defect-injection design for this run only, per PROJECT_SPEC.md's planted-defect demonstration requirement -- not a real specification defect for any phase to silently paper over.",
+  "in_scope": [
+    "demo-repo/src/loanflow/late_fee_tier.py",
+    "demo-repo/tests/unit/test_late_fee_tier.py"
+  ],
+  "out_of_scope": [
+    "demo-repo/tests/unit/test_late_fee_tier_regression.py",
+    "demo-repo/docs/late-fee-tier-policy.md",
+    "demo-repo/src/loanflow/risk_bands.py",
+    "demo-repo/src/loanflow/dti.py",
+    "demo-repo/src/loanflow/collateral.py",
+    "demo-repo/src/loanflow/cli.py",
+    "demo-repo/src/loanflow/pipeline.py"
+  ],
+  "constraints": [
+    "Implement exactly per the boundary rules documented in demo-repo/docs/late-fee-tier-policy.md; treat that document as the authoritative implementation spec for AC-1, per the Architect's finding citing it.",
+    "Do not modify demo-repo/tests/unit/test_late_fee_tier_regression.py -- it is a pre-existing, out-of-scope regression fixture for this task.",
+    "Standard library only; no new dependencies.",
+    "Reuse loanflow.errors.ValidationError for invalid input rather than introducing a new exception type.",
+    "This is a controlled, disclosed harness demonstration task (see objective)."
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "classify_late_fee_tier implements the three tiers (grace/standard/severe) exactly as documented in demo-repo/docs/late-fee-tier-policy.md, and raises loanflow.errors.ValidationError for a negative days_past_due, verified by the Engineer's own new unit tests in demo-repo/tests/unit/test_late_fee_tier.py."
+    },
+    {
+      "id": "AC-2",
+      "description": "demo-repo/tests/unit/test_late_fee_tier_regression.py (a pre-existing regression fixture already present in the repository for this task) passes unmodified -- this is this task's binding regression bar for the SEVERE tier boundary, independent of AC-1's cited document."
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-1",
+      "description": "Research the late-fee-tier-policy.md specification and the existing repository convention for boundary-classification functions (risk_bands.py) and for the ValidationError exception type.",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-2",
+      "description": "Implement loanflow.late_fee_tier.classify_late_fee_tier and its own unit test, TDD-first.",
+      "phase": "implementation",
+      "depends_on": [
+        "N-1"
+      ]
+    },
+    {
+      "id": "N-3",
+      "description": "Verify AC-1 (the Engineer's own tests) and AC-2 (the pre-existing regression fixture) independently.",
+      "phase": "verification",
+      "depends_on": [
+        "N-2"
+      ]
+    }
+  ],
+  "status": "approved"
+}

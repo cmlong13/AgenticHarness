@@ -1,0 +1,11 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260805-latefee-004",
+  "kind": "agent_dispatch",
+  "payload": {
+    "phase": "implementation",
+    "subagent_type": "engineer",
+    "agent_id": "af476a2ad9c7eae8c",
+    "dispatch_sequence": 1
+  }
+}

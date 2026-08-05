@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "task_id": "DEMO-COMPLETION-GUARDRAIL-1",
+  "run_id": "completion-guardrail-live-001",
+  "created_at": "2026-08-05T00:00:00Z",
+  "objective_summary": "[FIXTURE] Dedicated demonstration run claiming completion for the live completion-guardrail Stop hook test.",
+  "artifact_refs": {
+    "scope": "runs/completion-guardrail-live-001/scope.json",
+    "findings": "runs/completion-guardrail-live-001/findings.json",
+    "implementation_report": "runs/completion-guardrail-live-001/implementation-report.json",
+    "verification_report": "runs/completion-guardrail-live-001/verification-report.json"
+  },
+  "final_verdict": "pass",
+  "phases_completed": [
+    "discovery",
+    "research",
+    "implementation",
+    "verification"
+  ],
+  "lessons_learned_appended": [],
+  "remaining_risks": [],
+  "follow_up_actions": []
+}

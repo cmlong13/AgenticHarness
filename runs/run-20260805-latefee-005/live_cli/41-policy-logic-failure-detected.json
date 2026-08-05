@@ -1,0 +1,13 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260805-latefee-005",
+  "kind": "logic_failure_detected",
+  "payload": {
+    "verification_report_path": "runs/run-20260805-latefee-005/verification-report.json",
+    "final_verdict": "fail",
+    "failing_attempts": ["V-2"],
+    "failing_acceptance_criteria": ["AC-2"],
+    "classification": "logic_bug",
+    "description": "final_verdict=fail, routed_back_to_engineer.routed=true, and attempt V-2 is classified logic_bug -- all three conditions for a genuine, routable logic bug (per work/SKILL.md's Same-run logic-failure route-back classification rule) are satisfied."
+  }
+}

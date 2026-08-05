@@ -55,6 +55,30 @@ full, honest account of what is and is not live-proven. Full suite: 442 tests pa
 unchanged; `git status --short -- demo-repo` empty).
 **None of this is committed yet either** — check `git status` before assuming otherwise.
 
+**Live Stop-hook demonstration (2026-08-05, same day):** on top of the hooks milestone above,
+the completion-guardrail `Stop` hook's missing-verification-evidence block has now been
+demonstrated live against a real Claude Code `Stop` event, not just via direct script
+invocation. A dedicated fixture run, `runs/completion-guardrail-live-001/` (task
+`DEMO-COMPLETION-GUARDRAIL-1`), wrote a genuine, schema-valid, `final_verdict: "pass"`
+`verification-report.json`, moved it aside to `verification-report.json.moved-aside`, wrote a
+`run-summary.json` claiming `final_verdict: "pass"`, and wrote `.completion_claim.json` — the
+exact marker `work/SKILL.md`'s Reporting step writes. Ending the turn triggered the real,
+registered `Stop` hook, which blocked with the exact reason
+`runs/completion-guardrail-live-001/verification-report.json is missing (deleted or never
+produced)`; the turn continued rather than ending. The completion marker was then safely
+deactivated (renamed to `.completion_claim.json.consumed`, content unchanged) so no future
+turn is blocked by this fixture, and no active `.completion_claim.json` remains anywhere under
+`runs/`. See `runs/completion-guardrail-live-001/STOP-HOOK-LIVE-BLOCK-EVIDENCE.md`,
+`runs/completion-guardrail-live-001/CLEANUP-NOTE.md`, and
+`docs/hooks-permission-verification.md` §4. This proves the missing-verification-evidence
+branch specifically; the hook's other four check branches (invalid JSON, non-`pass` verdict,
+canonical-artifact identity mismatch, Git-reality conflict) remain deterministic-only, as
+before. The cooperation boundary is unchanged: this hook activates only when `/work` itself
+writes `.completion_claim.json` — no new live `/work` run was performed to produce this
+demonstration, and none of the other hooks-milestone open items (ORCH-* identity live proof,
+route-back live proof, a full live `/work` pipeline exercising these hooks) are affected by
+it.
+
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
 followed. Implementation should track this spec; if the two diverge, update this file first.
@@ -244,12 +268,19 @@ MCP server in favor of curl-based skills for reliability/debuggability).
   `work/SKILL.md`'s own Reporting step) unless `verification-report.json` exists, is valid,
   schema/semantically valid, `final_verdict: "pass"`, every canonical artifact
   `run-summary.json` cites exists and identity-matches, and the implementation report's
-  `changed_files` are genuinely reflected in `git status --porcelain`. **Deterministically
+  `changed_files` are genuinely reflected in `git status --porcelain`. **Live-demonstrated**
+  (2026-08-05, `runs/completion-guardrail-live-001/`): a real Claude Code `Stop` event fired
+  against a fixture with a genuine, previously-passing `verification-report.json` moved aside,
+  and the real, registered hook blocked the turn with the exact reason
+  `runs/completion-guardrail-live-001/verification-report.json is missing (deleted or never
+  produced)` — the turn continued rather than ending; see
+  `runs/completion-guardrail-live-001/STOP-HOOK-LIVE-BLOCK-EVIDENCE.md` and
+  `docs/hooks-permission-verification.md` §4. This proves the missing-verification-evidence
+  branch specifically; the hook's other four failure branches (invalid JSON, non-`pass`
+  verdict, canonical-artifact mismatch, Git-reality conflict) remain **deterministically
   verified only** (13 tests, `tests/test_hooks.py::TestCompletionGuardrail`, invoking the real
-  script's `main()` directly against crafted fixtures) — its live end-of-turn `Stop` trigger has
-  not been exercised against a real conversation turn, for the documented safety reason in
-  `docs/hooks-permission-verification.md` (risk of leaving a bad marker in place at the end of
-  this very session). Depends on `/work` cooperatively writing `.completion_claim.json`; an
+  script's `main()` directly against crafted fixtures), not separately demonstrated as live
+  `Stop`-event blocks. Depends on `/work` cooperatively writing `.completion_claim.json`; an
   orchestrator turn that never writes that marker is not caught by this hook — a known
   cooperation boundary, not a claim of unconditional enforcement (see §10).
 - Post-agent cost hook — extracts per-agent token/cost usage so a full pipeline run's total cost
@@ -290,10 +321,11 @@ MCP server in favor of curl-based skills for reliability/debuggability).
 - Code-craftsmanship skill, test-runner skill
 - Orchestrator skill + `/work` (free-form prompt mode only)
 - Pre-dispatch-check hook + completion-guardrail hook — **COMPLETE** (2026-08-05): implemented,
-  deterministically tested; pre-dispatch-check additionally live-verified via real refused
-  `Agent` tool calls, completion-guardrail live-verified only via direct script invocation, not
-  yet a real live `Stop`-event block (see §10 "Hooks and same-run route-back milestone
-  (2026-08-05)")
+  deterministically tested; pre-dispatch-check live-verified via real refused `Agent` tool
+  calls; completion-guardrail live-verified via a real `Stop`-event block against the
+  missing-verification-evidence branch (`runs/completion-guardrail-live-001/`, same day) — its
+  other four failure branches remain deterministic-only (see §10 "Hooks and same-run
+  route-back milestone (2026-08-05)")
 - `lessons-learned.md` + basic memory directory
 - Checkpoint/resume for the pipeline
 - GitHub access via `gh`/`git` CLI (real commits + independent push verification via
@@ -439,7 +471,10 @@ AgenticHarness/
 9. Checkpoint, memory loop, pre-dispatch hook, and completion guardrail. **Partially complete**
    (2026-08-05): pre-dispatch-check, skill-enforcement, and completion-guardrail hooks are
    implemented, registered in `.claude/settings.json`, and tested — see §10 "Hooks and same-run
-   route-back milestone (2026-08-05)". Checkpoint/resume and the memory loop
+   route-back milestone (2026-08-05)". The completion-guardrail hook's
+   missing-verification-evidence branch is now also live-demonstrated against a real `Stop`
+   event (`runs/completion-guardrail-live-001/`); its other branches remain
+   deterministic-only. Checkpoint/resume and the memory loop
    (`lessons-learned.md`, persistent memory directory) remain **not started**. The post-agent
    cost/token-tracking hook remains **not started**.
 10. Independent GitHub push-verification path. **Not started** — no commit/push has been
@@ -515,13 +550,26 @@ Demonstrated live, on a repo with ≥50 files:
       repair cycle, while infrastructure-flake and environment failures are confirmed to never
       route back. **Not yet demonstrated by an actual planted-bug live `/work` run** — no live
       run has exercised this path yet (see §10).
-- [ ] Completion-guardrail hook demonstrably blocks a run where verification evidence is
-      deleted. **Partial** (2026-08-05): `completion_guardrail.py` deterministically blocks
-      exactly this scenario when its `main()` is invoked directly against a crafted fixture
-      (`tests/test_hooks.py::TestCompletionGuardrail::test_deleted_verification_report_after_prior_pass_blocks`)
-      — the assignment's canonical scenario, reproduced honestly. **Not yet demonstrated as a
-      live `Stop`-event block** in a real Claude Code conversation turn (see §10 for why, and
-      the cooperation-boundary caveat).
+- [x] Completion-guardrail hook demonstrably blocks a run where verification evidence is
+      deleted. **Live-demonstrated** (2026-08-05): a dedicated fixture run,
+      `runs/completion-guardrail-live-001/` (task `DEMO-COMPLETION-GUARDRAIL-1`), wrote a
+      genuine, schema-valid, `final_verdict: "pass"` `verification-report.json`, then moved it
+      aside to make the canonical path missing (the assignment's canonical "delete the
+      verification evidence" scenario), wrote a `run-summary.json` claiming
+      `final_verdict: "pass"` and a `.completion_claim.json` marker, and ended the turn. The
+      real, registered Claude Code `Stop` hook fired and blocked with the exact reason
+      `runs/completion-guardrail-live-001/verification-report.json is missing (deleted or never
+      produced)`; the turn continued rather than ending. See
+      `runs/completion-guardrail-live-001/STOP-HOOK-LIVE-BLOCK-EVIDENCE.md`,
+      `runs/completion-guardrail-live-001/CLEANUP-NOTE.md`, and
+      `docs/hooks-permission-verification.md` §4. Also still backed by deterministic coverage
+      (`tests/test_hooks.py::TestCompletionGuardrail::test_deleted_verification_report_after_prior_pass_blocks`).
+      Two things this does **not** prove: (1) the hook's other four failure branches (invalid
+      JSON, non-`pass` verdict, canonical-artifact mismatch, Git-reality conflict) remain
+      deterministic-only, not separately live-demonstrated; (2) this was a dedicated,
+      hand-built fixture, not a block encountered inside a completed live `/work` pipeline run
+      — the known cooperation boundary stands: this hook activates only when `/work` itself
+      writes `.completion_claim.json` (see §10).
 - [ ] Orchestrator catches a simulated false "pushed" claim via `git ls-remote`.
 - [ ] Obsidian vault receives a run summary; `lessons-learned.md` gains ≤5 bullets; a second run
       visibly uses a lesson from the first.
@@ -1244,6 +1292,12 @@ requiring correction:
   `.completion_claim.json` marker in place at the end of this session, which would then
   block this very report from ending; `docs/hooks-permission-verification.md` states this
   distinction plainly rather than implying equal live proof for all three hooks.
+  **Update, same day:** this specific gap — no live `Stop`-event proof — was closed by a
+  follow-up demonstration using a dedicated, disposable fixture run rather than this
+  session's own conversation turn, sidestepping the risk above. See "Live Stop-hook
+  demonstration (`completion-guardrail-live-001`, 2026-08-05)" below for the full account;
+  the missing-verification-evidence branch specifically is now live-proven, the other four
+  branches remain deterministic-only as described above.
 - **Known cooperation boundary, stated honestly, not glossed over**:
   `completion_guardrail.py` activates only when `/work` itself writes
   `.completion_claim.json` before reporting completion. An orchestrator turn that skips
@@ -1308,6 +1362,75 @@ and `docs/hooks-permission-verification.md`'s "Runtime log vs. retained evidence
 for the full account. No route-back behavior, hook behavior, schemas, agent contracts, or
 historical `runs/run-*` evidence were touched by this correction.
 
+#### Live Stop-hook demonstration (`completion-guardrail-live-001`, 2026-08-05)
+
+A follow-on demonstration, same day, closing the one item the hooks milestone above
+explicitly left open: whether `completion_guardrail.py` actually blocks a real Claude Code
+`Stop` event, not just a direct `main()` invocation against crafted fixtures. This does
+**not** constitute a new live `/work` run — it is a dedicated, disposable fixture built and
+inspected directly, exactly as `run-20260804-riskband-003`'s and prior boundary-test
+evidence were, to exercise the hook's real end-of-turn trigger without risking this
+session's own conversation turn (the exact risk the hooks-milestone text above declined to
+take).
+
+- **Fixture.** `runs/completion-guardrail-live-001/`, task_id `DEMO-COMPLETION-GUARDRAIL-1`,
+  run_id `completion-guardrail-live-001`: schema- and semantically-valid `scope.json`,
+  `findings.json`, `implementation-report.json`; a genuine, schema-valid,
+  `final_verdict: "pass"` `verification-report.json` was written and validated first, then
+  moved aside (not deleted) to `verification-report.json.moved-aside`, so the canonical path
+  `runs/completion-guardrail-live-001/verification-report.json` is genuinely missing;
+  `run-summary.json` claims `final_verdict: "pass"`; `.completion_claim.json` was written
+  last, matching the exact marker `work/SKILL.md`'s Reporting step writes.
+- **Real `Stop` event.** The assistant's turn was ended (no further tool calls) with the
+  marker in place, letting Claude Code invoke the actually-registered `.claude/settings.json`
+  `Stop` hook — not a simulated call to `completion_guardrail.py`'s `main()`. The hook fired
+  automatically, per the harness's own `Stop`-hook contract.
+- **Exact block message (verbatim, delivered by the Claude Code harness as "Stop hook
+  feedback"):**
+  ```
+  [python .claude/hooks/completion_guardrail.py]: completion-guardrail: this run cannot be reported complete:
+  - run_id='completion-guardrail-live-001': runs/completion-guardrail-live-001/verification-report.json is missing (deleted or never produced).
+  ```
+  This is check #1 in the hook's own docstring — the specific missing-verification reason,
+  not a generic refusal.
+- **Turn continued.** The blocked `Stop` event caused Claude Code to re-invoke the assistant
+  with the hook's stderr fed back instead of letting the turn end — direct proof `Stop` was
+  denied, not merely that the script would return exit code 2 in isolation.
+- **Cleanup.** `.completion_claim.json` was renamed to `.completion_claim.json.consumed`
+  (content byte-for-byte unchanged) immediately after capturing the evidence above, so no
+  future turn in this session (or later) is blocked by this fixture. The underlying invalid
+  condition — `verification-report.json` absent from its canonical path — was deliberately
+  left as-is rather than "fixed," since restoring it would erase the exact condition this
+  fixture exists to demonstrate. Confirmed via `Get-ChildItem runs -Recurse -Force -Filter
+  ".completion_claim.json"`: no output, i.e. no active marker remains anywhere under `runs/`.
+- **Full account retained at:** `runs/completion-guardrail-live-001/STOP-HOOK-LIVE-BLOCK-EVIDENCE.md`
+  and `runs/completion-guardrail-live-001/CLEANUP-NOTE.md`; cross-referenced from
+  `docs/hooks-permission-verification.md` §4.
+
+**What this does and does not prove:**
+- Proves: the real, registered `Stop` hook genuinely intercepts and blocks a real Claude Code
+  end-of-turn event on a false/unverifiable completion claim, specifically for the
+  missing-`verification-report.json` branch — the assignment's canonical "delete the
+  verification evidence" scenario.
+- Does not prove: the hook's other four check branches (invalid JSON, non-`pass` verdict,
+  canonical-artifact `run-summary.json` mismatch, Git-reality conflict against
+  `changed_files`) firing as live `Stop`-event blocks — those remain deterministic-only
+  (`tests/test_hooks.py::TestCompletionGuardrail`), exactly as before this demonstration.
+- Does not prove: this hook (or the rest of the hooks/route-back milestone — ORCH-* identity
+  enforcement, same-run logic-bug route-back, skill-enforcement's live behavior inside a
+  real pipeline) firing inside an actual completed `/work` run. No `/work` pipeline was run
+  for this demonstration, and none of `run-20260804-riskband-003`'s or the hooks milestone's
+  other open items are closed by it.
+- Does not change: the known cooperation boundary — `completion_guardrail.py` activates only
+  when `/work` itself writes `.completion_claim.json` before reporting completion; an
+  orchestrator turn that never writes that marker is still not caught by this hook. This
+  demonstration proves the hook blocks *when the marker exists and evidence is missing*; it
+  says nothing about whether the marker is always written.
+- Does not touch: any historical `runs/run-*` evidence (`run-20260803-riskband-001`,
+  `run-20260804-riskband-002`, `run-20260804-riskband-003`, the hooks-diagnostic and
+  boundary-test fixtures) — this fixture is entirely self-contained under its own
+  `runs/completion-guardrail-live-001/` directory.
+
 #### Remaining work
 
 1. ~~Build `/work` free-form mode as a main-session command/skill.~~ **Entry point and
@@ -1351,9 +1474,14 @@ historical `runs/run-*` evidence were touched by this correction.
 8. Implement same-run logic-failure route-back, ORCH-* command identity enforcement, and the
    pre-dispatch-check/skill-enforcement/completion-guardrail hooks. **Implemented and
    deterministically verified** (2026-08-05) — see "Hooks and same-run route-back milestone
-   (2026-08-05)" above for the full account. **Not yet exercised by a live `/work` run**:
-   this remains the next thing a new live run would need to prove, including whether a
-   planted logic bug is actually routed back and repaired end-to-end.
+   (2026-08-05)" above for the full account. The completion-guardrail hook's
+   missing-verification-evidence branch is additionally now **live-demonstrated** against a
+   real `Stop` event via a dedicated fixture (`runs/completion-guardrail-live-001/`; see "Live
+   Stop-hook demonstration" above) — but that fixture was not a live `/work` run. **Still not
+   exercised by a live `/work` run**: this remains the next thing a new live run would need to
+   prove, including whether a planted logic bug is actually routed back and repaired
+   end-to-end, and whether ORCH-* identity checks and the other hooks' branches fire as
+   expected inside a real pipeline.
 
 Populating the 50+ file demo repository (formerly item 1 of this list) is **COMPLETE** — see
 "Demo repository (`demo-repo/loanflow`)" below. Items 1–7 above are now all complete, closing
@@ -1452,9 +1580,12 @@ completed" in §10 for exactly what this milestone did and did not close.
 **Update (2026-08-05):** three of the four hooks named in (2) above are now implemented and
 tested (pre-dispatch-check, skill-enforcement, completion-guardrail), along with the
 same-run logic-failure route-back loop and ORCH-* identity enforcement — see §10 "Hooks and
-same-run route-back milestone (2026-08-05)". Checkpoint/resume, the memory loop, the
-post-agent cost hook, and a live demonstration of route-back/hooks against a real `/work`
-run all remain open.
+same-run route-back milestone (2026-08-05)". The completion-guardrail hook's
+missing-verification-evidence branch is now also live-demonstrated against a real `Stop`
+event, via a dedicated fixture rather than a live `/work` run — see §10 "Live Stop-hook
+demonstration (`completion-guardrail-live-001`, 2026-08-05)". Checkpoint/resume, the memory
+loop, the post-agent cost hook, and a live demonstration of route-back/hooks against a real
+`/work` run all remain open.
 
 ### Eight-day MVP planning target
 
@@ -1490,8 +1621,11 @@ documentation may require additional time after the working MVP closes.
 7. Checkpoint, memory, and guardrail hooks. **Partially complete** (2026-08-05):
    pre-dispatch-check, skill-enforcement, and completion-guardrail hooks are implemented,
    configured, and tested (see §10 "Hooks and same-run route-back milestone (2026-08-05)")
-   — live-verified for the two `PreToolUse` hooks, deterministic-only for the `Stop` hook.
-   Checkpoint/resume, the memory loop, and the post-agent cost hook remain **not started.**
+   — live-verified for the two `PreToolUse` hooks; the `Stop` hook is now live-verified too,
+   for its missing-verification-evidence branch specifically
+   (`runs/completion-guardrail-live-001/`, see §10 "Live Stop-hook demonstration") — its other
+   four failure branches remain deterministic-only. Checkpoint/resume, the memory loop, and
+   the post-agent cost hook remain **not started.**
 8. ~~First complete evidence-backed pipeline run.~~ **COMPLETE** — `run-20260804-riskband-003`,
    `final_verdict: "pass"`. See §10 "Live evidence (`run-20260804-riskband-003`) — completed."
 9. Deferred integrations and final assignment demonstrations (includes `github/`/`jira/` skill

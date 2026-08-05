@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LATEFEE",
+  "run_id": "run-20260805-latefee-004",
+  "created_at": "2026-08-05T17:41:43Z",
+  "objective_summary": "BLOCKED, not a completed pipeline -- retained honestly as evidence of a real transport-repair budget being enforced rather than weakened. Discovery and Research completed cleanly: scope.json (a controlled, disclosed planted-defect demonstration task for the same-run logic-repair loop) and findings.json (real, live-dispatched Architect, agent a28379591290cca4f, 7 found + 2 honest not_found + 1 inferred, clean unfenced JSON on the first attempt) were both validated and promoted. Implementation was dispatched to a real Engineer (agent af476a2ad9c7eae8c): its first reply (pre_test_requested) was Markdown-fenced, corrected via the one permitted transport-only correction to the same agent id (content unchanged, confirmed byte-identical apart from the fence) -- exercising the Engineer transport-repair protocol live and successfully. The real pre-implementation test command (C-1, python -m pytest tests/unit/test_late_fee_tier.py -v via the real forked test-runner Skill) returned the expected exit_code 2 (ModuleNotFoundError for the not-yet-created module), identity-checked and matched. The Engineer was resumed with that real result and implemented loanflow.late_fee_tier.py plus its own test file, then replied with post_test_requested -- but this second reply was ALSO Markdown-fenced. Per work/SKILL.md's explicit rule that the transport-repair budget is exactly one correction per phase, shared across all staged turns (not one per turn), and the budget had already been spent on the first fenced reply, no second correction was sent. The Implementation phase is therefore blocked (state: implementation_blocked) purely on this wire-format-contract violation, not on any judgment about the Engineer's underlying work, which was never validated as a canonical artifact. Independently confirmed via git status: the Engineer had in fact written demo-repo/src/loanflow/late_fee_tier.py and demo-repo/tests/unit/test_late_fee_tier.py -- and, notably, its implementation used days_past_due < 30 for the STANDARD/SEVERE split, i.e. it independently resolved this run's disclosed policy-document/regression-fixture boundary mismatch in favor of the actually-required behavior BEFORE writing any code (citing the regression fixture explicitly in its own module docstring) -- so even absent the transport-budget exhaustion, this specific fixture design would not have produced a routable logic_bug verdict at Verification with this real Engineer's actual behavior. Neither Verification nor the same-run logic-repair loop was reached in this run. No implementation-report.json or verification-report.json was ever promoted or fabricated.",
+  "artifact_refs": {
+    "scope": "runs/run-20260805-latefee-004/scope.json",
+    "findings": "runs/run-20260805-latefee-004/findings.json"
+  },
+  "phases_completed": [
+    "discovery",
+    "research"
+  ],
+  "remaining_risks": [
+    "The real Engineer subagent produced two independent Markdown-fenced replies within a single Implementation phase (pre_test_requested and post_test_requested), exhausting the one-correction-per-phase transport-repair budget on the first and blocking on the second -- this budget may be too narrow for real multi-turn Engineer sessions if fencing recurs across turns, but work/SKILL.md's explicit instruction is not to weaken it, so this run honored that rather than silently allowing a second correction.",
+    "This run's planted-defect fixture design (a disclosed conflict between a policy document and a pre-existing regression fixture, both named explicitly in scope.json's acceptance criteria) was resolved correctly by the real Engineer before any code was written, because the Engineer proactively read the full findings.json (including an Architect-authored inferred finding naming the exact conflict) and the referenced regression fixture file -- demonstrating the cardinal 'verify before building' principle working as intended, but defeating this specific fixture's ability to produce a genuine routable logic_bug with this real agent's actual behavior."
+  ],
+  "follow_up_actions": [
+    "Attempt a new run (new run_id) reusing the same isolated fixture area, with a redesigned task that transparently and explicitly directs the Engineer to implement the policy document's literal (disclosed, known-incorrect) boundary rather than relying on the Engineer independently discovering and resolving a hidden conflict -- since this run's evidence shows a real, capable Engineer reliably discovers and resolves such conflicts on its own.",
+    "Consider whether the Implementation-phase transport-repair budget should remain exactly one correction shared across all staged turns, given this run's real evidence of a second fenced reply on a later turn after the first turn's fence had already consumed the budget -- no change was made in this run; this is a recommendation for a future milestone, not an in-run repair."
+  ],
+  "duration_seconds": 900,
+  "final_verdict": "blocked"
+}

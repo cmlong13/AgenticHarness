@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0",
+  "task_id": "DEMO-COMPLETION-GUARDRAIL-1",
+  "run_id": "completion-guardrail-live-001",
+  "created_at": "2026-08-05T00:00:00Z",
+  "scope_ref": {
+    "path": "runs/completion-guardrail-live-001/scope.json"
+  },
+  "findings_ref": {
+    "path": "runs/completion-guardrail-live-001/findings.json",
+    "finding_ids": [
+      "F-1"
+    ]
+  },
+  "minimal_change_rung": 2,
+  "minimal_change_rationale": "Fixture only: reuses the existing classify_dti() pattern; no real edit was made to demo-repo for this demonstration.",
+  "changed_files": [
+    {
+      "path": "demo-repo/src/loanflow/risk_bands.py",
+      "change_type": "modified",
+      "lines_added": 0,
+      "lines_removed": 0
+    }
+  ],
+  "diff_ref": "runs/completion-guardrail-live-001/diff.patch",
+  "commands": [
+    {
+      "id": "C-1",
+      "stage": "pre_implementation",
+      "command": "pytest demo-repo/tests/unit/test_risk_bands.py -k boundary",
+      "exit_code": 1,
+      "output_ref": "runs/completion-guardrail-live-001/cmd-1.log"
+    },
+    {
+      "id": "C-2",
+      "stage": "post_implementation",
+      "command": "pytest demo-repo/tests/unit/test_risk_bands.py -k boundary",
+      "exit_code": 0,
+      "output_ref": "runs/completion-guardrail-live-001/cmd-2.log"
+    }
+  ],
+  "test_first_evidence": {
+    "pre_implementation_command_id": "C-1",
+    "post_implementation_command_id": "C-2"
+  },
+  "tests": [
+    {
+      "test_file": "demo-repo/tests/unit/test_risk_bands.py",
+      "test_name": "test_dti_boundary_fixture_demo",
+      "status": "added"
+    }
+  ],
+  "dependency_changes": [],
+  "status": "ready_for_verification"
+}

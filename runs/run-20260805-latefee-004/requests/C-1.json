@@ -1,0 +1,9 @@
+{
+  "task_id": "T-LATEFEE",
+  "run_id": "run-20260805-latefee-004",
+  "command_id": "C-1",
+  "command": "python -m pytest tests/unit/test_late_fee_tier.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Pre-implementation TDD evidence: confirm the Engineer's newly added test_late_fee_tier.py fails because loanflow.late_fee_tier does not exist yet, before any production code is written."
+}

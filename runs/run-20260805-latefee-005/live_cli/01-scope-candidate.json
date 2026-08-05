@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LATEFEE2",
+  "run_id": "run-20260805-latefee-005",
+  "created_at": "2026-08-05T17:56:30Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "Controlled harness demonstration, attempt 2 (see run-20260805-latefee-004, closed 'blocked' on an unrelated transport-repair budget issue): implement loanflow.late_fee_tier.classify_late_fee_tier. This attempt explicitly and transparently directs the first implementation pass to follow demo-repo/docs/late-fee-tier-policy.md's literal wording, which is disclosed to conflict with the pre-existing regression fixture demo-repo/tests/unit/test_late_fee_tier_regression.py -- so Verification can genuinely fail and the same-run logic-repair loop can be exercised for real, per PROJECT_SPEC.md / ASSIGNMENT.md."
+  },
+  "objective": "Implement loanflow.late_fee_tier.classify_late_fee_tier(days_past_due) -> str in a new, isolated module. This is a controlled, fully disclosed harness demonstration task (task T-LATEFEE2, run run-20260805-latefee-005) of the same-run Quality-Engineer logic-failure route-back loop. Note: demo-repo/src/loanflow/late_fee_tier.py and demo-repo/tests/unit/test_late_fee_tier.py currently contain stray, non-canonical content from a different, earlier run (run-20260805-latefee-004) that was blocked before its implementation report was ever validated or promoted -- treat neither file's current content as authoritative; start this implementation fresh, per this scope, overwriting both as needed.",
+  "in_scope": [
+    "demo-repo/src/loanflow/late_fee_tier.py",
+    "demo-repo/tests/unit/test_late_fee_tier.py"
+  ],
+  "out_of_scope": [
+    "demo-repo/tests/unit/test_late_fee_tier_regression.py",
+    "demo-repo/docs/late-fee-tier-policy.md",
+    "demo-repo/src/loanflow/risk_bands.py",
+    "demo-repo/src/loanflow/dti.py",
+    "demo-repo/src/loanflow/collateral.py",
+    "demo-repo/src/loanflow/cli.py",
+    "demo-repo/src/loanflow/pipeline.py"
+  ],
+  "constraints": [
+    "This is a controlled, fully disclosed harness demonstration task testing the same-run Quality-Engineer logic-failure route-back loop (see PROJECT_SPEC.md / ASSIGNMENT.md). For this FIRST implementation pass, implement the SEVERE tier boundary using EXACTLY the literal wording of demo-repo/docs/late-fee-tier-policy.md (severe only when days_past_due > 30, i.e. day 30 itself is 'standard') -- do this even though demo-repo/tests/unit/test_late_fee_tier_regression.py (a pre-existing, out-of-scope regression fixture) asserts the opposite for day 30. This is intentional and disclosed: this task is deliberately designed so this first pass does not satisfy AC-2, so Verification genuinely fails and the harness's same-run logic-repair loop can be exercised for real. You should expect to be resumed for a repair turn after Verification reports this; that is the plan, not a mistake to avoid pre-emptively by implementing AC-2's behavior now.",
+    "Do not modify demo-repo/tests/unit/test_late_fee_tier_regression.py -- it is a pre-existing, out-of-scope regression fixture for this task, and its assertions define AC-2's real, unweakened bar for the eventual repair pass.",
+    "Standard library only; no new dependencies.",
+    "Reuse loanflow.errors.ValidationError for invalid input rather than introducing a new exception type."
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "classify_late_fee_tier implements the three tiers (grace/standard/severe) exactly as documented in demo-repo/docs/late-fee-tier-policy.md (grace 0-5 inclusive, standard 6-30 inclusive, severe strictly more than 30), and raises loanflow.errors.ValidationError for a negative days_past_due, verified by the Engineer's own new unit tests in demo-repo/tests/unit/test_late_fee_tier.py. This criterion must pass on the first implementation pass."
+    },
+    {
+      "id": "AC-2",
+      "description": "demo-repo/tests/unit/test_late_fee_tier_regression.py (a pre-existing regression fixture already present in the repository for this task) passes unmodified. Per this task's constraints, this criterion is deliberately NOT expected to pass on the first implementation pass -- it is expected to be satisfied only after a same-run repair cycle following a genuine Verification failure."
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-1",
+      "description": "Research the late-fee-tier-policy.md specification, the pre-existing regression fixture, and the existing repository convention for boundary-classification functions (risk_bands.py) and for the ValidationError exception type.",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-2",
+      "description": "Implement loanflow.late_fee_tier.classify_late_fee_tier and its own unit test, TDD-first, per the disclosed literal-document directive in constraints.",
+      "phase": "implementation",
+      "depends_on": ["N-1"]
+    },
+    {
+      "id": "N-3",
+      "description": "Verify AC-1 (the Engineer's own tests) and AC-2 (the pre-existing regression fixture) independently; expect AC-2 to fail on this first pass and trigger the same-run logic-repair loop.",
+      "phase": "verification",
+      "depends_on": ["N-2"]
+    }
+  ],
+  "status": "approved"
+}
