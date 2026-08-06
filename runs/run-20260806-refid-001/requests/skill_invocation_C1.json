@@ -1,0 +1,12 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260806-refid-001",
+  "kind": "skill_invocation",
+  "payload": {
+    "phase": "implementation",
+    "command_id": "C-1",
+    "skill": "test-runner",
+    "request_path": "runs/run-20260806-refid-001/requests/C-1.json",
+    "invoked_via": "Skill tool"
+  }
+}

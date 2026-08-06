@@ -1,0 +1,21 @@
+```json
+{
+  "response_type": "pre_test_requested",
+  "task_id": "T-REFID",
+  "run_id": "run-20260806-refid-001",
+  "test_created": {
+    "test_file": "demo-repo/tests/unit/test_applicant_validation.py",
+    "test_name": "test_invalid_reference_id_formats_are_rejected[AP-000123\\n]",
+    "status": "modified"
+  },
+  "requested_command": {
+    "id": "C-1",
+    "command": "python -m pytest tests/unit/test_applicant_validation.py -v",
+    "working_directory": "demo-repo",
+    "expected_outcome": "fail",
+    "expected_failure_reason": "The parametrized case 'AP-000123\\n' does not raise ValidationError because the compiled pattern's bare '$' anchor matches immediately before a trailing newline (Python re semantics without re.MULTILINE), so validate_reference_id currently returns the string instead of raising, causing pytest.raises(ValidationError) to fail."
+  },
+  "findings_relied_on": ["F-1"],
+  "minimal_change_rung_plan": 2
+}
+```

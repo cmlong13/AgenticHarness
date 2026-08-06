@@ -1,0 +1,9 @@
+{
+  "task_id": "T-REFID",
+  "run_id": "run-20260806-refid-001",
+  "command_id": "C-2",
+  "command": "python -m pytest tests/unit/test_applicant_validation.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Post-implementation check: confirm the regex anchor fix ('$' -> '\\Z') makes the previously-failing trailing-newline case raise ValidationError while all other cases still pass."
+}

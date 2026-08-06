@@ -24,10 +24,12 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
 from harness.evidence import (
+    PHASE_ORDER,
     load_json,
     validate_against_schema,
     validate_findings_semantics,
@@ -35,9 +37,48 @@ from harness.evidence import (
     validate_verification_report_semantics,
 )
 
-from . import discovery, evidence_io, paths
+from . import checkpoint, discovery, evidence_io, paths
 from .adapters import AgentAdapter, DiscoveryAdapter, TestRunnerAdapter
 from .state import FINAL_VERDICT_BY_STATE, PHASE_BY_STATE, State
+
+# checkpoint.json's artifact_refs is phase-keyed ("discovery"/"research"/...); a RunResult's
+# artifact_refs is artifact-name-keyed ("scope"/"findings"/...), matching run-summary.json.
+# The two conventions predate each other's existence and are kept distinct on purpose --
+# run-summary.json's keys name the artifact, checkpoint.json's keys name the phase that
+# produced it -- so every checkpoint write remaps through this table rather than guessing.
+_PHASE_TO_SUMMARY_KEY = {
+    "discovery": "scope",
+    "research": "findings",
+    "implementation": "implementation_report",
+    "verification": "verification_report",
+}
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _checkpoint_artifact_refs(phases_completed: list[str], artifact_refs: dict) -> dict:
+    return {
+        phase: artifact_refs[key]
+        for phase, key in _PHASE_TO_SUMMARY_KEY.items()
+        if phase in phases_completed and key in artifact_refs
+    }
+
+
+def _checkpoint_progress(run_directory: Path, task_id: str, run_id: str, target_repo_path: str, phases_completed: list, artifact_refs: dict) -> None:
+    """Called after a phase's canonical artifact is retained, validated, and promoted,
+    and the run is continuing -- never called after Verification, whose outcome is
+    always terminal and is instead handled by _finalize below."""
+    checkpoint.record_phase_progress(
+        run_directory,
+        task_id=task_id,
+        run_id=run_id,
+        target_repo_path=target_repo_path,
+        updated_at=_now_iso(),
+        completed_phases=list(phases_completed),
+        artifact_refs=_checkpoint_artifact_refs(phases_completed, artifact_refs),
+    )
 
 SCHEMA_DIR = Path(__file__).resolve().parents[2] / "harness" / "schemas"
 
@@ -625,6 +666,9 @@ def _finalize(
     *,
     reason: str,
     duration_seconds: float,
+    target_repo_path: str,
+    phases_reused: list | None = None,
+    phases_restarted: list | None = None,
 ) -> RunResult:
     artifact_refs = dict(artifact_refs)
     if "scope" not in artifact_refs:
@@ -661,8 +705,56 @@ def _finalize(
         ),
         "duration_seconds": duration_seconds,
     }
+    if phases_reused:
+        summary["phases_reused"] = list(phases_reused)
+    if phases_restarted:
+        summary["phases_restarted"] = list(phases_restarted)
 
     canonical_path = evidence_io.write_run_summary(run_directory, summary)
+
+    # Every terminal outcome updates checkpoint.json to reflect reality -- "complete" on
+    # a genuine pass, "failed" for anything else -- but only if a checkpoint already
+    # exists for this run (i.e. Discovery got far enough to be checkpointed at all; a
+    # Discovery-refused/invalid run never had forward progress worth checkpointing).
+    if state == State.COMPLETED:
+        checkpoint.record_completion(
+            run_directory, task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
+            updated_at=_now_iso(), artifact_refs=_checkpoint_artifact_refs(phases_completed, artifact_refs),
+        )
+    elif checkpoint.checkpoint_path(run_directory).exists():
+        # phases_completed (run-summary's sense) can include the very phase whose
+        # non-passing outcome is why the run is terminal -- e.g. Verification produced a
+        # perfectly valid verification-report.json with final_verdict "fail"/
+        # "inconclusive", so the *phase itself* ran to completion even though the *run*
+        # did not succeed. Checkpoint's completed_phases means something stricter --
+        # "safe to reuse without redoing" -- so the phase PHASE_BY_STATE associates with
+        # this terminal state is excluded here, keeping current_phase (that same phase)
+        # correctly absent from completed_phases per checkpoint's own invariant.
+        terminal_phase = PHASE_BY_STATE.get(state)
+        checkpoint_completed_phases = [p for p in phases_completed if p != terminal_phase]
+        try:
+            checkpoint.record_terminal_failure(
+                run_directory, task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
+                updated_at=_now_iso(), completed_phases=checkpoint_completed_phases,
+                artifact_refs=_checkpoint_artifact_refs(checkpoint_completed_phases, artifact_refs),
+                reason=reason or state.value,
+            )
+        except checkpoint.CheckpointError as exc:
+            # Only reachable from a state raised deep inside the same-run logic-repair
+            # loop (_handle_verification_failure), which revisits Implementation/
+            # Verification a second time within one process and one run -- something
+            # checkpoint.json's simple, strictly-linear phase model was never designed
+            # to represent, and never needs to: the repair loop is same-run/same-process
+            # by construction (ASSIGNMENT.md, work/SKILL.md) and is never itself resumed
+            # across a process restart. Leaving the last valid checkpoint in place
+            # (rather than crashing the run over an unrepresentable edge case) is safe
+            # because evaluate_resume also refuses any run_id whose run-summary.json
+            # already exists, independent of what checkpoint.json says.
+            evidence_io.retain_policy_event(
+                run_directory, "checkpoint_update_skipped",
+                {"reason": exc.message, "code": exc.code, "state": state.value},
+            )
+
     return RunResult(
         task_id=task_id,
         run_id=run_id,
@@ -674,6 +766,129 @@ def _finalize(
         reason=reason,
         run_summary_path=_rel(canonical_path, root),
     )
+
+
+def _do_research(
+    *, root: Path, run_directory: Path, agent_adapter: AgentAdapter, test_runner_adapter: TestRunnerAdapter,
+    task_id: str, run_id: str, created_at: str, artifact_refs: dict, finalize: Callable[..., RunResult],
+) -> tuple[dict | None, RunResult | None]:
+    """Dispatches a fresh Architect. Returns (findings_doc, None) on success or
+    (None, blocked_RunResult) otherwise. Shared by _run_phases (a fresh run) and
+    resume() (an incomplete Research phase restarting in a new process) -- the only
+    difference between those two callers is what happened *before* this call, never
+    what happens inside it."""
+    architect_payload = {
+        "task_id": task_id, "run_id": run_id, "created_at": created_at,
+        "scope_ref": {"path": artifact_refs["scope"]},
+    }
+    research_result = _run_agent_phase(
+        agent_adapter=agent_adapter, test_runner_adapter=test_runner_adapter, agent_type="architect",
+        payload=architect_payload, run_directory=run_directory, phase="research", schema_name="findings",
+        semantic_validate_fn=validate_findings_semantics, task_id=task_id, run_id=run_id,
+        target_repo_path=None,
+    )
+    if research_result.blocked:
+        return None, finalize(State.RESEARCH_BLOCKED, reason=research_result.reason)
+    artifact_refs["findings"] = _rel(research_result.canonical_path, root)
+    return research_result.doc, None
+
+
+def _do_implementation(
+    *, root: Path, run_directory: Path, agent_adapter: AgentAdapter, test_runner_adapter: TestRunnerAdapter,
+    task_id: str, run_id: str, created_at: str, target_repo_path: str, artifact_refs: dict, findings_doc: dict,
+    finalize: Callable[..., RunResult],
+) -> tuple[dict | None, str | None, RunResult | None]:
+    """Dispatches a fresh Engineer. Returns (impl_doc, engineer_handle, None) on success
+    or (None, None, blocked_RunResult) otherwise. See _do_research's docstring for why
+    this is shared between a fresh run and a resumed one."""
+    try:
+        path_validation = paths.build_path_validation_attestation(target_repo_path, repo_root=root)
+    except paths.PathSafetyError as exc:
+        return None, None, finalize(
+            State.IMPLEMENTATION_BLOCKED, reason=f"target_repo_path failed path safety re-check: {exc}"
+        )
+
+    found_finding_ids = [f["id"] for f in findings_doc.get("findings", []) if f.get("classification") == "found"]
+    engineer_payload = {
+        "task_id": task_id, "run_id": run_id, "created_at": created_at,
+        "target_repo_path": target_repo_path, "path_validation": path_validation,
+        "scope_ref": {"path": artifact_refs["scope"]},
+        "findings_ref": {"path": artifact_refs["findings"], "finding_ids": found_finding_ids},
+    }
+    impl_result = _run_agent_phase(
+        agent_adapter=agent_adapter, test_runner_adapter=test_runner_adapter, agent_type="engineer",
+        payload=engineer_payload, run_directory=run_directory, phase="implementation",
+        schema_name="implementation-report",
+        semantic_validate_fn=lambda doc: validate_implementation_report_semantics(doc, findings_doc),
+        task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
+    )
+    if impl_result.blocked:
+        return None, None, finalize(State.IMPLEMENTATION_BLOCKED, reason=impl_result.reason)
+    artifact_refs["implementation_report"] = _rel(impl_result.canonical_path, root)
+    impl_doc = impl_result.doc
+
+    if impl_doc.get("status") == "blocked":
+        return None, None, finalize(
+            State.IMPLEMENTATION_BLOCKED, reason=impl_doc.get("blocked_reason", "implementation reported blocked")
+        )
+
+    violation = paths.find_protected_violation(impl_doc.get("changed_files", []))
+    if violation:
+        return None, None, finalize(
+            State.IMPLEMENTATION_BLOCKED, reason=f"changed_files includes protected path {violation!r}"
+        )
+
+    return impl_doc, impl_result.handle, None
+
+
+def _do_verification(
+    *, root: Path, run_directory: Path, agent_adapter: AgentAdapter, test_runner_adapter: TestRunnerAdapter,
+    task_id: str, run_id: str, created_at: str, target_repo_path: str, artifact_refs: dict, findings_doc: dict,
+    scope_doc: dict, engineer_handle: str | None, finalize: Callable[..., RunResult], phases_completed: list,
+) -> RunResult:
+    """Dispatches a fresh Quality Engineer and always returns a terminal RunResult --
+    Verification's outcome (pass/fail-with-possible-repair/inconclusive/blocked) is
+    never "still in progress" once this call returns. See _do_research's docstring for
+    why this is shared between a fresh run and a resumed one."""
+    qe_payload = {
+        "task_id": task_id, "run_id": run_id, "created_at": created_at,
+        "target_repo_path": target_repo_path,
+        "path_validation": paths.build_path_validation_attestation(target_repo_path, repo_root=root),
+        "scope_ref": {"path": artifact_refs["scope"]},
+        "findings_ref": {"path": artifact_refs["findings"]},
+        "implementation_ref": {"path": artifact_refs["implementation_report"]},
+    }
+    verify_result = _run_agent_phase(
+        agent_adapter=agent_adapter, test_runner_adapter=test_runner_adapter, agent_type="quality_engineer",
+        payload=qe_payload, run_directory=run_directory, phase="verification",
+        schema_name="verification-report",
+        semantic_validate_fn=lambda doc: validate_verification_report_semantics(doc, scope_doc),
+        task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
+    )
+    if verify_result.blocked:
+        return finalize(State.VERIFICATION_BLOCKED, reason=verify_result.reason)
+    artifact_refs["verification_report"] = _rel(verify_result.canonical_path, root)
+    verify_doc = verify_result.doc
+    verdict = verify_doc.get("final_verdict")
+
+    if verdict == "pass":
+        phases_completed.append("verification")
+        return finalize(State.COMPLETED, reason="all acceptance criteria passed")
+    if verdict == "fail":
+        phases_completed.append("verification")
+        return _handle_verification_failure(
+            verify_doc=verify_doc, verify_canonical_path=verify_result.canonical_path,
+            engineer_handle=engineer_handle, qe_handle=verify_result.handle, repair_round=0,
+            agent_adapter=agent_adapter, test_runner_adapter=test_runner_adapter, run_directory=run_directory,
+            root=root, task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
+            findings_doc=findings_doc, scope_doc=scope_doc, artifact_refs=artifact_refs, finalize=finalize,
+        )
+    if verdict == "inconclusive":
+        phases_completed.append("verification")
+        return finalize(
+            State.VERIFICATION_INCONCLUSIVE, reason=verify_doc.get("blocked_reason", "verification inconclusive")
+        )
+    return finalize(State.VERIFICATION_BLOCKED, reason=verify_doc.get("blocked_reason", "verification blocked"))
 
 
 def _run_phases(
@@ -694,7 +909,7 @@ def _run_phases(
     def finalize(state: State, *, reason: str) -> RunResult:
         return _finalize(
             run_directory, root, state, task_id, run_id, created_at, artifact_refs, phases_completed,
-            reason=reason, duration_seconds=time.monotonic() - start_time,
+            reason=reason, duration_seconds=time.monotonic() - start_time, target_repo_path=target_repo_path,
         )
 
     # ---- Discovery ----
@@ -720,101 +935,38 @@ def _run_phases(
         return finalize(State.DISCOVERY_REFUSED, reason=scope_doc.get("refusal_reason", "scope refused"))
 
     phases_completed.append("discovery")
+    _checkpoint_progress(run_directory, task_id, run_id, target_repo_path, phases_completed, artifact_refs)
 
     # ---- Research (Architect) ----
-    architect_payload = {
-        "task_id": task_id, "run_id": run_id, "created_at": created_at,
-        "scope_ref": {"path": artifact_refs["scope"]},
-    }
-    research_result = _run_agent_phase(
-        agent_adapter=agent_adapter, test_runner_adapter=test_runner_adapter, agent_type="architect",
-        payload=architect_payload, run_directory=run_directory, phase="research", schema_name="findings",
-        semantic_validate_fn=validate_findings_semantics, task_id=task_id, run_id=run_id,
-        target_repo_path=None,
+    findings_doc, blocked = _do_research(
+        root=root, run_directory=run_directory, agent_adapter=agent_adapter,
+        test_runner_adapter=test_runner_adapter, task_id=task_id, run_id=run_id, created_at=created_at,
+        artifact_refs=artifact_refs, finalize=finalize,
     )
-    if research_result.blocked:
-        return finalize(State.RESEARCH_BLOCKED, reason=research_result.reason)
-    artifact_refs["findings"] = _rel(research_result.canonical_path, root)
-    findings_doc = research_result.doc
+    if blocked:
+        return blocked
     phases_completed.append("research")
+    _checkpoint_progress(run_directory, task_id, run_id, target_repo_path, phases_completed, artifact_refs)
 
     # ---- Implementation (Engineer) ----
-    try:
-        path_validation = paths.build_path_validation_attestation(target_repo_path, repo_root=root)
-    except paths.PathSafetyError as exc:
-        return finalize(State.IMPLEMENTATION_BLOCKED, reason=f"target_repo_path failed path safety re-check: {exc}")
-
-    found_finding_ids = [f["id"] for f in findings_doc.get("findings", []) if f.get("classification") == "found"]
-    engineer_payload = {
-        "task_id": task_id, "run_id": run_id, "created_at": created_at,
-        "target_repo_path": target_repo_path, "path_validation": path_validation,
-        "scope_ref": {"path": artifact_refs["scope"]},
-        "findings_ref": {"path": artifact_refs["findings"], "finding_ids": found_finding_ids},
-    }
-    impl_result = _run_agent_phase(
-        agent_adapter=agent_adapter, test_runner_adapter=test_runner_adapter, agent_type="engineer",
-        payload=engineer_payload, run_directory=run_directory, phase="implementation",
-        schema_name="implementation-report",
-        semantic_validate_fn=lambda doc: validate_implementation_report_semantics(doc, findings_doc),
-        task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
+    impl_doc, engineer_handle, blocked = _do_implementation(
+        root=root, run_directory=run_directory, agent_adapter=agent_adapter,
+        test_runner_adapter=test_runner_adapter, task_id=task_id, run_id=run_id, created_at=created_at,
+        target_repo_path=target_repo_path, artifact_refs=artifact_refs, findings_doc=findings_doc,
+        finalize=finalize,
     )
-    if impl_result.blocked:
-        return finalize(State.IMPLEMENTATION_BLOCKED, reason=impl_result.reason)
-    artifact_refs["implementation_report"] = _rel(impl_result.canonical_path, root)
-    impl_doc = impl_result.doc
-
-    if impl_doc.get("status") == "blocked":
-        return finalize(
-            State.IMPLEMENTATION_BLOCKED, reason=impl_doc.get("blocked_reason", "implementation reported blocked")
-        )
-
-    violation = paths.find_protected_violation(impl_doc.get("changed_files", []))
-    if violation:
-        return finalize(
-            State.IMPLEMENTATION_BLOCKED, reason=f"changed_files includes protected path {violation!r}"
-        )
-
+    if blocked:
+        return blocked
     phases_completed.append("implementation")
+    _checkpoint_progress(run_directory, task_id, run_id, target_repo_path, phases_completed, artifact_refs)
 
     # ---- Verification (Quality Engineer) ----
-    qe_payload = {
-        "task_id": task_id, "run_id": run_id, "created_at": created_at,
-        "target_repo_path": target_repo_path, "path_validation": path_validation,
-        "scope_ref": {"path": artifact_refs["scope"]},
-        "findings_ref": {"path": artifact_refs["findings"]},
-        "implementation_ref": {"path": artifact_refs["implementation_report"]},
-    }
-    verify_result = _run_agent_phase(
-        agent_adapter=agent_adapter, test_runner_adapter=test_runner_adapter, agent_type="quality_engineer",
-        payload=qe_payload, run_directory=run_directory, phase="verification",
-        schema_name="verification-report",
-        semantic_validate_fn=lambda doc: validate_verification_report_semantics(doc, scope_doc),
-        task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
+    return _do_verification(
+        root=root, run_directory=run_directory, agent_adapter=agent_adapter,
+        test_runner_adapter=test_runner_adapter, task_id=task_id, run_id=run_id, created_at=created_at,
+        target_repo_path=target_repo_path, artifact_refs=artifact_refs, findings_doc=findings_doc,
+        scope_doc=scope_doc, engineer_handle=engineer_handle, finalize=finalize, phases_completed=phases_completed,
     )
-    if verify_result.blocked:
-        return finalize(State.VERIFICATION_BLOCKED, reason=verify_result.reason)
-    artifact_refs["verification_report"] = _rel(verify_result.canonical_path, root)
-    verify_doc = verify_result.doc
-    verdict = verify_doc.get("final_verdict")
-
-    if verdict == "pass":
-        phases_completed.append("verification")
-        return finalize(State.COMPLETED, reason="all acceptance criteria passed")
-    if verdict == "fail":
-        phases_completed.append("verification")
-        return _handle_verification_failure(
-            verify_doc=verify_doc, verify_canonical_path=verify_result.canonical_path,
-            engineer_handle=impl_result.handle, qe_handle=verify_result.handle, repair_round=0,
-            agent_adapter=agent_adapter, test_runner_adapter=test_runner_adapter, run_directory=run_directory,
-            root=root, task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
-            findings_doc=findings_doc, scope_doc=scope_doc, artifact_refs=artifact_refs, finalize=finalize,
-        )
-    if verdict == "inconclusive":
-        phases_completed.append("verification")
-        return finalize(
-            State.VERIFICATION_INCONCLUSIVE, reason=verify_doc.get("blocked_reason", "verification inconclusive")
-        )
-    return finalize(State.VERIFICATION_BLOCKED, reason=verify_doc.get("blocked_reason", "verification blocked"))
 
 
 def run(
@@ -846,4 +998,134 @@ def run(
         return _finalize(
             run_directory, root, State.FAILED, task_id, run_id, created_at, artifact_refs, phases_completed,
             reason=f"internal orchestration error: {exc}", duration_seconds=time.monotonic() - start_time,
+            target_repo_path=target_repo_path,
         )
+
+
+def resume(
+    *,
+    run_id: str,
+    agent_adapter: AgentAdapter,
+    test_runner_adapter: TestRunnerAdapter,
+    repo_root: Path | None = None,
+) -> RunResult:
+    """Resumes an interrupted run from its checkpoint. Every phase already in
+    completed_phases is reused (its canonical artifact is loaded and revalidated, never
+    re-dispatched); the one incomplete phase and everything after it is run fresh,
+    dispatching brand-new agent instances -- this process holds no live handle from
+    whatever process wrote the checkpoint, and none is ever claimed to survive. Refuses
+    outright (State.FAILED, no run-summary.json written or overwritten) if
+    checkpoint.evaluate_resume finds the checkpoint missing, malformed, mismatched, or
+    terminal -- see checkpoint.py's own docstring for the full precondition list."""
+    root = (repo_root or paths.REPO_ROOT).resolve()
+    run_directory = evidence_io.run_dir(root, run_id)
+    evidence_io.ensure_run_dirs(run_directory)
+    start_time = time.monotonic()
+
+    evidence_io.retain_policy_event(run_directory, "resume_requested", {"run_id": run_id})
+    decision = checkpoint.evaluate_resume(run_directory, requested_run_id=run_id, repo_root=root)
+
+    if not decision.resumable:
+        evidence_io.retain_policy_event(
+            run_directory, "resume_refused", {"run_id": run_id, "code": decision.code, "reason": decision.reason},
+        )
+        return RunResult(
+            task_id=decision.task_id or "", run_id=run_id, state=State.FAILED, run_dir=run_directory,
+            artifact_refs=dict(decision.artifact_refs), phases_completed=list(decision.completed_phases),
+            final_verdict="blocked", reason=f"resume refused ({decision.code}): {decision.reason}",
+            run_summary_path="",
+        )
+
+    evidence_io.retain_policy_event(
+        run_directory, "checkpoint_validated",
+        {"run_id": run_id, "completed_phases": decision.completed_phases, "next_phase": decision.next_phase},
+    )
+    for phase in decision.completed_phases:
+        evidence_io.retain_policy_event(
+            run_directory, "phase_reused", {"phase": phase, "artifact_ref": decision.artifact_refs.get(phase)},
+        )
+    restarted_phase = decision.next_phase
+    evidence_io.retain_policy_event(run_directory, "phase_restarted", {"phase": restarted_phase})
+
+    task_id = decision.task_id
+    target_repo_path = decision.target_repo_path
+    scope_doc = decision.docs["discovery"]
+    created_at = scope_doc.get("created_at")
+    findings_doc = decision.docs.get("research")
+    impl_doc = decision.docs.get("implementation")
+    engineer_handle = None  # a fresh process; no live handle from before ever existed here.
+
+    phases_reused = list(decision.completed_phases)
+    phases_completed = list(decision.completed_phases)
+    # Only decision.next_phase was genuinely interrupted mid-flight and is being
+    # restarted -- any phase after it in this same call was never attempted by any
+    # process before now, so it is ordinary forward progress (like a fresh run()), not
+    # a restart, even though it is also dispatched fresh in this loop.
+    phases_restarted: list = [restarted_phase]
+    artifact_refs = {_PHASE_TO_SUMMARY_KEY[phase]: rel for phase, rel in decision.artifact_refs.items()}
+
+    def finalize(state: State, *, reason: str) -> RunResult:
+        # Every terminal exit from this resume() call -- whether the restarted phase
+        # itself blocks (research/implementation) or the run proceeds all the way
+        # through verification (pass, fail, inconclusive, or a same-run repair cycle) --
+        # routes through this one closure, since _do_research/_do_implementation/
+        # _do_verification/_handle_verification_failure all call `finalize` for every
+        # return path. Retaining resume_completed here, exactly once per resume() call,
+        # is what makes that guarantee hold regardless of which phase the run stops in --
+        # matching work/SKILL.md's "retain resume_completed immediately before reporting
+        # the run's outcome" for every resumed run, not only ones that reach Verification.
+        result = _finalize(
+            run_directory, root, state, task_id, run_id, created_at, artifact_refs, phases_completed,
+            reason=reason, duration_seconds=time.monotonic() - start_time, target_repo_path=target_repo_path,
+            phases_reused=phases_reused, phases_restarted=phases_restarted,
+        )
+        evidence_io.retain_policy_event(
+            run_directory, "resume_completed",
+            {"run_id": run_id, "final_verdict": result.final_verdict, "phases_completed": result.phases_completed},
+        )
+        return result
+
+    for phase in PHASE_ORDER:
+        if phase in phases_completed:
+            continue
+
+        if phase == "research":
+            findings_doc, blocked = _do_research(
+                root=root, run_directory=run_directory, agent_adapter=agent_adapter,
+                test_runner_adapter=test_runner_adapter, task_id=task_id, run_id=run_id, created_at=created_at,
+                artifact_refs=artifact_refs, finalize=finalize,
+            )
+            if blocked:
+                return blocked
+            phases_completed.append("research")
+            _checkpoint_progress(run_directory, task_id, run_id, target_repo_path, phases_completed, artifact_refs)
+        elif phase == "implementation":
+            impl_doc, engineer_handle, blocked = _do_implementation(
+                root=root, run_directory=run_directory, agent_adapter=agent_adapter,
+                test_runner_adapter=test_runner_adapter, task_id=task_id, run_id=run_id, created_at=created_at,
+                target_repo_path=target_repo_path, artifact_refs=artifact_refs, findings_doc=findings_doc,
+                finalize=finalize,
+            )
+            if blocked:
+                return blocked
+            phases_completed.append("implementation")
+            _checkpoint_progress(run_directory, task_id, run_id, target_repo_path, phases_completed, artifact_refs)
+        elif phase == "verification":
+            # resume_completed is retained inside `finalize` above, not here -- every
+            # terminal path _do_verification can take (including a same-run repair
+            # cycle) already calls `finalize` internally.
+            return _do_verification(
+                root=root, run_directory=run_directory, agent_adapter=agent_adapter,
+                test_runner_adapter=test_runner_adapter, task_id=task_id, run_id=run_id, created_at=created_at,
+                target_repo_path=target_repo_path, artifact_refs=artifact_refs, findings_doc=findings_doc,
+                scope_doc=scope_doc, engineer_handle=engineer_handle, finalize=finalize,
+                phases_completed=phases_completed,
+            )
+        else:
+            raise OrchestrationError(f"resume() cannot restart unrecognized phase {phase!r}")
+
+    # Unreachable: evaluate_resume only returns resumable=True when next_phase is one of
+    # research/implementation/verification (status "complete" -- next_phase None -- is
+    # already refused above), so the loop above always returns from inside the
+    # "verification" branch before falling through here.
+    raise OrchestrationError("resume() reached no remaining phases -- internal inconsistency")

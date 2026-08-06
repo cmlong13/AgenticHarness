@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from harness.evidence import (
@@ -46,7 +47,7 @@ from harness.evidence import (
     validate_verification_report_semantics,
 )
 
-from . import discovery, evidence_io, paths
+from . import checkpoint, discovery, evidence_io, paths
 from .state import FINAL_VERDICT_BY_STATE, State
 
 REPO_ROOT = paths.REPO_ROOT
@@ -70,9 +71,12 @@ SEMANTIC_VALIDATORS = {
 }
 
 # response["status"] values that represent an affirmative outcome (exit code 0).
-# Every other status a handler can return ("invalid", "blocked", "mismatch") is a
-# well-formed negative result (exit code 1), not a CLI failure.
-OK_STATUSES = {"valid", "match", "ok", "retained", "promoted", "written"}
+# Every other status a handler can return ("invalid", "blocked", "mismatch", "refused")
+# is a well-formed negative result (exit code 1), not a CLI failure.
+OK_STATUSES = {"valid", "match", "ok", "retained", "promoted", "written", "resumable"}
+
+# op_write_checkpoint's `kind` field selects which checkpoint.py record_* builder runs.
+_CHECKPOINT_KINDS = {"progress", "completion", "interruption", "terminal_failure"}
 
 _IDENTITY_FIELDS = ("task_id", "run_id", "command_id", "command", "working_directory")
 
@@ -92,6 +96,10 @@ def _load_schema(name: str) -> dict:
 
 def _rel(path: Path) -> str:
     return str(path.resolve().relative_to(REPO_ROOT)).replace("\\", "/")
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _require_str(req: dict, field: str) -> str:
@@ -353,6 +361,98 @@ def op_write_run_summary(req: dict) -> dict:
     return {"operation": "write_run_summary", "status": "written", "path": _rel(path)}
 
 
+def op_write_checkpoint(req: dict) -> dict:
+    """10. Persist runs/<run_id>/checkpoint.json -- delegates entirely to
+    harness.orchestrator.checkpoint's record_* builders (never hand-rolled). `kind`
+    selects which one: "progress" after a safely completed, non-terminal phase
+    (Discovery/Research/Implementation); "completion" after Verification passes;
+    "interruption" for a deliberate, evidence-backed pause (Part 5's controlled live
+    interruption); "terminal_failure" for any other terminal outcome. `completed_phases`
+    and `artifact_refs` (phase-keyed: "discovery"/"research"/"implementation"/
+    "verification") are required for every kind except "completion" (which always
+    covers all four phases). Refuses (status "blocked", never a Python exception) if the
+    resulting document would itself be schema/semantically invalid -- see checkpoint.py's
+    own _write()."""
+    kind = _require_str(req, "kind")
+    if kind not in _CHECKPOINT_KINDS:
+        raise LiveCliUsageError(f"'kind' must be one of {sorted(_CHECKPOINT_KINDS)}, got {kind!r}")
+    run_id = _require_str(req, "run_id")
+    task_id = _require_str(req, "task_id")
+    target_repo_path = _require_str(req, "target_repo_path")
+    completed_phases = req.get("completed_phases", [])
+    artifact_refs = req.get("artifact_refs", {})
+    if not isinstance(completed_phases, list) or not isinstance(artifact_refs, dict):
+        raise LiveCliUsageError("'completed_phases' must be a list and 'artifact_refs' must be an object")
+
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    evidence_io.ensure_run_dirs(run_directory)
+    updated_at = req.get("updated_at") or _utc_now_iso()
+
+    try:
+        if kind == "progress":
+            path = checkpoint.record_phase_progress(
+                run_directory, task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
+                updated_at=updated_at, completed_phases=completed_phases, artifact_refs=artifact_refs,
+            )
+        elif kind == "completion":
+            path = checkpoint.record_completion(
+                run_directory, task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
+                updated_at=updated_at, artifact_refs=artifact_refs,
+            )
+        elif kind == "interruption":
+            path = checkpoint.record_interruption(
+                run_directory, task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
+                updated_at=updated_at, completed_phases=completed_phases, artifact_refs=artifact_refs,
+                note=req.get("note", ""),
+            )
+        else:  # "terminal_failure"
+            path = checkpoint.record_terminal_failure(
+                run_directory, task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
+                updated_at=updated_at, completed_phases=completed_phases, artifact_refs=artifact_refs,
+                reason=_require_str(req, "reason"),
+            )
+    except checkpoint.CheckpointError as exc:
+        return {"operation": "write_checkpoint", "status": "blocked", "error": exc.message, "code": exc.code}
+    return {"operation": "write_checkpoint", "status": "written", "path": _rel(path)}
+
+
+def op_evaluate_resume(req: dict) -> dict:
+    """11. Evaluate whether runs/<run_id>/checkpoint.json can be resumed -- delegates
+    entirely to checkpoint.evaluate_resume (existence, schema/semantic validity, run_id
+    match, terminal-status refusal, real target_repo_path re-check, per-artifact
+    existence + full revalidation + identity cross-check, predecessor-order enforcement).
+    Retains resume_requested before the check and checkpoint_validated/resume_refused
+    after, so the policy-event trail exists regardless of outcome -- the /work skill
+    must not additionally retain these itself. On a resumable outcome, returns
+    `completed_phases` (reuse these, never redispatch their agent) and `next_phase` (the
+    one incomplete phase to restart with a fresh Agent dispatch)."""
+    run_id = _require_str(req, "run_id")
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    evidence_io.ensure_run_dirs(run_directory)
+    evidence_io.retain_policy_event(run_directory, "resume_requested", {"run_id": run_id})
+
+    decision = checkpoint.evaluate_resume(run_directory, requested_run_id=run_id, repo_root=REPO_ROOT)
+
+    if not decision.resumable:
+        evidence_io.retain_policy_event(
+            run_directory, "resume_refused", {"run_id": run_id, "code": decision.code, "reason": decision.reason},
+        )
+        return {
+            "operation": "evaluate_resume", "status": "refused", "code": decision.code, "reason": decision.reason,
+            "task_id": decision.task_id, "completed_phases": decision.completed_phases,
+        }
+
+    evidence_io.retain_policy_event(
+        run_directory, "checkpoint_validated",
+        {"run_id": run_id, "completed_phases": decision.completed_phases, "next_phase": decision.next_phase},
+    )
+    return {
+        "operation": "evaluate_resume", "status": "resumable", "task_id": decision.task_id,
+        "target_repo_path": decision.target_repo_path, "completed_phases": decision.completed_phases,
+        "next_phase": decision.next_phase, "artifact_refs": decision.artifact_refs,
+    }
+
+
 OPERATIONS = {
     "validate_scope": op_validate_scope,
     "retain_attempt": op_retain_attempt,
@@ -363,6 +463,8 @@ OPERATIONS = {
     "retain_rejection": op_retain_rejection,
     "retain_policy_event": op_retain_policy_event,
     "write_run_summary": op_write_run_summary,
+    "write_checkpoint": op_write_checkpoint,
+    "evaluate_resume": op_evaluate_resume,
 }
 
 

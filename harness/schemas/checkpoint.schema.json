@@ -8,6 +8,7 @@
     "schema_version",
     "task_id",
     "run_id",
+    "target_repo_path",
     "updated_at",
     "completed_phases",
     "current_phase",
@@ -21,6 +22,7 @@
     "schema_version": { "const": "1.0" },
     "task_id": { "type": "string", "minLength": 1 },
     "run_id": { "type": "string", "minLength": 1 },
+    "target_repo_path": { "type": "string", "minLength": 1 },
     "updated_at": { "type": "string", "format": "date-time" },
     "completed_phases": {
       "type": "array",
@@ -91,5 +93,5 @@
       }
     }
   },
-  "$comment": "Semantic rules not enforced here (deferred to the future Python validator): (1) current_phase must not appear in completed_phases; (2) artifact_refs must contain exactly one entry per phase name present in completed_phases, and no entry for current_phase or any phase after it; (3) next_phase, when non-null, must be the phase immediately following current_phase in the fixed order discovery -> research -> implementation -> verification."
+  "$comment": "Extension (2026-08-06, checkpoint/resume milestone): target_repo_path was added as a required field. It is not represented in any other canonical artifact (scope.json does not persist it either -- it is only ever an out-of-band parameter the live orchestrator re-supplies from its own memory each phase), so a fresh process resuming a run has no other way to recover it. Semantic rules not enforced here (deferred to harness/evidence.py's validate_checkpoint_semantics): (1) current_phase must not appear in completed_phases; (2) artifact_refs must contain exactly one entry per phase name present in completed_phases, and no entry for current_phase or any phase after it; (3) every phase in completed_phases must have a corresponding artifact_refs entry (the reverse of rule 2 -- guards against a false completed-phase claim); (4) completed_phases must be a contiguous prefix of the fixed order discovery -> research -> implementation -> verification, with no phase skipped or out of order (enforces predecessor relationships). next_phase (corrected 2026-08-06, checkpoint/resume consistency cleanup) is deliberately NOT part of this independently-validated list, and this is not an oversight: harness/orchestrator/checkpoint.py's four record_* builders always derive both current_phase and next_phase from the same PHASE_ORDER-minus-completed_phases computation, so next_phase is current_phase's immediate successor by construction for every checkpoint written through the canonical API, given rule (4) above already holds -- no separate check can fail that a correct builder could ever trip. More importantly, next_phase is never read back as authoritative: checkpoint.py's evaluate_resume() does not trust doc['current_phase'] or doc['next_phase'] for its own resume decision at all -- it re-derives the next phase to restart directly from the revalidated completed_phases, exactly as it revalidates every other completed-phase claim rather than trusting the document. A checkpoint.json with a stale or hand-edited next_phase would therefore mislead a human reading the file, but cannot mislead resume() itself, which is why this rule is not part of the independently-enforced safety contract the way rules (1)-(4) are."
 }

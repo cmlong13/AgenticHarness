@@ -39,9 +39,14 @@ def ensure_run_dirs(run_directory: Path) -> None:
     (run_directory / "logs").mkdir(exist_ok=True)
 
 
-def _write_new(path: Path, data: bytes) -> None:
-    if path.exists():
-        raise EvidenceCollisionError(f"refusing to overwrite existing evidence at {path}")
+def atomic_write(path: Path, data: bytes) -> None:
+    """Write `data` to `path` via a temp file + os.replace, allowing overwrite of an
+    already-existing file -- unlike _write_new's collision guard below, this is for
+    evidence that is legitimately rewritten across a run's lifetime (checkpoint.json is
+    the one user of this today). os.replace is atomic on both POSIX and Windows, so an
+    interruption between the temp-file write and the replace can never leave a partially
+    written checkpoint appearing valid at the canonical path -- the canonical path either
+    still holds the previous, fully-written version or the new, fully-written version."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     tmp_path.write_bytes(data)
@@ -50,6 +55,12 @@ def _write_new(path: Path, data: bytes) -> None:
     except Exception:
         tmp_path.unlink(missing_ok=True)
         raise
+
+
+def _write_new(path: Path, data: bytes) -> None:
+    if path.exists():
+        raise EvidenceCollisionError(f"refusing to overwrite existing evidence at {path}")
+    atomic_write(path, data)
 
 
 def retain_raw_attempt(run_directory: Path, phase: str, attempt_n: int, raw_text: str) -> Path:

@@ -79,17 +79,23 @@ $ARGUMENTS
 
 # Parsing $ARGUMENTS
 
-1. If `$ARGUMENTS` starts with `--dry-run ` (or is exactly `--dry-run` with nothing
+1. **`--resume <run_id>` is the one and only resume syntax.** If `$ARGUMENTS` is exactly
+   `--resume <run_id>` (a `--resume` token followed by one non-empty run_id token and
+   nothing else), stop parsing here and go directly to "Checkpointing and resume" below
+   -- never Discovery, never treated as a free-form request naming a run to resume, and
+   never combined with `--dry-run` or ticket mode. `--resume` with no run_id, or with
+   anything after the run_id, is a usage error: report it plainly and stop.
+2. If `$ARGUMENTS` starts with `--dry-run ` (or is exactly `--dry-run` with nothing
    after it, which is an error -- a dry run still needs a real request to scope), strip
    that prefix: the remainder is the free-form request, and `dry_run = true`.
-2. Otherwise the entire `$ARGUMENTS` string is the free-form request and `dry_run = false`.
-3. If the request (after stripping `--dry-run` if present) looks Jira-ticket-shaped --
+3. Otherwise the entire `$ARGUMENTS` string is the free-form request and `dry_run = false`.
+4. If the request (after stripping `--dry-run` if present) looks Jira-ticket-shaped --
    matches a pattern like `^[A-Z][A-Z0-9]+-\d+\b` at the start (e.g. `PROJ-123`) --
    **do not guess a Jira integration**. Report plainly: "Ticket-mode input detected
    (`<the matched id>`). Ticket mode is not implemented in this milestone -- see
    `PROJECT_SPEC.md` §4 'Later integrations'. Re-run with a free-form description
    instead." Stop here; do not proceed to Discovery.
-4. Otherwise proceed to Discovery in free-form mode with the parsed request text.
+5. Otherwise proceed to Discovery in free-form mode with the parsed request text.
 
 # Run identity
 
@@ -133,6 +139,8 @@ function's own docstring for the authoritative field-level contract):
 | `retain_rejection` | Persist a `command_rejected` from the test-runner Skill. |
 | `retain_policy_event` | Append an evidence event (mutation sentinels, agent-dispatch records, Skill-invocation records -- see "Agent and Skill evidence" below). |
 | `write_run_summary` | Schema-validate and write the terminal `run-summary.json`. Accepts either an explicit `final_verdict` or a `state` field (a `harness.orchestrator.state.State` value name) to derive it from the same table `harness/orchestrator/core.py` uses -- never restate that mapping by hand. |
+| `write_checkpoint` | Schema/semantically-validate and atomically write `runs/<run_id>/checkpoint.json`. `kind` selects the builder: `"progress"` (after Discovery/Research/Implementation, non-terminal), `"completion"` (after Verification passes), `"interruption"` (a deliberate, evidence-backed pause -- see "Checkpointing and resume" below), `"terminal_failure"` (any other terminal outcome). Refuses (`status: "blocked"`) rather than writing anything invalid. Retains its own `checkpoint_written` policy event automatically on every successful write -- do not additionally retain that event by hand. |
+| `evaluate_resume` | Load and fully revalidate `runs/<run_id>/checkpoint.json` against every Part 3 precondition (existence, schema/semantics, run_id match, terminal-status refusal, real `target_repo_path` re-check, per-artifact existence + revalidation + identity cross-check, predecessor-order enforcement). Retains `resume_requested` and `checkpoint_validated`/`resume_refused` itself -- do not additionally retain those two events by hand. Returns `completed_phases` (reuse, never redispatch) and `next_phase` (the one incomplete phase to restart) on `status: "resumable"`. |
 
 # Phase 1: Discovery (main session, no subagent)
 
@@ -157,7 +165,12 @@ function's own docstring for the authoritative field-level contract):
 6. If valid, `promote_artifact` (`phase: "discovery"`) to produce the canonical
    `scope.json`. If `status` was `"refused"`, the run also ends here (a refusal is a
    legitimate, promoted outcome -- `state: "discovery_refused"` for the run summary),
-   without dispatching the Architect.
+   without dispatching the Architect and **without** writing a checkpoint (a refusal is
+   terminal, not forward progress worth checkpointing -- see "Checkpointing and resume").
+7. If `status` was `"approved"`, `write_checkpoint` (`kind: "progress"`,
+   `completed_phases: ["discovery"]`, `artifact_refs: {"discovery": "<scope.json path>"}`,
+   `target_repo_path` as supplied to this run) before dispatching the Architect. This is
+   the first of four progress checkpoints -- see "Checkpointing and resume" below.
 
 # Phase 2: Research (real Architect dispatch)
 
@@ -186,7 +199,10 @@ function's own docstring for the authoritative field-level contract):
      classifications, broken `supporting_finding_ids`, etc). This is not a transport
      problem and is not eligible for correction -- go straight to "the run ends" below.
 5. If valid (either on the first attempt or after a successful transport repair below),
-   `promote_artifact` (`phase: "research"`) to produce the canonical `findings.json`.
+   `promote_artifact` (`phase: "research"`) to produce the canonical `findings.json`,
+   then `write_checkpoint` (`kind: "progress"`, `completed_phases: ["discovery",
+   "research"]`, `artifact_refs` naming both `scope.json` and `findings.json`) -- the
+   second progress checkpoint.
 6. Absent a transport repair, the Architect returns one final message and is not resumed
    -- its own contract (`architect.md`) is single-shot, not staged. The transport repair
    below is the one narrow, explicitly-scoped exception to that single-shot contract.
@@ -325,7 +341,11 @@ is not a completed four-phase run.
    `findings.json`). Independently re-check `changed_files` against the Protected Path
    list yourself (`build_path_attestation`/`live_cli` does not re-derive this for you;
    it is the same list `paths.py` enforces -- inspect the promoted report's
-   `changed_files` directly).
+   `changed_files` directly). Once promoted (and only for a `ready_for_verification`
+   report -- a `blocked` implementation report is a terminal outcome for this run, not
+   forward progress), `write_checkpoint` (`kind: "progress"`, `completed_phases:
+   ["discovery", "research", "implementation"]`, `artifact_refs` naming all three
+   promoted artifacts) -- the third progress checkpoint.
 
 ## Engineer transport repair (Implementation phase, at most one correction total)
 
@@ -414,6 +434,14 @@ returned, exactly as you already do for `C-1`/`C-2`/`V-1`. A mismatch on an ORCH
 command blocks completion honestly rather than being silently accepted. Also run
 `git status`/`git diff --stat -- demo-repo` to confirm `changed_files` matches reality.
 Never report "verification passed" solely because the Quality Engineer said so.
+
+Once you have promoted `verification-report.json` and independently confirmed its
+verdict, write the run's terminal checkpoint per "Checkpointing and resume" below --
+`kind: "completion"` on a genuine, independently-confirmed `pass` (with no further
+logic-bug repair pending), `kind: "terminal_failure"` for every other terminal outcome
+(`fail` with the repair budget exhausted, `inconclusive`, or a malformed/blocked
+verification phase). Do this exactly once per run, after the *final* verdict is known --
+not after every intermediate repair-round verdict.
 
 ## Same-run logic-failure route-back to the Engineer
 
@@ -707,6 +735,100 @@ the fork itself is **not yet live-verified** by an actual `/work` run (see
    its Step 9 implementation edit -- this expectation is the fork's whole purpose, and it
    still requires a real `/work` run to confirm live before it can be reported as proven.
 
+# Checkpointing and resume
+
+## Writing checkpoints during a fresh run
+
+Every safely completed, non-terminal phase gets a `write_checkpoint` call
+(`kind: "progress"`) immediately after its canonical artifact is promoted -- see the
+three progress-checkpoint steps already named in Phase 1/2/3 above. The run's terminal
+outcome gets exactly one more checkpoint write, made once the final verdict is known
+(never before, and never twice for the same terminal outcome):
+
+- `kind: "completion"` -- only on a genuine, independently-confirmed `pass` with
+  `artifact_refs` naming all four canonical artifacts.
+- `kind: "terminal_failure"` -- every other terminal outcome (Discovery invalid,
+  Research blocked, Implementation blocked, Verification failed/inconclusive/blocked),
+  with `completed_phases`/`artifact_refs` limited to the phases that actually produced a
+  safely reusable artifact and `reason` stating plainly why the run stopped.
+- **No checkpoint at all** for `discovery_invalid`/`discovery_refused` -- Discovery
+  itself never got far enough to be worth checkpointing (see Phase 1 step 6/7 above).
+- If a same-run logic-bug repair cycle (see that section above) is in progress, do not
+  write a terminal checkpoint until the repair cycle itself reaches a final outcome
+  (`pass` after repair, or repair-budget exhaustion) -- write once, for that final
+  outcome, exactly as for a non-repaired run. The repair cycle is same-run/same-process
+  by construction and is never itself resumed across a process restart, so it needs no
+  checkpoint of its own mid-cycle.
+
+Never call `write_checkpoint` twice for the same phase with the same `kind` in the same
+run, and never call it for a phase whose artifact was not actually just promoted --
+checkpointing is evidence of real progress, not a formality.
+
+## Resuming an interrupted run (`/work --resume <run_id>`)
+
+Triggered only by the exact syntax "Parsing $ARGUMENTS" step 1 recognizes. When
+triggered:
+
+1. `evaluate_resume` (`run_id` only). This one call performs Part 3's entire
+   precondition pipeline and retains `resume_requested` plus `checkpoint_validated`/
+   `resume_refused` itself -- do not additionally retain either event by hand, and do
+   not hand-rip any of these checks yourself (existence, schema/semantic validity,
+   run_id match, terminal-status refusal, a real `target_repo_path` re-check, every
+   referenced artifact's existence *and* full schema/semantic revalidation *and*
+   task_id/run_id identity cross-check, and predecessor-order enforcement -- Research
+   needs a valid `scope.json`; Implementation needs valid `scope.json` and
+   `findings.json`; Verification needs valid `scope.json`, `findings.json`, and an
+   `implementation-report.json`). Never promote/overwrite any canonical artifact as
+   part of this step.
+2. **If `status` is `"refused"`**: report plainly, citing the exact `code` and `reason`
+   `evaluate_resume` returned (e.g. `no_checkpoint`, `invalid_checkpoint`,
+   `run_id_mismatch`, `terminal_complete`, `terminal_failed`, `run_already_terminal`,
+   `target_repo_path_invalid`, `missing_artifact`, `invalid_artifact`,
+   `artifact_identity_mismatch`). Stop here. In particular:
+   - `terminal_complete`/`terminal_failed`/`run_already_terminal` mean the run already
+     reached a real conclusion (pass, fail, blocked, or inconclusive) -- never restart
+     it, and never describe this as a new attempt at the same work; if the underlying
+     task still needs doing, that is a new `/work` invocation with a new `run_id`, not a
+     resume of this one.
+   - Any other refusal code means the checkpoint itself cannot be trusted (missing,
+     malformed, mismatched, or referencing an artifact that no longer validates) --
+     report the exact problem; do not attempt to repair the checkpoint by hand and retry.
+3. **If `status` is `"resumable"`**: adopt `task_id`, `target_repo_path`,
+   `completed_phases`, and `artifact_refs` exactly as `evaluate_resume` returned them --
+   never re-derive or re-guess any of these. `created_at` for the rest of this run is the
+   `created_at` field inside the promoted `scope.json` (read it yourself; it is not part
+   of `evaluate_resume`'s own response).
+4. For every phase in `completed_phases`: this phase is **reused**, not
+   redispatched -- do not call the `Agent` tool for it, do not construct a new
+   `agent_dispatch` policy event for it (the original dispatch already has one, still
+   retained, from whatever process wrote the checkpoint), and treat its promoted
+   artifact as already-validated. `retain_policy_event` (`kind: "phase_reused"`, payload
+   naming the phase and its `artifact_refs` path) once per reused phase. In particular:
+   if `research` is in `completed_phases`, the Architect must not run again; if
+   `implementation` is in `completed_phases`, the Engineer must not run again.
+5. `evaluate_resume`'s `next_phase` is the one incomplete phase. `retain_policy_event`
+   (`kind: "phase_restarted"`, payload naming `next_phase`) once, then resume normal
+   phase execution starting there, exactly as Phase 2/3/4 above already describe --
+   with one binding difference: **dispatch a brand-new agent instance** (a fresh `Agent`
+   tool call) for this phase. There is no live handle from whatever process wrote the
+   checkpoint for this new process to resume -- none is ever claimed to exist, and this
+   new agent is never described as "the same Architect/Engineer/Quality Engineer
+   continuing," only as a fresh dispatch for a restarted phase. Every phase after
+   `next_phase` proceeds normally (also a fresh dispatch each, exactly as in a
+   non-resumed run) and continues getting its own progress checkpoint as it completes.
+6. Before promoting any canonical artifact for the restarted phase, confirm the
+   canonical path does not already exist from an earlier, uncounted attempt (`Read`/
+   `Bash ls` it, or simply attempt the promotion and treat a `blocked`/collision result
+   from `promote_artifact` as a hard stop) -- never silently overwrite existing evidence
+   to "make room" for a fresh attempt.
+7. On the run's own final `run-summary.json` (`write_run_summary`), include
+   `phases_reused` (exactly `completed_phases` from step 3) and `phases_restarted`
+   (exactly `[next_phase]` from step 5 -- any phase *after* `next_phase` that also ran in
+   this same resumed invocation is ordinary forward progress, not a restart, since no
+   process ever attempted it before). Retain `resume_completed`
+   (`kind: "resume_completed"`, payload naming the final verdict and `phases_completed`)
+   immediately before reporting the run's outcome to the user.
+
 # Reporting
 
 ## Completion-guardrail marker (required before reporting any run as complete)
@@ -735,6 +857,10 @@ State plainly, every time:
   claimed).
 - Whether this run required a same-run logic-bug repair cycle (Part 2), and if so, both
   the original and repaired `implementation-report`/`verification-report` paths.
+- The exact `runs/<run_id>/checkpoint.json` path and its current `status`.
+- Whether this invocation was a resume (`/work --resume <run_id>`): if so, which phases
+  were reused (no redispatch) and which single phase was restarted (fresh dispatch),
+  citing `evaluate_resume`'s own `completed_phases`/`next_phase`.
 - For a dry run: that Implementation and Verification were intentionally not attempted,
   and that this is not a completed pipeline run.
 - Any evidence gap. If required evidence is missing, say the run cannot be called

@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-REFID",
+  "run_id": "run-20260806-refid-001",
+  "created_at": "2026-08-06T17:01:08Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "Fix validate_reference_id in demo-repo to reject a reference ID with a trailing newline, which the current regex's trailing '$' anchor incorrectly allows through in Python's re module."
+  },
+  "objective": "validate_reference_id (demo-repo/src/loanflow/applicant_validation.py) must reject a reference id string with a trailing newline, which Python's re module currently lets through because '$' matches immediately before a trailing newline as well as at the true end of string.",
+  "in_scope": [
+    "demo-repo/src/loanflow/applicant_validation.py",
+    "demo-repo/tests/unit/test_applicant_validation.py"
+  ],
+  "out_of_scope": [
+    "demo-repo/src/loanflow/",
+    "any other validator or module"
+  ],
+  "constraints": [
+    "No new dependencies without written justification",
+    "Minimal fix: change the regex anchor only, do not rewrite the function"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "validate_reference_id raises ValidationError for a reference id with a trailing newline (e.g. 'AP-000123\\n'), which it currently incorrectly accepts"
+    },
+    {
+      "id": "AC-2",
+      "description": "All existing valid/invalid reference id test cases continue to pass unchanged"
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-1",
+      "description": "Confirm the regex anchor gap via source and a live interpreter check",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-2",
+      "description": "Fix the anchor (regex '$' -> '\\Z') and add a regression test",
+      "phase": "implementation",
+      "depends_on": [
+        "N-1"
+      ]
+    },
+    {
+      "id": "N-3",
+      "description": "Verify the fix and full applicant_validation test file",
+      "phase": "verification",
+      "depends_on": [
+        "N-2"
+      ]
+    }
+  ],
+  "status": "approved"
+}

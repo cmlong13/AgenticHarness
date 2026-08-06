@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 from harness.evidence import load_json, validate_against_schema
-from harness.orchestrator import core, evidence_io
+from harness.orchestrator import checkpoint, core, evidence_io
 from harness.orchestrator.adapters import UnresumableHandleError
 from harness.orchestrator.state import State
 
@@ -1467,3 +1467,213 @@ def test_incomplete_acceptance_criterion_coverage_prevents_completion(tmp_path):
     assert result.state != State.COMPLETED
     assert not (result.run_dir / "verification-report.json").exists()
     _assert_valid_run_summary(result)
+
+
+# ---------------------------------------------------------------------------
+# Checkpoint persistence and process-resume (checkpoint/resume milestone)
+# ---------------------------------------------------------------------------
+
+
+def _seed_partial_run(root: Path, *, completed: list[str]) -> dict:
+    """Directly builds the on-disk state a genuinely interrupted process would leave
+    behind for the given prefix of PHASE_ORDER -- the promoted canonical artifact for
+    every already-completed phase plus a matching checkpoint.json -- without ever
+    calling core.run() (which always drives all the way to a terminal _finalize). This
+    is the deterministic-test equivalent of Part 5's live interruption: a prior process
+    got this far and then stopped; core.resume() is what a fresh process calls next."""
+    run_directory = evidence_io.run_dir(root, RUN_ID)
+    evidence_io.ensure_run_dirs(run_directory)
+    artifact_refs: dict[str, str] = {}
+
+    if "discovery" in completed:
+        p = evidence_io.promote_canonical(run_directory, "scope.json", _scope_dict())
+        artifact_refs["discovery"] = _rel(p, root)
+    if "research" in completed:
+        p = evidence_io.promote_canonical(run_directory, "findings.json", _findings_dict())
+        artifact_refs["research"] = _rel(p, root)
+
+    checkpoint.record_phase_progress(
+        run_directory, task_id=TASK_ID, run_id=RUN_ID, target_repo_path=TARGET_REPO_PATH,
+        updated_at=CREATED_AT, completed_phases=list(completed), artifact_refs=artifact_refs,
+    )
+    return artifact_refs
+
+
+def _rel(path: Path, root: Path) -> str:
+    return str(path.resolve().relative_to(root.resolve())).replace("\\", "/")
+
+
+def test_resume_restarts_incomplete_research_with_fresh_architect(tmp_path):
+    _make_fixture_repo(tmp_path)
+    _seed_partial_run(tmp_path, completed=["discovery"])
+
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(),
+            "quality_engineer": _qe_sequence(verdict="pass"),
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+
+    result = core.resume(
+        run_id=RUN_ID, agent_adapter=agent_adapter, test_runner_adapter=test_runner_adapter, repo_root=tmp_path
+    )
+
+    assert result.state == State.COMPLETED
+    assert agent_adapter.start_count("architect") == 1
+    assert agent_adapter.start_count("engineer") == 1
+    assert agent_adapter.start_count("quality_engineer") == 1
+
+    summary = _assert_valid_run_summary(result)
+    assert summary["phases_reused"] == ["discovery"]
+    assert summary["phases_restarted"] == ["research"]
+    assert summary["phases_completed"] == ["discovery", "research", "implementation", "verification"]
+
+    events = [e["kind"] for e in _policy_events(result)]
+    assert events.index("resume_requested") < events.index("checkpoint_validated")
+    assert events.index("checkpoint_validated") < events.index("phase_reused")
+    assert events.index("phase_reused") < events.index("phase_restarted")
+    assert events[-1] == "resume_completed"
+    reused_events = [e for e in _policy_events(result) if e["kind"] == "phase_reused"]
+    assert reused_events == [{"kind": "phase_reused", "phase": "discovery", "artifact_ref": _rel(result.run_dir / "scope.json", tmp_path)}]
+
+
+def test_resume_reuses_research_and_architect_is_not_redispatched(tmp_path):
+    _make_fixture_repo(tmp_path)
+    _seed_partial_run(tmp_path, completed=["discovery", "research"])
+
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [],  # must never be started -- research is already complete and reused
+            "engineer": _engineer_sequence(),
+            "quality_engineer": _qe_sequence(verdict="pass"),
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+
+    result = core.resume(
+        run_id=RUN_ID, agent_adapter=agent_adapter, test_runner_adapter=test_runner_adapter, repo_root=tmp_path
+    )
+
+    assert result.state == State.COMPLETED
+    assert agent_adapter.start_count("architect") == 0, "Research is already complete -- the Architect must not be redispatched"
+    assert agent_adapter.start_count("engineer") == 1, "a fresh Engineer must be dispatched for the restarted Implementation phase"
+
+    # The Engineer's very first call in this resumed run is a fresh start(), never a
+    # resume() of some handle inherited from a prior process -- no such handle exists in
+    # this new process, and none is ever claimed to survive.
+    engineer_calls = [c for c in agent_adapter.calls if c[1] == "engineer"]
+    assert engineer_calls[0][0] == "start"
+    assert len(set(agent_adapter.handles_used("engineer"))) == 1
+
+    summary = _assert_valid_run_summary(result)
+    assert summary["phases_reused"] == ["discovery", "research"]
+    assert summary["phases_restarted"] == ["implementation"]
+
+
+def test_resume_refuses_terminal_completed_run_and_does_not_restart(tmp_path):
+    _make_fixture_repo(tmp_path)
+    before = _hash_tree(tmp_path / TARGET_REPO_PATH)
+
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(),
+            "quality_engineer": _qe_sequence(verdict="pass"),
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+    first = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+    assert first.state == State.COMPLETED
+
+    resume_agent_adapter = ScriptedAgentAdapter({})  # must never be touched
+    result = core.resume(
+        run_id=RUN_ID, agent_adapter=resume_agent_adapter,
+        test_runner_adapter=ScriptedTestRunnerAdapter(command_results={}), repo_root=tmp_path,
+    )
+
+    assert result.state == State.FAILED
+    assert result.final_verdict == "blocked"
+    assert "resume refused" in result.reason
+    assert resume_agent_adapter.calls == [], "a terminal, already-passing run must never be silently continued"
+    assert _hash_tree(tmp_path / TARGET_REPO_PATH) == before
+
+
+def test_resume_refuses_terminal_blocked_run_and_does_not_silently_continue(tmp_path):
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter({"architect": ["not-json-at-all-and-no-repair-possible-{{"]})
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results={})
+    first = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+    assert first.state == State.RESEARCH_BLOCKED
+    assert (first.run_dir / "run-summary.json").exists()
+
+    resume_agent_adapter = ScriptedAgentAdapter({})
+    result = core.resume(
+        run_id=RUN_ID, agent_adapter=resume_agent_adapter,
+        test_runner_adapter=ScriptedTestRunnerAdapter(command_results={}), repo_root=tmp_path,
+    )
+
+    assert result.state == State.FAILED
+    assert resume_agent_adapter.calls == [], "a terminal, blocked run must never be silently continued"
+
+
+def test_resume_does_not_overwrite_existing_canonical_artifact(tmp_path):
+    _make_fixture_repo(tmp_path)
+    _seed_partial_run(tmp_path, completed=["discovery", "research"])
+
+    run_directory = evidence_io.run_dir(tmp_path, RUN_ID)
+    stray_path = run_directory / "implementation-report.json"
+    stray_content = json.dumps({"stray": "leftover-from-a-different-attempt"})
+    stray_path.write_text(stray_content, encoding="utf-8")
+
+    agent_adapter = ScriptedAgentAdapter({"engineer": _engineer_sequence()})
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+
+    result = core.resume(
+        run_id=RUN_ID, agent_adapter=agent_adapter, test_runner_adapter=test_runner_adapter, repo_root=tmp_path
+    )
+
+    assert result.state == State.IMPLEMENTATION_BLOCKED
+    assert "refusing to overwrite" in result.reason
+    assert stray_path.read_text(encoding="utf-8") == stray_content, "an existing canonical artifact must never be silently overwritten"
+
+    # resume_completed must be retained even when the restarted phase itself blocks and
+    # the run never reaches Verification -- not only on a path that gets that far.
+    events = [e["kind"] for e in _policy_events(result)]
+    assert events[-1] == "resume_completed"
+
+
+def test_checkpoint_progress_is_written_after_each_phase_in_a_fresh_run(tmp_path):
+    """Integration-level proof that core.run() itself calls checkpoint.py at the right
+    times -- the low-level shape of each write is already covered directly in
+    tests/test_orchestrator_checkpoint.py."""
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence(),
+            "quality_engineer": _qe_sequence(verdict="pass"),
+        }
+    )
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=_happy_command_results(), diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+    assert result.state == State.COMPLETED
+
+    written_events = [e for e in _policy_events(result) if e["kind"] == "checkpoint_written"]
+    completed_phases_sequence = [tuple(e["completed_phases"]) for e in written_events]
+    assert completed_phases_sequence == [
+        ("discovery",),
+        ("discovery", "research"),
+        ("discovery", "research", "implementation"),
+        ("discovery", "research", "implementation", "verification"),
+    ]
+    assert written_events[-1]["status"] == "complete"
+
+    final_checkpoint = _read_json(result.run_dir / "checkpoint.json")
+    assert final_checkpoint["status"] == "complete"
+    assert final_checkpoint["current_phase"] is None

@@ -412,4 +412,69 @@ class TestTddSourceChangeInspectionAndCompletionEvidence:
     def test_canonical_evidence_and_independent_checks_required_for_completion(self) -> None:
         assert "Completion claims from any subagent are independently checked" in self.flat_text
         assert "Missing evidence blocks success" in self.flat_text
+
+
+class TestCheckpointingAndResume:
+    def setup_method(self) -> None:
+        self.text = SKILL_PATH.read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+
+    def test_resume_is_the_one_and_only_syntax(self) -> None:
+        assert "--resume <run_id>" in self.text
+        assert "one and only resume syntax" in self.flat_text
+
+    def test_resume_never_combined_with_dry_run_or_ticket_mode(self) -> None:
+        assert "never combined with `--dry-run` or ticket mode" in self.flat_text
+
+    def test_progress_checkpoint_written_after_each_of_three_phases(self) -> None:
+        for phrase in (
+            'completed_phases: ["discovery"]',
+            'completed_phases: ["discovery", "research"]',
+            'completed_phases: ["discovery", "research", "implementation"]',
+        ):
+            assert phrase in self.flat_text, phrase
+
+    def test_no_checkpoint_for_discovery_refused_or_invalid(self) -> None:
+        assert "No checkpoint at all" in self.flat_text or "without dispatching the Architect and **without** writing a checkpoint" in self.text
+
+    def test_evaluate_resume_performs_full_precondition_pipeline(self) -> None:
+        assert "evaluate_resume" in self.text
+        for code in (
+            "no_checkpoint", "invalid_checkpoint", "run_id_mismatch", "terminal_complete",
+            "terminal_failed", "run_already_terminal", "target_repo_path_invalid",
+            "missing_artifact", "invalid_artifact", "artifact_identity_mismatch",
+        ):
+            assert code in self.text, code
+
+    def test_terminal_runs_never_restarted(self) -> None:
+        assert "never restart it" in self.flat_text.lower()
+
+    def test_completed_phases_reused_without_redispatch(self) -> None:
+        assert "reused" in self.flat_text.lower()
+        assert "not redispatched" in self.flat_text.lower() or "must not be redispatched" in self.flat_text.lower()
+        assert "the Architect must not run again" in self.flat_text
+        assert "the Engineer must not run again" in self.flat_text
+
+    def test_restarted_phase_gets_a_fresh_agent_not_a_resumed_handle(self) -> None:
+        assert "dispatch a brand-new agent instance" in self.flat_text
+        assert "no live handle from whatever process wrote the checkpoint" in self.flat_text
+        assert "never described as" in self.flat_text.lower()
+
+    def test_existing_canonical_artifact_never_silently_overwritten_on_resume(self) -> None:
+        assert "never silently overwrite existing evidence" in self.flat_text.lower()
+
+    def test_run_summary_records_reused_and_restarted_phases(self) -> None:
+        assert "phases_reused" in self.text
+        assert "phases_restarted" in self.text
+
+    def test_resume_policy_events_documented(self) -> None:
+        for kind in (
+            "resume_requested", "checkpoint_validated", "phase_reused", "phase_restarted",
+            "resume_refused", "resume_completed", "checkpoint_written",
+        ):
+            assert kind in self.text, kind
+
+    def test_reporting_states_checkpoint_path_and_resume_status(self) -> None:
+        assert "checkpoint.json" in self.text
+        assert "which phases were reused" in self.flat_text.lower() or "which single phase was restarted" in self.flat_text.lower()
         assert "not evidence" in self.flat_text.lower()

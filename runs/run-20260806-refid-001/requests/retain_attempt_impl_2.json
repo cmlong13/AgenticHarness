@@ -1,0 +1,7 @@
+{
+  "operation": "retain_attempt",
+  "run_id": "run-20260806-refid-001",
+  "phase": "implementation",
+  "attempt_n": 2,
+  "raw_text": "```json\n{\n  \"response_type\": \"pre_test_requested\",\n  \"task_id\": \"T-REFID\",\n  \"run_id\": \"run-20260806-refid-001\",\n  \"test_created\": {\n    \"test_file\": \"demo-repo/tests/unit/test_applicant_validation.py\",\n    \"test_name\": \"test_invalid_reference_id_formats_are_rejected[AP-000123\\\\n]\",\n    \"status\": \"added\"\n  },\n  \"requested_command\": {\n    \"id\": \"C-1\",\n    \"command\": \"python -m pytest tests/unit/test_applicant_validation.py -v\",\n    \"working_directory\": \"demo-repo\",\n    \"expected_outcome\": \"fail\",\n    \"expected_failure_reason\": \"The bad_id parametrize case 'AP-000123\\\\n' should currently fail: _REFERENCE_ID_RE = re.compile(r\\\"^[A-Z]{2}-\\\\d{6}$\\\") has no re.MULTILINE flag, so its trailing '$' matches immediately before the string's final '\\\\n' as well as at the true end of string, making _REFERENCE_ID_RE.match('AP-000123\\\\n') succeed and validate_reference_id return the value instead of raising ValidationError, so pytest.raises(ValidationError) fails to observe the expected exception for that one parametrized case.\"\n  },\n  \"findings_relied_on\": [\"F-1\"],\n  \"minimal_change_rung_plan\": 3\n}\n```"
+}

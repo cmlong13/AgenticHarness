@@ -1,0 +1,13 @@
+{
+  "operation": "write_checkpoint",
+  "kind": "terminal_failure",
+  "run_id": "run-20260806-refid-001",
+  "task_id": "T-REFID",
+  "target_repo_path": "demo-repo",
+  "completed_phases": ["discovery", "research"],
+  "artifact_refs": {
+    "discovery": "runs/run-20260806-refid-001/scope.json",
+    "research": "runs/run-20260806-refid-001/findings.json"
+  },
+  "reason": "Implementation phase blocked on resume: the resumed run's fresh Engineer dispatch (agent a9f9581966b31dc62) produced a Markdown-fenced pre_test_requested reply, which consumed this phase's single permitted transport-only correction (successfully resolved). A second, unrelated transport failure -- leading prose before the JSON object on the finalization_evidence_requested turn, after C-1/C-2 both executed correctly via the real test-runner Skill with matching identity and a genuine pre-test failure followed by a genuine post-test pass -- is not eligible for a second correction under the one-per-phase budget. No implementation-report.json was ever validated or promoted."
+}

@@ -1,0 +1,27 @@
+{
+  "operation": "write_run_summary",
+  "run_id": "run-20260806-refid-001",
+  "state": "implementation_blocked",
+  "summary": {
+    "schema_version": "1.0",
+    "task_id": "T-REFID",
+    "run_id": "run-20260806-refid-001",
+    "created_at": "2026-08-06T17:30:33Z",
+    "objective_summary": "This was a /work --resume run-20260806-refid-001 invocation. Discovery (scope.json) and Research (findings.json) were reused unchanged from the prior interrupted process's checkpoint -- no redispatch. Implementation was the one incomplete phase and was restarted with a brand-new Engineer agent instance (per the resume protocol; no live handle to the prior process's agent existed). That fresh Engineer produced a genuine failing pre-test (C-1, exit_code 1, DID NOT RAISE ValidationError for the trailing-newline case), a minimal one-character regex-anchor fix ('$' -> '\\\\Z') in demo-repo/src/loanflow/applicant_validation.py, and a genuine passing post-test (C-2, exit_code 0, all 6 tests pass) -- both mediated through the real test-runner Skill with matching request/result identity. The phase then blocked: its pre_test_requested turn was Markdown-fenced (a transport/parse failure), consuming this phase's one permitted transport-only correction, which succeeded. A second, independent transport failure -- leading prose before the JSON object on the finalization_evidence_requested turn -- was not eligible for a second correction under the one-correction-per-phase budget, so the phase was blocked before any implementation-report.json could be validated or promoted. Verification was never attempted.",
+    "artifact_refs": {
+      "scope": "runs/run-20260806-refid-001/scope.json",
+      "findings": "runs/run-20260806-refid-001/findings.json",
+      "checkpoint": "runs/run-20260806-refid-001/checkpoint.json"
+    },
+    "phases_completed": ["discovery", "research"],
+    "phases_reused": ["discovery", "research"],
+    "phases_restarted": ["implementation"],
+    "remaining_risks": [
+      "The regex-anchor fix ('$' -> '\\\\Z') in demo-repo/src/loanflow/applicant_validation.py is present in the working tree and independently confirmed (via the real test-runner Skill, C-1/C-2) to make the previously-failing trailing-newline case pass while all other cases continue to pass, but it was never verified through a promoted implementation-report.json or a Verification phase, and remains uncommitted, unreviewed working-tree state."
+    ],
+    "follow_up_actions": [
+      "Start a new /work run (or a fresh, non-resumed Implementation dispatch) to obtain a conforming finalization_evidence_requested/finalization_evidence exchange and a validly promoted implementation-report.json for this same fix, since this run's Engineer transport-repair budget is exhausted and cannot be reused.",
+      "Decide whether to keep or discard the current uncommitted working-tree changes under demo-repo/ (applicant_validation.py and test_applicant_validation.py) before starting that new run, since they were never promoted as evidence."
+    ]
+  }
+}

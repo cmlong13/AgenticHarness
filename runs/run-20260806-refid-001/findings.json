@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-REFID",
+  "run_id": "run-20260806-refid-001",
+  "created_at": "2026-08-06T17:01:08Z",
+  "scope_ref": {
+    "path": "runs/run-20260806-refid-001/scope.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "_REFERENCE_ID_RE is compiled as r\"^[A-Z]{2}-\\d{6}$\" (no re.MULTILINE flag) and validate_reference_id checks the input via _REFERENCE_ID_RE.match(reference_id), raising ValidationError only when that match call returns a falsy result.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/applicant_validation.py",
+          "start_line": 13,
+          "end_line": 13,
+          "evidence_tier": "executable_code",
+          "excerpt": "_REFERENCE_ID_RE = re.compile(r\"^[A-Z]{2}-\\d{6}$\")"
+        },
+        {
+          "path": "demo-repo/src/loanflow/applicant_validation.py",
+          "start_line": 16,
+          "end_line": 26,
+          "evidence_tier": "executable_code",
+          "excerpt": "if not _REFERENCE_ID_RE.match(reference_id):\n    raise ValidationError(...)\nreturn reference_id"
+        }
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "validate_reference_id('AP-000123\\n') does not raise ValidationError -- it returns the string unchanged -- because Python's re module documents '$' as matching either at the true end of the string or immediately before a trailing newline at the end of the string when re.MULTILINE is not set, and _REFERENCE_ID_RE (F-1) uses a bare '$' anchor with no re.MULTILINE flag, so _REFERENCE_ID_RE.match('AP-000123\\n') succeeds and the 'if not ...' branch in validate_reference_id is not taken.",
+      "classification": "inferred",
+      "supporting_finding_ids": [
+        "F-1"
+      ],
+      "reasoning": "F-1 establishes the exact compiled pattern and match call used at runtime. Python's re module semantics (documented and stable stdlib behavior since Python's earliest re implementation) specify that, absent re.MULTILINE, '$' matches at the end of the string and also just before a single trailing '\\n' at the end of the string. Applying that documented anchor behavior to the pattern and call captured in F-1 shows that the digit group '\\d{6}' would match 'AP-000123'[3:9]='000123' and the trailing '$' would then match the position immediately before the string's final '\\n', making the overall match succeed for input 'AP-000123\\n'. Since the function only raises when match() is falsy (F-1), a successful match means no exception is raised and the trailing-newline string is returned as if valid."
+    },
+    {
+      "id": "F-3",
+      "claim": "demo-repo/tests/unit/test_applicant_validation.py has no test case that exercises a reference id string with a trailing newline (e.g. 'AP-000123\\n').",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "grep",
+          "query": "reference_id|REFERENCE_ID|newline|\\\\n",
+          "scope": "demo-repo/tests/unit/test_applicant_validation.py",
+          "result": "Matched only import/usage lines and the two test function definitions; no occurrence of a literal newline character or the word 'newline' anywhere in the file."
+        },
+        {
+          "method": "grep",
+          "query": "000123|trailing",
+          "scope": "demo-repo/tests/unit/test_applicant_validation.py",
+          "result": "Matched only the existing valid-id assertion ('AP-000123') and the bad_id parametrize line; neither includes a trailing-newline variant."
+        },
+        {
+          "method": "read",
+          "query": "full file contents",
+          "scope": "demo-repo/tests/unit/test_applicant_validation.py",
+          "result": "File contains exactly two tests: test_valid_reference_id_is_returned_unchanged (asserts 'AP-000123' round-trips) and test_invalid_reference_id_formats_are_rejected, parametrized over ['AP000123', 'ap-000123', 'AP-12', '']. No trailing-newline case is present in either test."
+        }
+      ]
+    }
+  ],
+  "open_questions": [
+    "The scope's task_graph includes N-2 (fix the regex anchor '$' -> '\\Z' and add a regression test) and N-3 (verify the fix) as implementation/verification phases. Implementing that regex change, writing the new regression test, and running the test suite to verify are outside the Architect's research-only role and are not performed in this findings report; a separate implementation step is required to apply and verify the fix described in the scope's objective."
+  ]
+}

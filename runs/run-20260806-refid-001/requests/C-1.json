@@ -1,0 +1,9 @@
+{
+  "task_id": "T-REFID",
+  "run_id": "run-20260806-refid-001",
+  "command_id": "C-1",
+  "command": "python -m pytest tests/unit/test_applicant_validation.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Pre-implementation TDD check: confirm the new 'AP-000123\\n' bad_id parametrize case fails as expected (validate_reference_id currently accepts a trailing-newline reference id due to the bare '$' regex anchor without re.MULTILINE)."
+}

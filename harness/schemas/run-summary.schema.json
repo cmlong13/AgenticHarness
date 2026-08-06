@@ -38,6 +38,16 @@
       "uniqueItems": true,
       "items": { "enum": ["discovery", "research", "implementation", "verification"] }
     },
+    "phases_reused": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "enum": ["discovery", "research", "implementation", "verification"] }
+    },
+    "phases_restarted": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "enum": ["discovery", "research", "implementation", "verification"] }
+    },
     "lessons_learned_appended": {
       "type": "array",
       "maxItems": 5,
@@ -53,5 +63,5 @@
     },
     "duration_seconds": { "type": "number", "minimum": 0 }
   },
-  "$comment": "Semantic rule not enforced here (deferred to the future Python validator): each path present in artifact_refs must resolve to a file that actually exists and whose own task_id/run_id match this document's."
+  "$comment": "Semantic rule not enforced here (deferred to the future Python validator): each path present in artifact_refs must resolve to a file that actually exists and whose own task_id/run_id match this document's. Extension (2026-08-06, checkpoint/resume milestone): phases_reused and phases_restarted are optional and present only on a run-summary produced by a resumed run -- phases_reused lists phases whose canonical artifact was loaded from a prior checkpoint without redispatching an agent; phases_restarted lists phases that were incomplete at interruption and were run fresh in this process. Both are absent on an ordinary, non-resumed run."
 }

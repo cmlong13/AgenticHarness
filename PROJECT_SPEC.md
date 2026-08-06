@@ -79,6 +79,85 @@ demonstration, and none of the other hooks-milestone open items (ORCH-* identity
 route-back live proof, a full live `/work` pipeline exercising these hooks) are affected by
 it.
 
+**Milestone update (2026-08-06): checkpoint persistence and genuine process-resume.** On top
+of the hooks/route-back milestone above, this session closes the checkpoint/resume milestone:
+(1) `checkpoint.schema.json` gained one precise, documented extension, `target_repo_path`
+(required) -- the only fact resume genuinely cannot recover otherwise, since no other
+canonical artifact persists it; (2) `harness/orchestrator/checkpoint.py` (new) -- four explicit
+builders (`record_phase_progress`, `record_completion`, `record_interruption`,
+`record_terminal_failure`) that assemble, schema/semantically validate, and atomically write
+(`evidence_io.atomic_write`: temp file + `os.replace`, extended from the existing collision-guarded
+write pattern to allow legitimate overwrite) `runs/<run_id>/checkpoint.json`, plus a
+side-effect-free `evaluate_resume()` implementing every resume precondition: existence, schema/
+semantic validity, run_id match, terminal-status refusal (`complete`/`failed`, plus an
+independent `run-summary.json`-exists guard), a real `target_repo_path` re-check, and for every
+completed phase, artifact existence, full schema/semantic revalidation, and task_id/run_id
+identity cross-check against the checkpoint's own claims; (3) two new semantic rules in
+`harness/evidence.py`'s `validate_checkpoint_semantics` closing real gaps -- every
+`completed_phases` entry must have a matching `artifact_refs` entry (blocks a false
+completed-phase claim) and `completed_phases` must be a contiguous prefix of
+discovery→research→implementation→verification (enforces predecessor relationships
+structurally); (4) `harness/orchestrator/core.py`'s phase logic extracted into shared
+`_do_research`/`_do_implementation`/`_do_verification` helpers so the existing `run()` and a new
+`resume()` share them, with progress checkpoints threaded through `run()` and a centralized
+terminal-checkpoint write inside `_finalize`; (5) two new `live_cli.py` operations,
+`write_checkpoint` and `evaluate_resume`, delegating entirely to `checkpoint.py`; (6) `/work`
+SKILL.md gained the one and only resume syntax, `/work --resume <run_id>`, checkpoint-write steps
+after Discovery/Research/Implementation/Verification, and a full "Checkpointing and resume"
+section describing the fresh-agent-dispatch, no-redispatch-of-completed-phases, no-overwrite,
+and honest-policy-event rules. `run-summary.schema.json` gained two optional fields,
+`phases_reused`/`phases_restarted`, present only on a resumed run's summary. 47 new deterministic
+tests (`tests/test_orchestrator_checkpoint.py`, additions to `tests/test_orchestrator_core.py`,
+`tests/test_orchestrator_live_cli.py`, `tests/test_work_skill.py`); full suite 489 passing (up
+from 442), `demo-repo/` unaffected as a baseline (106 tests). **Live-demonstrated the same day**:
+a real, live `/work`-shaped run (`run-20260806-refid-001`, task `T-REFID`, targeting a genuine,
+previously-uncovered bug in `demo-repo/src/loanflow/applicant_validation.py` --
+`validate_reference_id`'s regex uses a bare `$` anchor, which Python's `re` module matches
+immediately before a trailing newline as well as at the true end of string, so
+`validate_reference_id("AP-000123\n")` was incorrectly accepted) ran Discovery (approved,
+checkpointed), a real Architect dispatch (Research, checkpointed, `findings.json` with one
+`found`, one `inferred`, one honest `not_found` finding), and began Implementation with a real
+Engineer dispatch that wrote a genuine failing regression test
+(`demo-repo/tests/unit/test_applicant_validation.py`, parametrized case `"AP-000123\n"`, real
+`pytest` failure confirmed) before the run was deliberately interrupted -- retained as an
+`intentional_interruption` policy event -- before mediating that test through the test-runner
+Skill and before resuming the Engineer. `checkpoint.json`'s last safely completed phase remains
+Research; no `implementation-report.json` was ever promoted; no `.completion_claim.json` was
+written. See `runs/run-20260806-refid-001/` for the full retained evidence.
+
+**Second process (2026-08-06, same day): genuine fresh-process resume, terminated blocked.**
+A separate Claude Code process invoked `/work --resume run-20260806-refid-001`, closing the
+deliberate handoff boundary named above. `evaluate_resume` returned `status: "resumable"`; the
+resuming process reused Discovery and Research unchanged (`phase_reused` retained for both,
+neither the Architect nor a new Discovery pass dispatched), retained `phase_restarted` for
+Implementation, and dispatched a brand-new Engineer agent instance (`a9f9581966b31dc62`) rather
+than claiming any live handle from the first, already-exited process survived. That fresh
+Engineer produced a genuine failing pre-implementation test (`C-1`, real `pytest` exit code 1,
+`DID NOT RAISE ValidationError` for the trailing-newline case) and, after the same one-character
+regex-anchor fix (`'$'` -> `'\Z'`) in `applicant_validation.py`, a genuine passing
+post-implementation test (`C-2`, real `pytest` exit code 0, all 6 tests pass) -- both
+independently mediated through the real test-runner Skill with matching request/result identity.
+The phase then blocked honestly: its first staged turn (`pre_test_requested`) was
+Markdown-fenced, a real transport violation that consumed this phase's single permitted
+transport-only correction (successfully resolved); a second, unrelated transport violation
+(leading prose before the JSON object on the `finalization_evidence_requested` turn) was not
+eligible for a second correction under the one-per-phase budget, so the phase blocked before any
+`implementation-report.json` could be validated or promoted. The run wrote a terminal
+`checkpoint.json` (`status: "failed"`, `completed_phases: ["discovery", "research"]`) and a
+`run-summary.json` with `final_verdict: "blocked"`; Verification was never attempted; no
+`.completion_claim.json` was written. This live-proves a genuine process restart, checkpoint
+loading and validation, reuse of completed Discovery and Research without redispatch, no
+Architect redispatch, a fresh-agent restart of the incomplete Implementation phase, refusal to
+reuse an old process-local agent handle, and honest terminal blocking after resume. It does
+**not** prove a successfully completed resumed pipeline, successful Verification after resume,
+or a final passing verdict after resume -- those remain deterministic-test-proven only
+(`tests/test_orchestrator_core.py`'s resume tests), pending a future live run that reaches
+Verification. The two unpromoted `demo-repo/` working-tree changes this blocked run left behind
+(`applicant_validation.py`, `test_applicant_validation.py`) have since been reverted by the user;
+`demo-repo/` carries no residual changes from this run. See
+`runs/run-20260806-refid-001/checkpoint.json`, `run-summary.json`, and
+`logs/policy-events.jsonl` for the full record.
+
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
 followed. Implementation should track this spec; if the two diverge, update this file first.
@@ -288,10 +367,14 @@ MCP server in favor of curl-based skills for reliability/debuggability).
 
 ### Memory loop
 - `lessons-learned.md` — read before every run; at most 5 bullets appended after each run.
+  **Not started.**
 - Persistent memory directory — small single-fact files + an index, for durable facts
   (environment quirks, workflow corrections, project state). Relative dates converted to
-  absolute when saved.
+  absolute when saved. **Not started.**
 - Pipeline checkpointing — an interrupted run auto-resumes at the phase it died in.
+  **Complete and live-demonstrated (2026-08-06)** — see the checkpoint/resume milestone note
+  above and §10. The memory loop itself (`lessons-learned.md`, the persistent memory directory)
+  remains separate, later work, not part of this milestone.
 
 ### Output contracts (per phase)
 - Discovery → task definition + task graph
@@ -327,7 +410,8 @@ MCP server in favor of curl-based skills for reliability/debuggability).
   other four failure branches remain deterministic-only (see §10 "Hooks and same-run
   route-back milestone (2026-08-05)")
 - `lessons-learned.md` + basic memory directory
-- Checkpoint/resume for the pipeline
+- Checkpoint/resume for the pipeline — **COMPLETE and live-demonstrated (2026-08-06)**: see
+  the checkpoint/resume milestone note above and §10.
 - GitHub access via `gh`/`git` CLI (real commits + independent push verification via
   `git ls-remote`/`git rev-parse`)
 - A real target repo (≥50 files) to run against — **complete**: `demo-repo/loanflow`, 55 files,
@@ -387,7 +471,11 @@ AgenticHarness/
 │
 ├── harness/                       # Python glue code invoked BY hooks/skills, not a separate agent runtime
 │   ├── __init__.py                # [DONE]
-│   ├── checkpoint.py              # pipeline state save/resume -- not yet built (§10 "Remaining work")
+│   ├── orchestrator/checkpoint.py # [DONE] pipeline state save/resume (checkpoint/resume milestone,
+│   │                              #        2026-08-06) -- lives under harness/orchestrator/, not
+│   │                              #        directly under harness/ as this file map originally
+│   │                              #        planned, for the same relative-import consistency
+│   │                              #        reason discovery.py/evidence_io.py/paths.py do
 │   ├── memory.py                  # lessons-learned.md + memory-dir read/append (cap enforcement)
 │   ├── evidence.py                # [DONE] schema + semantic artifact validation, incl. validate_scope_semantics
 │   ├── cost.py                    # token/cost aggregation across a run
@@ -474,9 +562,10 @@ AgenticHarness/
    route-back milestone (2026-08-05)". The completion-guardrail hook's
    missing-verification-evidence branch is now also live-demonstrated against a real `Stop`
    event (`runs/completion-guardrail-live-001/`); its other branches remain
-   deterministic-only. Checkpoint/resume and the memory loop
-   (`lessons-learned.md`, persistent memory directory) remain **not started**. The post-agent
-   cost/token-tracking hook remains **not started**.
+   deterministic-only. Checkpoint/resume — **COMPLETE and live-demonstrated (2026-08-06)**, see
+   the checkpoint/resume milestone note above. The memory loop (`lessons-learned.md`, persistent
+   memory directory) remains **not started**. The post-agent cost/token-tracking hook remains
+   **not started**.
 10. Independent GitHub push-verification path. **Not started** — no commit/push has been
     performed by the harness in any live run to date (by design; see `work/SKILL.md` standing
     rule 12).
@@ -573,8 +662,29 @@ Demonstrated live, on a repo with ≥50 files:
 - [ ] Orchestrator catches a simulated false "pushed" claim via `git ls-remote`.
 - [ ] Obsidian vault receives a run summary; `lessons-learned.md` gains ≤5 bullets; a second run
       visibly uses a lesson from the first.
-- [ ] Killing the pipeline mid-Implementation and rerunning resumes from checkpoint instead of
-      restarting.
+- [x] Killing the pipeline mid-Implementation and rerunning resumes from checkpoint instead of
+      restarting. **Live-demonstrated across two genuine, separate Claude Code processes
+      (2026-08-06)**: the first process interrupted `run-20260806-refid-001` deliberately during
+      Implementation (Engineer dispatched, first staged turn received and retained, never
+      mediated or resumed); `checkpoint.json` correctly recorded
+      `completed_phases: ["discovery", "research"]`, `current_phase: "implementation"`,
+      `status: "interrupted"`. A second, separate process then invoked `/work --resume
+      run-20260806-refid-001`, received `evaluate_resume.status: "resumable"`, reused Discovery
+      and Research without redispatching the Architect, and restarted Implementation with a
+      brand-new Engineer instance rather than any surviving process-local handle — this is the
+      run that does resume from checkpoint instead of restarting, exactly as this checklist item
+      asks. **Qualification**: that resumed invocation did not go on to complete the pipeline —
+      after mediating a real failing C-1 and a real passing C-2 test and independently confirming
+      the production fix, it terminated **blocked** during Implementation when the Engineer
+      produced a second transport-format violation after the phase's single correction budget was
+      already exhausted; it never entered Verification and never promoted
+      `implementation-report.json`. See §10 "Second process (2026-08-06, same day): genuine
+      fresh-process resume, terminated blocked" and `runs/run-20260806-refid-001/` for the full
+      record. Deterministic proof that a fresh process reuses completed phases and dispatches a
+      fresh agent for the restarted one, without redispatching a completed phase's agent, and that
+      such a resumed run can also reach a genuine passing Verification, remains covered by
+      `tests/test_orchestrator_core.py`'s resume tests only — no live run has yet demonstrated a
+      resumed pipeline completing through Verification with a passing verdict.
 - [ ] Total token/cost figure for one full pipeline run can be stated.
 
 ## 9. What NOT to Build
@@ -1572,8 +1682,9 @@ the live adapter layer (§6 items 5–8, 11) are all now complete and verified, 
 passing, end-to-end four-phase `/work` run (`run-20260804-riskband-003`) — the Core MVP's live
 loop has closed once, with real evidence. The remaining paths: (1) the `github/` and `jira/`
 skill packs, required for the assignment's "≥4 skill packs" bar but not the Core MVP loop (§4);
-(2) hooks/guardrails, checkpoint/resume, the memory loop, and token/cost accounting (§6 items
-9–10); (3) Obsidian integration, connector comparisons, and planted-defect (flaky-test,
+(2) hooks/guardrails and token/cost accounting (§6 items 9–10) — checkpoint/resume, the other
+item in that pair, is now complete, see the checkpoint/resume milestone notes above (2026-08-06);
+(3) Obsidian integration, connector comparisons, and planted-defect (flaky-test,
 false-push) demonstrations (§6 item 12). See "Live evidence (`run-20260804-riskband-003`) —
 completed" in §10 for exactly what this milestone did and did not close.
 
@@ -1583,9 +1694,10 @@ same-run logic-failure route-back loop and ORCH-* identity enforcement — see �
 same-run route-back milestone (2026-08-05)". The completion-guardrail hook's
 missing-verification-evidence branch is now also live-demonstrated against a real `Stop`
 event, via a dedicated fixture rather than a live `/work` run — see §10 "Live Stop-hook
-demonstration (`completion-guardrail-live-001`, 2026-08-05)". Checkpoint/resume, the memory
-loop, the post-agent cost hook, and a live demonstration of route-back/hooks against a real
-`/work` run all remain open.
+demonstration (`completion-guardrail-live-001`, 2026-08-05)". **Update (2026-08-06):**
+checkpoint/resume is now complete — see the checkpoint/resume milestone notes above for the
+current, authoritative account. The memory loop, the post-agent cost hook, and a live
+demonstration of route-back/hooks against a real `/work` run all remain open.
 
 ### Eight-day MVP planning target
 
@@ -1618,14 +1730,19 @@ documentation may require additional time after the working MVP closes.
 6. ~~Live Claude Code adapter layer, real test-runner adapter, reasoning-backed Discovery
    adapter, and `/work` prompt mode.~~ **COMPLETE and live-verified** —
    `run-20260804-riskband-003`.
-7. Checkpoint, memory, and guardrail hooks. **Partially complete** (2026-08-05):
-   pre-dispatch-check, skill-enforcement, and completion-guardrail hooks are implemented,
-   configured, and tested (see §10 "Hooks and same-run route-back milestone (2026-08-05)")
-   — live-verified for the two `PreToolUse` hooks; the `Stop` hook is now live-verified too,
-   for its missing-verification-evidence branch specifically
-   (`runs/completion-guardrail-live-001/`, see §10 "Live Stop-hook demonstration") — its other
-   four failure branches remain deterministic-only. Checkpoint/resume, the memory loop, and
-   the post-agent cost hook remain **not started.**
+7. Checkpoint, memory, and guardrail hooks. **Partially complete**: pre-dispatch-check,
+   skill-enforcement, and completion-guardrail hooks are implemented, configured, and tested
+   (see §10 "Hooks and same-run route-back milestone (2026-08-05)") — live-verified for the
+   two `PreToolUse` hooks; the `Stop` hook is now live-verified too, for its
+   missing-verification-evidence branch specifically (`runs/completion-guardrail-live-001/`,
+   see §10 "Live Stop-hook demonstration") — its other four failure branches remain
+   deterministic-only. ~~Checkpoint/resume.~~ **COMPLETE (2026-08-06)**: persistence is
+   implemented, deterministic resume tests pass, and a genuine two-process live restart reused
+   Discovery and Research and restarted Implementation with a fresh Engineer — that live
+   resumed invocation later ended blocked during Implementation on transport-budget exhaustion;
+   a resumed run reaching a passing Verification remains deterministic-only. See the
+   checkpoint/resume milestone notes above for the full, authoritative account. The memory loop
+   and the post-agent cost hook remain **not started.**
 8. ~~First complete evidence-backed pipeline run.~~ **COMPLETE** — `run-20260804-riskband-003`,
    `final_verdict: "pass"`. See §10 "Live evidence (`run-20260804-riskband-003`) — completed."
 9. Deferred integrations and final assignment demonstrations (includes `github/`/`jira/` skill

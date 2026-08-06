@@ -1,0 +1,44 @@
+command: python -m pytest tests/unit/test_applicant_validation.py -v
+executed_as: C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe -m pytest tests/unit/test_applicant_validation.py -v
+working_directory: demo-repo
+timeout_seconds: 300
+real_pytest_exit_code: 1
+reported_exit_code: 1
+
+--- STDOUT ---
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo
+configfile: pyproject.toml
+collecting ... collected 6 items
+
+tests/unit/test_applicant_validation.py::test_valid_reference_id_is_returned_unchanged PASSED [ 16%]
+tests/unit/test_applicant_validation.py::test_invalid_reference_id_formats_are_rejected[AP000123] PASSED [ 33%]
+tests/unit/test_applicant_validation.py::test_invalid_reference_id_formats_are_rejected[ap-000123] PASSED [ 50%]
+tests/unit/test_applicant_validation.py::test_invalid_reference_id_formats_are_rejected[AP-12] PASSED [ 66%]
+tests/unit/test_applicant_validation.py::test_invalid_reference_id_formats_are_rejected[] PASSED [ 83%]
+tests/unit/test_applicant_validation.py::test_invalid_reference_id_formats_are_rejected[AP-000123\n] FAILED [100%]
+
+================================== FAILURES ===================================
+_________ test_invalid_reference_id_formats_are_rejected[AP-000123\n] _________
+
+bad_id = 'AP-000123\n'
+
+    @pytest.mark.parametrize(
+        "bad_id", ["AP000123", "ap-000123", "AP-12", "", "AP-000123\n"]
+    )
+    def test_invalid_reference_id_formats_are_rejected(bad_id: str) -> None:
+>       with pytest.raises(ValidationError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValidationError
+
+tests\unit\test_applicant_validation.py:17: Failed
+=========================== short test summary info ===========================
+FAILED tests/unit/test_applicant_validation.py::test_invalid_reference_id_formats_are_rejected[AP-000123\n]
+========================= 1 failed, 5 passed in 0.04s =========================
+
+--- STDERR ---
+
+--- MUTATION CHECK ---
+no persistent non-cache file addition, deletion, or modification detected

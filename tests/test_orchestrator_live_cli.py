@@ -530,3 +530,119 @@ class TestCliErrorHandling:
         )
         assert exit_code != 0
         assert resp["status"] == "invalid"
+
+
+# ---------------------------------------------------------------------------
+# operations 10 + 11: write_checkpoint / evaluate_resume
+# ---------------------------------------------------------------------------
+
+
+class TestWriteCheckpoint:
+    def test_progress_checkpoint_is_written(self, repo_root, capsys) -> None:
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "write_checkpoint", "kind": "progress", "run_id": "run-1", "task_id": "T-1",
+                "target_repo_path": "demo-repo", "completed_phases": ["discovery"],
+                "artifact_refs": {"discovery": "runs/run-1/scope.json"},
+            },
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "written"
+        doc = json.loads((repo_root / resp["path"]).read_text(encoding="utf-8"))
+        assert doc["status"] == "in_progress"
+        assert doc["current_phase"] == "research"
+        assert doc["target_repo_path"] == "demo-repo"
+
+    def test_unrecognized_kind_is_a_usage_error(self, repo_root, capsys) -> None:
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "write_checkpoint", "kind": "not-a-real-kind", "run_id": "run-1", "task_id": "T-1",
+                "target_repo_path": "demo-repo",
+            },
+            capsys,
+        )
+        assert exit_code == 2
+        assert resp["status"] == "error"
+
+    def test_invalid_resulting_document_is_blocked_not_written(self, repo_root, capsys) -> None:
+        # completed_phases claims "research" complete with no artifact_refs entry for it
+        # -- a false completed-phase claim; the write must be refused, not written.
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "write_checkpoint", "kind": "progress", "run_id": "run-1", "task_id": "T-1",
+                "target_repo_path": "demo-repo", "completed_phases": ["discovery", "research"],
+                "artifact_refs": {"discovery": "runs/run-1/scope.json"},
+            },
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "blocked"
+        assert not (repo_root / "runs" / "run-1" / "checkpoint.json").exists()
+
+    def test_completion_checkpoint_covers_all_four_phases(self, repo_root, capsys) -> None:
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "write_checkpoint", "kind": "completion", "run_id": "run-1", "task_id": "T-1",
+                "target_repo_path": "demo-repo",
+                "artifact_refs": {
+                    "discovery": "runs/run-1/scope.json", "research": "runs/run-1/findings.json",
+                    "implementation": "runs/run-1/implementation-report.json",
+                    "verification": "runs/run-1/verification-report.json",
+                },
+            },
+            capsys,
+        )
+        assert exit_code == 0
+        doc = json.loads((repo_root / resp["path"]).read_text(encoding="utf-8"))
+        assert doc["status"] == "complete"
+        assert doc["current_phase"] is None
+
+
+class TestEvaluateResume:
+    def test_missing_checkpoint_is_refused(self, repo_root, capsys) -> None:
+        exit_code, resp = _run_main(repo_root, {"operation": "evaluate_resume", "run_id": "run-1"}, capsys)
+        assert exit_code == 1
+        assert resp["status"] == "refused"
+        assert resp["code"] == "no_checkpoint"
+
+        events_path = repo_root / "runs" / "run-1" / "logs" / "policy-events.jsonl"
+        kinds = [json.loads(line)["kind"] for line in events_path.read_text(encoding="utf-8").splitlines()]
+        assert kinds == ["resume_requested", "resume_refused"]
+
+    def test_valid_checkpoint_is_resumable(self, repo_root, capsys) -> None:
+        (repo_root / "demo-repo").mkdir()
+        _run_main(
+            repo_root,
+            {
+                "operation": "promote_artifact", "run_id": "run-1", "phase": "discovery",
+                "expected_task_id": "T-1", "expected_run_id": "run-1", "target_repo_path": "demo-repo",
+                "doc": _SCOPE_BASE,
+            },
+            capsys,
+        )
+        _run_main(
+            repo_root,
+            {
+                "operation": "write_checkpoint", "kind": "progress", "run_id": "run-1", "task_id": "T-1",
+                "target_repo_path": "demo-repo", "completed_phases": ["discovery"],
+                "artifact_refs": {"discovery": "runs/run-1/scope.json"},
+            },
+            capsys,
+        )
+
+        exit_code, resp = _run_main(repo_root, {"operation": "evaluate_resume", "run_id": "run-1"}, capsys)
+        assert exit_code == 0
+        assert resp["status"] == "resumable"
+        assert resp["task_id"] == "T-1"
+        assert resp["target_repo_path"] == "demo-repo"
+        assert resp["completed_phases"] == ["discovery"]
+        assert resp["next_phase"] == "research"
+
+        events_path = repo_root / "runs" / "run-1" / "logs" / "policy-events.jsonl"
+        kinds = [json.loads(line)["kind"] for line in events_path.read_text(encoding="utf-8").splitlines()]
+        assert kinds == ["checkpoint_written", "resume_requested", "checkpoint_validated"]

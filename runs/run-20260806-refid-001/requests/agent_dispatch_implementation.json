@@ -1,0 +1,12 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260806-refid-001",
+  "kind": "agent_dispatch",
+  "payload": {
+    "phase": "implementation",
+    "subagent_type": "engineer",
+    "agent_id": "a9f9581966b31dc62",
+    "dispatch_sequence": 1,
+    "note": "fresh dispatch for restarted phase per resume protocol; supersedes the unresumable pre-interruption instance from the checkpointed process"
+  }
+}

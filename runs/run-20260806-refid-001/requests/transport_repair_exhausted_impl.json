@@ -1,0 +1,16 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260806-refid-001",
+  "kind": "transport_repair_exhausted",
+  "payload": {
+    "phase": "implementation",
+    "agent_id": "a9f9581966b31dc62",
+    "budget": 1,
+    "prior_correction_turn": "pre_test_requested",
+    "prior_correction_attempt_ref": "runs/run-20260806-refid-001/attempts/implementation-2.raw.txt",
+    "prior_correction_resolved_attempt_ref": "runs/run-20260806-refid-001/attempts/implementation-3.raw.txt",
+    "failing_turn": "finalization_evidence_requested",
+    "failing_attempt_ref": "runs/run-20260806-refid-001/attempts/implementation-5.raw.txt",
+    "reason": "This Implementation phase's single permitted transport-only correction was already spent earlier in this same phase (on the Markdown-fenced pre_test_requested reply, which the correction successfully resolved). The budget is one per phase, shared across all staged turns, not one per turn. A second, unrelated transport failure (leading prose) on the finalization_evidence_requested turn is therefore not eligible for a second correction request. The phase is blocked."
+  }
+}

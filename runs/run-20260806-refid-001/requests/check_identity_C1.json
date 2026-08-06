@@ -1,0 +1,17 @@
+{
+  "operation": "check_command_identity",
+  "request": {
+    "task_id": "T-REFID",
+    "run_id": "run-20260806-refid-001",
+    "command_id": "C-1",
+    "command": "python -m pytest tests/unit/test_applicant_validation.py -v",
+    "working_directory": "demo-repo"
+  },
+  "result": {
+    "task_id": "T-REFID",
+    "run_id": "run-20260806-refid-001",
+    "command_id": "C-1",
+    "command": "python -m pytest tests/unit/test_applicant_validation.py -v",
+    "working_directory": "demo-repo"
+  }
+}

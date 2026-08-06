@@ -1,0 +1,11 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260806-refid-001",
+  "kind": "resume_completed",
+  "payload": {
+    "final_verdict": "blocked",
+    "phases_completed": ["discovery", "research"],
+    "phases_reused": ["discovery", "research"],
+    "phases_restarted": ["implementation"]
+  }
+}

@@ -420,6 +420,42 @@ def validate_checkpoint_semantics(doc: dict, *, artifact: str = "checkpoint") ->
                 )
             )
 
+    # The reverse of the check above -- every phase claimed complete must have a
+    # corresponding artifact_refs entry. Without this, a checkpoint could claim
+    # completed_phases: ["discovery", "research"] with an empty artifact_refs and pass
+    # validation: a false completed-phase claim with nothing backing it.
+    for phase in completed_phases:
+        if phase not in artifact_refs:
+            errors.append(
+                ValidationError(
+                    artifact,
+                    "$.completed_phases",
+                    f"phase {phase!r} is marked completed but artifact_refs has no entry for it",
+                )
+            )
+
+    # completed_phases must be a contiguous prefix of the fixed phase order -- no phase
+    # skipped, no phase out of order. This is what makes "Research requires valid
+    # scope.json," "Implementation requires valid scope.json and findings.json," and
+    # "Verification requires scope, findings, and implementation report" true by
+    # construction rather than by convention: a phase can only be complete if every
+    # phase before it in PHASE_ORDER is complete too.
+    completed_set = set(completed_phases)
+    prefix_len = 0
+    for phase in PHASE_ORDER:
+        if phase not in completed_set:
+            break
+        prefix_len += 1
+    if len(completed_set) != prefix_len:
+        errors.append(
+            ValidationError(
+                artifact,
+                "$.completed_phases",
+                f"completed_phases must be a contiguous prefix of {list(PHASE_ORDER)} with no phase skipped "
+                f"or out of order, got {completed_phases!r}",
+            )
+        )
+
     if doc.get("status") == "complete":
         missing = [p for p in PHASE_ORDER if p not in completed_phases]
         if missing:
@@ -435,4 +471,14 @@ def validate_checkpoint_semantics(doc: dict, *, artifact: str = "checkpoint") ->
                 errors.append(
                     ValidationError(artifact, f"$.{field}", f"must be null when status is 'complete', got {doc.get(field)!r}")
                 )
+
+    # No rule here checks next_phase against current_phase -- deliberately, not an
+    # omission. See checkpoint.schema.json's own $comment for the full reasoning: every
+    # harness/orchestrator/checkpoint.py record_* builder derives next_phase as
+    # current_phase's immediate successor by construction (given the contiguous-prefix
+    # rule above already holds), and checkpoint.evaluate_resume() never reads the
+    # persisted current_phase/next_phase fields back as authoritative -- it re-derives
+    # the phase to restart directly from the revalidated completed_phases. A stale or
+    # hand-edited next_phase can therefore mislead a human reading checkpoint.json, but
+    # cannot mislead resume() itself, so it is not part of this safety-critical list.
     return errors
