@@ -1,0 +1,15 @@
+{
+  "operation": "append_memory",
+  "kind": "lesson",
+  "run_id": "run-20260806-memoryloop-001",
+  "candidates": [
+    {
+      "id": "L-20260806-TRANSPORT-BUDGET",
+      "text": "Strict JSON transport failures (a fenced or prose-wrapped raw agent reply) must be classified and repaired separately from content failures, before any semantic or schema validation is attempted, and are only ever granted a single bounded correction attempt per phase rather than an unbounded retry loop.",
+      "source_run_id": "run-20260803-riskband-001",
+      "evidence_ref": "runs/run-20260803-riskband-001/logs/policy-events.jsonl",
+      "date": "2026-08-06",
+      "tags": ["transport", "validation", "json", "correction-budget"]
+    }
+  ]
+}

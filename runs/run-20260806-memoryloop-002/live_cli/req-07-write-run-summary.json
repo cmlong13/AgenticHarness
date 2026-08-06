@@ -1,0 +1,26 @@
+{
+  "operation": "write_run_summary",
+  "run_id": "run-20260806-memoryloop-002",
+  "summary": {
+    "schema_version": "1.0",
+    "task_id": "T-MEMLOOP-B",
+    "run_id": "run-20260806-memoryloop-002",
+    "created_at": "2026-08-06T18:19:08Z",
+    "objective_summary": "Deterministic memory-loop demonstration (Part 8, Run B): load_memory ran before Discovery and selected lesson L-20260806-TRANSPORT-BUDGET (and fact FACT-20260803-ARCHFENCE) as relevant via deterministic keyword matching; Discovery genuinely ran (retain_attempt -> validate_scope -> promote_artifact) and produced a real scope.json whose constraints/AC-1 explicitly cite and apply L-20260806-TRANSPORT-BUDGET; a memory_applied event was retained citing that exact lesson id and scope.json as the decision evidence; summarize_memory independently confirmed memory_influenced_run from the retained policy events, not from assertion. By design, this run intentionally stops after Discovery -- Research/Implementation/Verification were never attempted, matching Part 8's allowance that a full live four-phase run is not required when the memory-influence requirement can be shown with deterministic evidence. final_verdict is 'blocked' only because state.py's vocabulary has no 'intentionally paused' value (the same known representational gap the dry-run boundary already documents), not because anything failed.",
+    "artifact_refs": {
+      "scope": "runs/run-20260806-memoryloop-002/scope.json"
+    },
+    "final_verdict": "blocked",
+    "phases_completed": ["discovery"],
+    "lessons_learned_appended": [],
+    "memory_loaded": true,
+    "memory_influenced_run": true,
+    "memory_refs_used": ["L-20260806-TRANSPORT-BUDGET"],
+    "remaining_risks": [
+      "This run intentionally never reached Research/Implementation/Verification -- it is a narrow memory-influence proof, not a completed pipeline."
+    ],
+    "follow_up_actions": [
+      "A future live /work run should exercise this same memory-load-then-apply path inside a real, complete four-phase pipeline rather than a standalone Discovery-only demonstration."
+    ]
+  }
+}

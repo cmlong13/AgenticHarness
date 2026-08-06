@@ -646,3 +646,277 @@ class TestEvaluateResume:
         events_path = repo_root / "runs" / "run-1" / "logs" / "policy-events.jsonl"
         kinds = [json.loads(line)["kind"] for line in events_path.read_text(encoding="utf-8").splitlines()]
         assert kinds == ["checkpoint_written", "resume_requested", "checkpoint_validated"]
+
+
+# ---------------------------------------------------------------------------
+# operations 12-15: load_memory / append_memory / record_memory_applied / summarize_memory
+# ---------------------------------------------------------------------------
+
+
+def _memory_fact(**overrides) -> dict:
+    base = {
+        "id": "FACT-0001",
+        "content": "The test-runner Skill must run forked (context: fork) or disallowed-tools leak into a resumed Engineer.",
+        "source_run_id": "run-source-1",
+        "evidence_ref": "runs/run-source-1/logs/policy-events.jsonl",
+        "recorded_at": "2026-08-06",
+        "status": "confirmed",
+        "tags": ["test-runner", "fork"],
+    }
+    base.update(overrides)
+    return base
+
+
+def _memory_lesson(**overrides) -> dict:
+    base = {
+        "id": "L-0001",
+        "text": "Strict JSON transport failures must be classified and repaired before semantic validation, within a bounded correction budget.",
+        "source_run_id": "run-source-1",
+        "evidence_ref": "runs/run-source-1/logs/policy-events.jsonl",
+        "date": "2026-08-06",
+        "tags": ["transport", "validation"],
+    }
+    base.update(overrides)
+    return base
+
+
+def _seed_source_evidence(repo_root) -> None:
+    evidence_dir = repo_root / "runs" / "run-source-1" / "logs"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    (evidence_dir / "policy-events.jsonl").write_text('{"kind": "transport_parse_failure"}\n', encoding="utf-8")
+
+
+class TestLoadMemory:
+    def test_empty_memory_returns_honest_empty_result_and_retains_memory_loaded(self, repo_root, capsys) -> None:
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "load_memory", "run_id": "run-b", "raw_prompt": "fix a typo"}, capsys
+        )
+        assert exit_code == 0
+        assert resp["status"] == "ok"
+        assert resp["valid_fact_count"] == 0
+        assert resp["relevant_facts"] == []
+        assert resp["relevant_lessons"] == []
+
+        events_path = repo_root / "runs" / "run-b" / "logs" / "policy-events.jsonl"
+        kinds = [json.loads(line)["kind"] for line in events_path.read_text(encoding="utf-8").splitlines()]
+        assert kinds == ["memory_loaded"]
+
+    def test_relevant_entries_are_selected_by_deterministic_keyword_match(self, repo_root, capsys) -> None:
+        _seed_source_evidence(repo_root)
+        _run_main(
+            repo_root,
+            {"operation": "append_memory", "kind": "fact", "run_id": "run-a", "fact": _memory_fact()},
+            capsys,
+        )
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "load_memory", "run_id": "run-b", "raw_prompt": "the test-runner fork isolation is broken again"},
+            capsys,
+        )
+        assert exit_code == 0
+        assert [f["id"] for f in resp["relevant_facts"]] == ["FACT-0001"]
+
+    def test_load_memory_can_run_before_any_scope_artifact_exists(self, repo_root, capsys) -> None:
+        """Demonstrates memory loading has no dependency on Discovery having run yet --
+        it can be, and per work/SKILL.md must be, called before Discovery."""
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "load_memory", "run_id": "run-b", "raw_prompt": "anything at all"}, capsys
+        )
+        assert exit_code == 0
+        assert not (repo_root / "runs" / "run-b" / "scope.json").exists()
+
+
+class TestAppendMemory:
+    def test_append_fact_success(self, repo_root, capsys) -> None:
+        _seed_source_evidence(repo_root)
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "append_memory", "kind": "fact", "run_id": "run-a", "fact": _memory_fact()},
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "appended"
+        assert (repo_root / "memory" / "facts.jsonl").exists()
+
+    def test_append_fact_duplicate_is_a_well_formed_negative_result(self, repo_root, capsys) -> None:
+        _seed_source_evidence(repo_root)
+        _run_main(repo_root, {"operation": "append_memory", "kind": "fact", "run_id": "run-a", "fact": _memory_fact()}, capsys)
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "append_memory", "kind": "fact", "run_id": "run-a", "fact": _memory_fact(id="FACT-9999")},
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "duplicate"
+
+    def test_append_lesson_candidates_capped_at_five(self, repo_root, capsys) -> None:
+        _seed_source_evidence(repo_root)
+        candidates = [
+            _memory_lesson(id=f"L-{n:04d}", text=f"Lesson {n} about harness orchestration validation ordering.")
+            for n in range(7)
+        ]
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "append_memory", "kind": "lesson", "run_id": "run-a", "candidates": candidates},
+            capsys,
+        )
+        assert exit_code == 0
+        assert len(resp["appended"]) == 5
+        assert len(resp["skipped"]) == 2
+
+        events_path = repo_root / "runs" / "run-a" / "logs" / "policy-events.jsonl"
+        kinds = [json.loads(line)["kind"] for line in events_path.read_text(encoding="utf-8").splitlines()]
+        assert "memory_lessons_append" in kinds
+
+
+class TestRecordMemoryApplied:
+    def test_valid_applied_claim_is_retained(self, repo_root, capsys) -> None:
+        _seed_source_evidence(repo_root)
+        _run_main(repo_root, {"operation": "append_memory", "kind": "fact", "run_id": "run-a", "fact": _memory_fact()}, capsys)
+        # Audit 1: entry_id must have been selected relevant by THIS run's own load_memory call.
+        _run_main(
+            repo_root, {"operation": "load_memory", "run_id": "run-b", "raw_prompt": "the test-runner fork isolation is broken"}, capsys
+        )
+
+        run_b_scope = repo_root / "runs" / "run-b" / "scope.json"
+        run_b_scope.parent.mkdir(parents=True, exist_ok=True)
+        run_b_scope.write_text('{"constraints": ["forked test-runner required, per FACT-0001"]}', encoding="utf-8")
+
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "record_memory_applied", "run_id": "run-b",
+                "entry_id": "FACT-0001", "entry_type": "fact", "source_run_id": "run-source-1",
+                "current_run_id": "run-b", "phase": "discovery",
+                "decision": "Scope constraints require the forked test-runner Skill, per FACT-0001.",
+                "evidence_path": "runs/run-b/scope.json",
+            },
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "retained"
+
+    def test_missing_decision_evidence_is_blocked_not_fabricated(self, repo_root, capsys) -> None:
+        _seed_source_evidence(repo_root)
+        _run_main(repo_root, {"operation": "append_memory", "kind": "fact", "run_id": "run-a", "fact": _memory_fact()}, capsys)
+
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "record_memory_applied", "run_id": "run-b",
+                "entry_id": "FACT-0001", "entry_type": "fact", "source_run_id": "run-source-1",
+                "current_run_id": "run-b", "phase": "discovery", "decision": "x",
+                "evidence_path": "runs/run-b/does-not-exist.json",
+            },
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "blocked"
+
+        events_path = repo_root / "runs" / "run-b" / "logs" / "policy-events.jsonl"
+        kinds = [json.loads(line)["kind"] for line in events_path.read_text(encoding="utf-8").splitlines()]
+        assert kinds == ["memory_applied_rejected"]  # never "memory_applied"
+
+
+class TestSummarizeMemory:
+    def test_loaded_only_does_not_report_influenced(self, repo_root, capsys) -> None:
+        _run_main(repo_root, {"operation": "load_memory", "run_id": "run-b", "raw_prompt": "anything"}, capsys)
+        exit_code, resp = _run_main(repo_root, {"operation": "summarize_memory", "run_id": "run-b"}, capsys)
+        assert exit_code == 0
+        assert resp["memory_loaded"] is True
+        assert resp["memory_influenced_run"] is False
+        assert resp["memory_refs_used"] == []
+
+    def test_loaded_and_applied_reports_influenced_with_refs(self, repo_root, capsys) -> None:
+        _seed_source_evidence(repo_root)
+        _run_main(repo_root, {"operation": "append_memory", "kind": "fact", "run_id": "run-a", "fact": _memory_fact()}, capsys)
+        _run_main(repo_root, {"operation": "load_memory", "run_id": "run-b", "raw_prompt": "test-runner fork"}, capsys)
+
+        scope_path = repo_root / "runs" / "run-b" / "scope.json"
+        scope_path.write_text('{"constraints": ["applies FACT-0001"]}', encoding="utf-8")
+        _run_main(
+            repo_root,
+            {
+                "operation": "record_memory_applied", "run_id": "run-b",
+                "entry_id": "FACT-0001", "entry_type": "fact", "source_run_id": "run-source-1",
+                "current_run_id": "run-b", "phase": "discovery", "decision": "used the fact",
+                "evidence_path": "runs/run-b/scope.json",
+            },
+            capsys,
+        )
+
+        exit_code, resp = _run_main(repo_root, {"operation": "summarize_memory", "run_id": "run-b"}, capsys)
+        assert exit_code == 0
+        assert resp["memory_loaded"] is True
+        assert resp["memory_influenced_run"] is True
+        assert resp["memory_refs_used"] == ["FACT-0001"]
+
+
+class TestRecordMemoryAppliedRunScopedAndEvidenceCites:
+    """Integration-level proof (through the real live_cli dispatch, not memory.py
+    directly) that op_record_memory_applied enforces both Audit 1 (run-scoped
+    selection) and Audit 2 (evidence must cite the entry)."""
+
+    def test_globally_valid_but_not_selected_entry_is_blocked(self, repo_root, capsys) -> None:
+        _seed_source_evidence(repo_root)
+        _run_main(repo_root, {"operation": "append_memory", "kind": "fact", "run_id": "run-a", "fact": _memory_fact()}, capsys)
+        # load_memory with a prompt that shares no vocabulary with the fact's tags/content.
+        _run_main(repo_root, {"operation": "load_memory", "run_id": "run-b", "raw_prompt": "unrelated loan underwriting policy text"}, capsys)
+
+        scope_path = repo_root / "runs" / "run-b" / "scope.json"
+        scope_path.write_text('{"constraints": ["cites FACT-0001"]}', encoding="utf-8")
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "record_memory_applied", "run_id": "run-b",
+                "entry_id": "FACT-0001", "entry_type": "fact", "source_run_id": "run-source-1",
+                "current_run_id": "run-b", "phase": "discovery", "decision": "x",
+                "evidence_path": "runs/run-b/scope.json",
+            },
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "blocked"
+        assert any("was not selected as relevant" in e for e in resp["errors"])
+
+    def test_no_load_memory_call_at_all_blocks_application(self, repo_root, capsys) -> None:
+        _seed_source_evidence(repo_root)
+        _run_main(repo_root, {"operation": "append_memory", "kind": "fact", "run_id": "run-a", "fact": _memory_fact()}, capsys)
+        # run-b never calls load_memory at all.
+        scope_path = repo_root / "runs" / "run-b" / "scope.json"
+        scope_path.parent.mkdir(parents=True, exist_ok=True)
+        scope_path.write_text('{"constraints": ["cites FACT-0001"]}', encoding="utf-8")
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "record_memory_applied", "run_id": "run-b",
+                "entry_id": "FACT-0001", "entry_type": "fact", "source_run_id": "run-source-1",
+                "current_run_id": "run-b", "phase": "discovery", "decision": "x",
+                "evidence_path": "runs/run-b/scope.json",
+            },
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "blocked"
+        assert any("no memory_loaded event found" in e for e in resp["errors"])
+
+    def test_evidence_file_that_does_not_cite_the_id_is_blocked(self, repo_root, capsys) -> None:
+        _seed_source_evidence(repo_root)
+        _run_main(repo_root, {"operation": "append_memory", "kind": "fact", "run_id": "run-a", "fact": _memory_fact()}, capsys)
+        _run_main(repo_root, {"operation": "load_memory", "run_id": "run-b", "raw_prompt": "test-runner fork"}, capsys)
+
+        scope_path = repo_root / "runs" / "run-b" / "scope.json"
+        scope_path.write_text('{"objective": "totally unrelated content"}', encoding="utf-8")
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "record_memory_applied", "run_id": "run-b",
+                "entry_id": "FACT-0001", "entry_type": "fact", "source_run_id": "run-source-1",
+                "current_run_id": "run-b", "phase": "discovery", "decision": "x",
+                "evidence_path": "runs/run-b/scope.json",
+            },
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "blocked"
+        assert any("does not contain entry_id" in e for e in resp["errors"])

@@ -158,6 +158,121 @@ Verification. The two unpromoted `demo-repo/` working-tree changes this blocked 
 `runs/run-20260806-refid-001/checkpoint.json`, `run-summary.json`, and
 `logs/policy-events.jsonl` for the full record.
 
+**Milestone update (2026-08-06, same day): persistent memory and the lessons-learned
+feedback loop.** On top of the checkpoint/resume milestone above, this session closes the
+memory-loop milestone (`ASSIGNMENT.md` §2.6; the "Persistent memory and lessons-learned
+feedback loop" scope for this session, narrower than checkpoint/resume): (1)
+`harness/orchestrator/memory.py` (new) -- fact/lesson validation, append-safe
+persistence, deterministic keyword-based relevance selection (`derive_keywords`,
+`select_relevant_facts`/`select_relevant_lessons`, no embeddings), duplicate suppression
+via text normalization, and `summarize_memory_events`, which derives a run's
+`memory_loaded`/`memory_influenced_run`/`memory_refs_used` from that run's own retained
+`policy-events.jsonl` rather than from caller assertion; (2) two new durable files,
+`memory/facts.jsonl` (append-only, one evidence-backed fact per line) and
+`memory/lessons-learned.md` (a deterministic `- [ID] (source_run: ..., evidence: ...,
+date: ..., tags: ...) text` bullet grammar, capped at 5 new entries per terminal run);
+(3) four new `harness/orchestrator/live_cli.py` operations -- `load_memory`,
+`append_memory` (`kind: "fact"|"lesson"`), `record_memory_applied`, and
+`summarize_memory` -- each delegating entirely to `memory.py`, consistent with Option C;
+(4) three new, narrowly-scoped optional fields on `run-summary.schema.json`
+(`memory_loaded`, `memory_influenced_run`, `memory_refs_used`), plus an `if/then` making
+`memory_refs_used` non-empty mandatory whenever `memory_influenced_run` is `true`
+(`lessons_learned_appended` already existed in the schema from an earlier milestone and
+did not need to change); (5) `work/SKILL.md` gained a "Phase 0: Memory load" section
+(fixed order: memory load -> Discovery -> Research -> Implementation -> Verification ->
+terminal memory append), a "Memory: loaded vs. applied" section defining exactly when
+`record_memory_applied` may be called, a "Terminal memory append" section (facts/lessons
+evaluated only from the terminal branch, never on an interruption), and standing rule 14
+(memory is context, never authority over scope/Protected Paths/evidence). 62 new
+deterministic tests (`tests/test_orchestrator_memory.py` -- 41 tests covering fact
+validation, lesson behavior, load order, actual-use proof, and checkpoint/resume
+interaction; additions to `tests/test_orchestrator_live_cli.py` -- 10 tests exercising
+the four new operations through the real CLI dispatch path; additions to
+`tests/test_work_skill.py` -- 11 structural tests on the new SKILL.md sections); full
+suite 551 passing (up from 489), `demo-repo/` unaffected (106 tests, unchanged).
+**Proven the same day via a real, two-run `live_cli.py` demonstration** -- an Option-C
+memory-operation demonstration through direct, real invocations of the same CLI `/work`
+itself calls, explicitly **not** a live `/work` four-phase pipeline run, per this
+milestone's own allowance that deterministic evidence suffices for the memory-influence
+requirement when a full live pipeline is not otherwise required: Run A
+(`runs/run-20260806-memoryloop-001/`) made two real `live_cli.py append_memory` calls,
+persisting a fact and a lesson (`L-20260806-TRANSPORT-BUDGET`) grounded in real,
+pre-existing evidence from `runs/run-20260803-riskband-001/` (the genuine live Architect
+transport-fence failure documented in that run's own retained
+`logs/policy-events.jsonl`) -- not invented for the fixture. Run B
+(`runs/run-20260806-memoryloop-002/`) made seven real `live_cli.py` calls: `load_memory`
+selected that lesson as relevant via deterministic keyword intersection (no hand-picked
+list); a genuine Discovery step (`retain_attempt` -> `validate_scope` ->
+`promote_artifact`) produced a real `scope.json` whose `constraints`/`AC-1` explicitly
+cite `L-20260806-TRANSPORT-BUDGET` by ID; `record_memory_applied` retained a
+`memory_applied` event naming that exact lesson id, this run, the `discovery` phase, the
+concrete decision, and `evidence_path: "runs/run-20260806-memoryloop-002/scope.json"`
+(independently re-checked to exist before the event was accepted); and `summarize_memory`
+-- reading only the retained policy events, not an assertion -- confirmed
+`memory_influenced_run: true` and `memory_refs_used: ["L-20260806-TRANSPORT-BUDGET"]`,
+written verbatim into Run B's own `run-summary.json`. Run B intentionally stops after
+Discovery (`final_verdict: "blocked"` for the same reason the existing dry-run boundary
+uses that value -- an intentional pause, not a failure); Research/Implementation/
+Verification were never attempted. See `runs/run-20260806-memoryloop-001/
+MEMORY-DEMO-RUN-A.md` and `runs/run-20260806-memoryloop-002/MEMORY-DEMO-RUN-B.md` for the
+full, itemized account, including what this narrow proof does and does not establish.
+Not built this session, per the assignment's explicit exclusions: token/cost tracking,
+GitHub/Jira skills, Obsidian integration, connector authentication, REST fallback, a
+false-push demonstration, a flaky-test demonstration, architecture diagrams, or the final
+write-up. Neither historical run evidence nor `demo-repo/` was modified; nothing was
+committed or pushed.
+
+**Post-audit hardening (2026-08-06, same day): memory-applied enforcement tightened, no
+new feature run.** A narrowly-scoped audit of the memory-loop milestone above found two
+real enforcement gaps in `validate_memory_applied` and corrected them: (1) it validated
+`entry_id` against memory *globally* (any currently-valid fact/lesson anywhere in
+`memory/`), not against what *this run's own* retained `memory_loaded` event(s) actually
+selected as relevant -- `harness/orchestrator/memory.py` gained
+`_relevant_ids_from_memory_loaded_events` (unions every `memory_loaded` event's
+`relevant_fact_ids`/`relevant_lesson_ids` found in `runs/<run_id>/logs/policy-events.jsonl`)
+and `validate_memory_applied` now refuses an entry that exists but was never loaded and
+selected by this run, an entry selected only by a different run, a fact claimed as a
+lesson (or vice versa), and any claim with zero retained `memory_loaded` events at all;
+(2) it confirmed `evidence_path` merely *existed*, not that the file's own content
+actually cited the applied entry -- `memory.py` gained a bounded (2 MB cap), exact-
+boundary-matched text search (`_evidence_file_contains_entry_id`, using
+`(?<![A-Za-z0-9_-])<id>(?![A-Za-z0-9_-])` so "L-1" cannot false-match inside "L-10" or
+"L-1-EXTRA") and now refuses an existing-but-silent evidence file, and a directory path
+is now correctly rejected (`.is_file()`, not merely `.exists()`) rather than crashing or
+silently passing. `harness/orchestrator/live_cli.py`'s `op_record_memory_applied` now
+threads `run_directory` through to `validate_memory_applied` accordingly. Also resolved:
+`work/SKILL.md`'s "memory is loaded exactly once per run" wording was ambiguous about
+resumed invocations -- it now states precisely that this guarantee is **one load per
+process invocation, not one load per `run_id`**, adds an explicit `load_memory` step to
+"Resuming an interrupted run" (a second, independent `memory_loaded` event under the
+same `run_id`, retained before the restarted phase's fresh agent is dispatched), and adds
+a "Loading memory on a resumed invocation" section stating that newly loaded memory may
+inform the restarted phase and later, never retroactively reinterpret a reused phase's
+already-promoted artifact. 28 new deterministic tests total: 18 in
+`tests/test_orchestrator_memory.py` (8 in `TestMemoryAppliedRunScopedSelection`, 8 in
+`TestMemoryAppliedEvidenceCitesEntry`, and 2 in a dedicated
+`TestRunBRealEvidenceStillValidatesUnderStricterContract` that reads Run B's real,
+unmodified retained evidence read-only and confirms its exact original
+`memory_applied` payload still validates under the strengthened contract), 3 in
+`tests/test_orchestrator_live_cli.py`, and 7 structural tests in
+`tests/test_work_skill.py`; full suite 579 passing (up from 551). A small, justified
+complexity reduction was also applied: `select_relevant_facts`/`select_relevant_lessons`
+now share one private `_select_relevant` helper, and the evidence-reference-exists check
+duplicated across `_fact_evidence_errors`/`load_lessons`/`append_lessons` was factored
+into one `_evidence_ref_exists` helper -- both mechanical, behavior-preserving, verified
+by the unchanged test results. No other complexity issue (dead code, unreachable branch,
+unsafe path handling, nondeterministic ordering, or accidental append-only-file rewrite)
+was found; `memory.py` was not otherwise refactored. This audit also corrected several
+instances of ambiguous "live-demonstrated"/"live pipeline" wording in this document (see
+the memory-loop milestone paragraph above, §3 "Memory loop," §4, and §10 below) to state
+plainly that the memory-influence proof is a **real, two-run `live_cli.py` CLI
+demonstration**, not a live `/work` four-phase pipeline run -- the underlying evidence
+(Run A/Run B, `runs/run-20260806-memoryloop-001/`, `runs/run-20260806-memoryloop-002/`)
+is unchanged and was not reprocessed; only this document's prose was corrected. No new
+`/work` run was performed, `demo-repo/` was not touched, no historical run evidence
+(including Run A's and Run B's own retained files) was modified, and nothing was
+committed or pushed.
+
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
 followed. Implementation should track this spec; if the two diverge, update this file first.
@@ -366,15 +481,55 @@ MCP server in favor of curl-based skills for reliability/debuggability).
   is knowable. **Not started.**
 
 ### Memory loop
-- `lessons-learned.md` — read before every run; at most 5 bullets appended after each run.
-  **Not started.**
-- Persistent memory directory — small single-fact files + an index, for durable facts
-  (environment quirks, workflow corrections, project state). Relative dates converted to
-  absolute when saved. **Not started.**
+- `memory/lessons-learned.md` — loaded before every run (`live_cli.py`'s `load_memory`
+  operation, called from `work/SKILL.md`'s "Phase 0: Memory load," before Discovery); at
+  most 5 new bullets appended per terminal run (`append_memory`, `kind: "lesson"`,
+  enforced by `harness/orchestrator/memory.py::append_lessons`'s own cap, not by
+  convention). **Complete and demonstrated (2026-08-06) via a real, two-run
+  `live_cli.py` CLI demonstration** (not a live `/work` pipeline run) — see the
+  memory-loop milestone note above and §10's "Memory-loop milestone (2026-08-06)".
+- `memory/facts.jsonl` — an append-only, evidence-backed persistent fact index (stable
+  id, content, `source_run_id`, `evidence_ref`, `recorded_at`, `status`, optional `tags`);
+  malformed/unprovenanced/duplicate/secret-shaped entries are skipped and named, never
+  silently dropped, and never allowed to block a later valid entry in the same file from
+  loading. Relative dates are the authoring orchestrator's responsibility to convert to
+  absolute before calling `append_memory` — `memory.py` validates the resulting string is
+  already absolute-shaped but does not itself interpret relative language. **Complete and
+  demonstrated (2026-08-06) via the same real, two-run `live_cli.py` CLI demonstration**
+  (not a live `/work` pipeline run). This supersedes this document's earlier planned
+  `memory/facts/` (a directory of single-fact files + an index) — the memory-loop
+  milestone's own explicit instructions preferred the smaller `memory/facts.jsonl`
+  shape, and no prior code existed under `memory/` to make the older plan a binding
+  convention.
+- Deterministic relevance selection — plain tag/keyword-token-set intersection
+  (`memory.py::derive_keywords`/`select_relevant_facts`/`select_relevant_lessons`), never
+  an embedding or similarity service. **Complete.**
+- Loaded-vs-applied distinction — `memory_loaded` (Part 3) is retained whenever memory is
+  read and considered; `memory_applied` (Part 4) is retained via `record_memory_applied`
+  only when *all* of: the entry id was actually selected as relevant by one of *this
+  run's own* retained `memory_loaded` events (never a globally-valid entry this run
+  never loaded and selected — a post-audit strengthening, 2026-08-06); and
+  `evidence_path` resolves to a real, existing, regular file under the repo whose own
+  content cites the entry id by exact, boundary-matched id (an existing-but-silent
+  evidence file is refused). `run-summary.json`'s `memory_influenced_run` is derived
+  from the run's own retained events (`summarize_memory`), never from assertion.
+  **Complete and demonstrated (2026-08-06) via the real, two-run `live_cli.py` CLI
+  demonstration** (not a live `/work` pipeline run) — see Run B below.
 - Pipeline checkpointing — an interrupted run auto-resumes at the phase it died in.
   **Complete and live-demonstrated (2026-08-06)** — see the checkpoint/resume milestone note
-  above and §10. The memory loop itself (`lessons-learned.md`, the persistent memory directory)
-  remains separate, later work, not part of this milestone.
+  above and §10. Checkpoint interruption/terminal-failure writes never trigger a memory
+  append (`checkpoint.py` has no reference to `memory.py` at all —
+  `tests/test_orchestrator_memory.py::TestCheckpointResumeInteraction::
+  test_checkpoint_module_never_calls_memory_append_functions` asserts this structurally);
+  a resumed run's own terminal memory-append step runs at most once, and
+  `append_fact`/`append_lessons`'s duplicate suppression makes a retried finalization
+  attempt append nothing new even if it were ever called twice.
+- Not part of this milestone, per the assignment's explicit exclusions: token/cost
+  tracking, GitHub/Jira skills, Obsidian integration (so `memory/lessons-learned.md` is
+  not the same thing as the still-not-built Obsidian vault write-back — see the Obsidian
+  row above), connector authentication, REST fallback, a false-push demonstration, a
+  flaky-test demonstration, and a full live four-phase `/work` run exercising this memory
+  path (Run B below deliberately stops after Discovery; see its own stated limitations).
 
 ### Output contracts (per phase)
 - Discovery → task definition + task graph
@@ -409,7 +564,9 @@ MCP server in favor of curl-based skills for reliability/debuggability).
   missing-verification-evidence branch (`runs/completion-guardrail-live-001/`, same day) — its
   other four failure branches remain deterministic-only (see §10 "Hooks and same-run
   route-back milestone (2026-08-05)")
-- `lessons-learned.md` + basic memory directory
+- `lessons-learned.md` + basic memory directory — **COMPLETE, demonstrated (2026-08-06)
+  via a real, two-run `live_cli.py` CLI demonstration** (not a live `/work` pipeline
+  run): see the memory-loop milestone note above and §10.
 - Checkpoint/resume for the pipeline — **COMPLETE and live-demonstrated (2026-08-06)**: see
   the checkpoint/resume milestone note above and §10.
 - GitHub access via `gh`/`git` CLI (real commits + independent push verification via
@@ -476,7 +633,6 @@ AgenticHarness/
 │   │                              #        directly under harness/ as this file map originally
 │   │                              #        planned, for the same relative-import consistency
 │   │                              #        reason discovery.py/evidence_io.py/paths.py do
-│   ├── memory.py                  # lessons-learned.md + memory-dir read/append (cap enforcement)
 │   ├── evidence.py                # [DONE] schema + semantic artifact validation, incl. validate_scope_semantics
 │   ├── cost.py                    # token/cost aggregation across a run
 │   ├── schemas/                   # [DONE] the six *.schema.json artifact contracts
@@ -490,13 +646,25 @@ AgenticHarness/
 │       ├── discovery.py           # [DONE] scope-draft validation gate (schema + semantics + path safety)
 │       ├── evidence_io.py         # [DONE] raw-candidate retention, collision-guarded canonical writes
 │       ├── adapters.py            # [DONE] AgentAdapter / TestRunnerAdapter / DiscoveryAdapter interfaces only
+│       ├── memory.py              # [DONE] fact/lesson validation, append-safe persistence, deterministic
+│       │                          #        keyword-based relevance selection, memory_applied validation,
+│       │                          #        summarize_memory_events (memory-loop milestone, 2026-08-06) --
+│       │                          #        lives under harness/orchestrator/, not directly under harness/
+│       │                          #        as this file map originally planned, for the same
+│       │                          #        relative-import consistency reason checkpoint.py/discovery.py/
+│       │                          #        evidence_io.py/paths.py do
 │       └── live_cli.py            # [DONE] thin JSON-in/JSON-out bridge the /work skill calls -- no agent
 │                                   #        reasoning; deterministically tested (see §10 "Live architecture
-│                                   #        decision (Option C)"), not yet exercised by a live /work run
+│                                   #        decision (Option C)"); the memory-loop milestone's four new
+│                                   #        operations (load_memory/append_memory/record_memory_applied/
+│                                   #        summarize_memory) have been exercised for real via a deterministic
+│                                   #        two-run demonstration (Run A/Run B, §10), not through a literal
+│                                   #        /work slash-command invocation
 │
-├── memory/
-│   ├── lessons-learned.md
-│   └── facts/                     # single-fact files + index.md
+├── memory/                        # [DONE] (memory-loop milestone, 2026-08-06)
+│   ├── facts.jsonl                # append-only fact index -- see §3 "Memory loop"; supersedes this file
+│   │                               # map's earlier-planned memory/facts/ directory shape (never built)
+│   └── lessons-learned.md
 │
 ├── runs/                          # per-run artifacts: findings docs, diffs, verification reports, checkpoints
 │
@@ -563,8 +731,11 @@ AgenticHarness/
    missing-verification-evidence branch is now also live-demonstrated against a real `Stop`
    event (`runs/completion-guardrail-live-001/`); its other branches remain
    deterministic-only. Checkpoint/resume — **COMPLETE and live-demonstrated (2026-08-06)**, see
-   the checkpoint/resume milestone note above. The memory loop (`lessons-learned.md`, persistent
-   memory directory) remains **not started**. The post-agent cost/token-tracking hook remains
+   the checkpoint/resume milestone note above. The memory loop
+   (`memory/lessons-learned.md`, `memory/facts.jsonl`) — **COMPLETE, demonstrated
+   (2026-08-06) via a real, two-run `live_cli.py` CLI demonstration** (not a live
+   `/work` pipeline run), see the memory-loop milestone note above and §10's
+   "Memory-loop milestone (2026-08-06)". The post-agent cost/token-tracking hook remains
    **not started**.
 10. Independent GitHub push-verification path. **Not started** — no commit/push has been
     performed by the harness in any live run to date (by design; see `work/SKILL.md` standing
@@ -660,8 +831,23 @@ Demonstrated live, on a repo with ≥50 files:
       — the known cooperation boundary stands: this hook activates only when `/work` itself
       writes `.completion_claim.json` (see §10).
 - [ ] Orchestrator catches a simulated false "pushed" claim via `git ls-remote`.
-- [ ] Obsidian vault receives a run summary; `lessons-learned.md` gains ≤5 bullets; a second run
-      visibly uses a lesson from the first.
+- [ ] Obsidian vault receives a run summary (**not started** — separate, later work, per
+      the assignment's explicit exclusion of Obsidian integration from this milestone);
+      `lessons-learned.md` gains ≤5 bullets; a second run visibly uses a lesson from the
+      first. **The lessons-learned/second-run-uses-a-lesson half is demonstrated
+      (2026-08-06) via a real, two-run `live_cli.py` CLI demonstration**, not a live
+      `/work` invocation (an explicitly allowed substitution for this specific
+      requirement — see §10 "Memory-loop milestone (2026-08-06)"): Run A
+      (`runs/run-20260806-memoryloop-001/`) appended exactly one lesson,
+      `L-20260806-TRANSPORT-BUDGET` (well under the 5-bullet cap), grounded in real,
+      pre-existing evidence from `runs/run-20260803-riskband-001/`; Run B
+      (`runs/run-20260806-memoryloop-002/`) loaded memory before Discovery, selected that
+      exact lesson as relevant via deterministic keyword matching, cited its ID in a
+      genuine, promoted `scope.json`'s `constraints`/`AC-1`, and retained a real
+      `memory_applied` event naming the lesson, the decision, and the evidence path —
+      `run-summary.json`'s `memory_influenced_run: true` is derived from that retained
+      event, not asserted. Obsidian write-back itself remains undone; this is the
+      lessons-learned mechanism only.
 - [x] Killing the pipeline mid-Implementation and rerunning resumes from checkpoint instead of
       restarting. **Live-demonstrated across two genuine, separate Claude Code processes
       (2026-08-06)**: the first process interrupted `run-20260806-refid-001` deliberately during
@@ -1696,8 +1882,9 @@ missing-verification-evidence branch is now also live-demonstrated against a rea
 event, via a dedicated fixture rather than a live `/work` run — see §10 "Live Stop-hook
 demonstration (`completion-guardrail-live-001`, 2026-08-05)". **Update (2026-08-06):**
 checkpoint/resume is now complete — see the checkpoint/resume milestone notes above for the
-current, authoritative account. The memory loop, the post-agent cost hook, and a live
-demonstration of route-back/hooks against a real `/work` run all remain open.
+current, authoritative account. **Update (2026-08-06, same day):** the memory loop is now
+also complete — see the memory-loop milestone notes above. The post-agent cost hook and a
+live demonstration of route-back/hooks against a real `/work` run both remain open.
 
 ### Eight-day MVP planning target
 
@@ -1741,8 +1928,12 @@ documentation may require additional time after the working MVP closes.
    Discovery and Research and restarted Implementation with a fresh Engineer — that live
    resumed invocation later ended blocked during Implementation on transport-budget exhaustion;
    a resumed run reaching a passing Verification remains deterministic-only. See the
-   checkpoint/resume milestone notes above for the full, authoritative account. The memory loop
-   and the post-agent cost hook remain **not started.**
+   checkpoint/resume milestone notes above for the full, authoritative account. ~~The memory
+   loop.~~ **COMPLETE (2026-08-06)**: `memory/facts.jsonl` and `memory/lessons-learned.md`
+   are implemented, deterministically tested (62+ new tests, plus a post-audit hardening
+   pass), and demonstrated via a real, two-run `live_cli.py` CLI demonstration (Run A/
+   Run B) — not a live `/work` pipeline run — see the memory-loop milestone notes above.
+   The post-agent cost hook remains **not started.**
 8. ~~First complete evidence-backed pipeline run.~~ **COMPLETE** — `run-20260804-riskband-003`,
    `final_verdict: "pass"`. See §10 "Live evidence (`run-20260804-riskband-003`) — completed."
 9. Deferred integrations and final assignment demonstrations (includes `github/`/`jira/` skill

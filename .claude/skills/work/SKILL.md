@@ -76,6 +76,15 @@ $ARGUMENTS
     event (`kind: "orchestrator_command_identity_mismatch"`) naming the command id and
     the mismatched fields, and do not report the run `pass`. Never fabricate a matching
     result or locally repair a mismatch to make it look clean.
+14. Memory (`memory/facts.jsonl`, `memory/lessons-learned.md`) is prior, evidence-backed
+    *context*, never authority. Loading a relevant fact or lesson never changes
+    `in_scope`/`out_of_scope`/`constraints`/`acceptance_criteria`, never overrides the
+    Protected Path list or any scope-validation rule, and never substitutes for a
+    canonical artifact or an independent check this document already requires. A run
+    summary may claim `memory_influenced_run: true` only when at least one genuine
+    `memory_applied` event was retained in *this* run -- never because a fact or lesson
+    merely appeared in a prompt. See "Phase 0: Memory load," "Memory: loaded vs.
+    applied," and "Terminal memory append" below.
 
 # Parsing $ARGUMENTS
 
@@ -141,33 +150,104 @@ function's own docstring for the authoritative field-level contract):
 | `write_run_summary` | Schema-validate and write the terminal `run-summary.json`. Accepts either an explicit `final_verdict` or a `state` field (a `harness.orchestrator.state.State` value name) to derive it from the same table `harness/orchestrator/core.py` uses -- never restate that mapping by hand. |
 | `write_checkpoint` | Schema/semantically-validate and atomically write `runs/<run_id>/checkpoint.json`. `kind` selects the builder: `"progress"` (after Discovery/Research/Implementation, non-terminal), `"completion"` (after Verification passes), `"interruption"` (a deliberate, evidence-backed pause -- see "Checkpointing and resume" below), `"terminal_failure"` (any other terminal outcome). Refuses (`status: "blocked"`) rather than writing anything invalid. Retains its own `checkpoint_written` policy event automatically on every successful write -- do not additionally retain that event by hand. |
 | `evaluate_resume` | Load and fully revalidate `runs/<run_id>/checkpoint.json` against every Part 3 precondition (existence, schema/semantics, run_id match, terminal-status refusal, real `target_repo_path` re-check, per-artifact existence + revalidation + identity cross-check, predecessor-order enforcement). Retains `resume_requested` and `checkpoint_validated`/`resume_refused` itself -- do not additionally retain those two events by hand. Returns `completed_phases` (reuse, never redispatch) and `next_phase` (the one incomplete phase to restart) on `status: "resumable"`. |
+| `load_memory` | The one canonical memory-load operation, called once, before Discovery (see "Phase 0: Memory load" below). Reads `memory/facts.jsonl` and `memory/lessons-learned.md`, validates every entry, derives deterministic keywords from the raw task prompt, and returns `relevant_facts`/`relevant_lessons` by tag/keyword intersection -- never an LLM judgment call. Retains its own `memory_loaded` policy event automatically -- do not additionally retain that event by hand. Read-only otherwise: never touches `scope.json` or any other canonical artifact. |
+| `append_memory` | Appends new, evidence-backed memory. `kind: "fact"` appends at most one fact (`fact` field); `kind: "lesson"` appends up to 5 candidates (`candidates` field, in order -- the cap and duplicate suppression are enforced by the operation itself, not by counting carefully). Every candidate is independently validated (provenance, real evidence, no secrets, no duplicates, and for lessons, harness-workflow relevance) regardless of what you believe about it -- a rejected or duplicate candidate is a legitimate, well-formed negative result, not a bug. Retains its own `memory_fact_append`/`memory_lessons_append` policy event automatically. |
+| `record_memory_applied` | Retains a `memory_applied` event -- and only a `memory_applied` event -- when a concrete decision in this run genuinely used a specific prior fact or lesson. Refuses (`status: "blocked"`, retains `memory_applied_rejected` instead) unless `entry_id` resolves to a currently-valid fact/lesson and `evidence_path` resolves to a real, existing file. Never call this merely because a fact or lesson was included in a prompt -- see "Memory: loaded vs. applied" below. |
+| `summarize_memory` | Read-only. Derives `memory_loaded`/`memory_influenced_run`/`memory_refs_used` from this run's own retained `logs/policy-events.jsonl` -- never from assertion. Call this immediately before `write_run_summary` and merge its three fields into the summary document; see "Terminal memory append" below. |
+
+# Phase 0: Memory load (before Discovery)
+
+Order is fixed and non-negotiable: **memory load -> Discovery -> Research ->
+Implementation -> Verification -> terminal memory append.** For a **fresh invocation**
+(no `--resume`), memory is loaded exactly once, immediately after "Run identity" below
+has produced `task_id`/`run_id` and before any Discovery reasoning begins -- never
+skipped because memory files don't exist yet (an empty result is honest and normal, not
+a blocker), and never called a second time later in that same process.
+
+This is precisely **one load per process invocation, not one load per run_id**. A
+`run_id` that is later resumed (`/work --resume <run_id>`) spans two separate processes,
+and each of those processes calls `load_memory` exactly once, for itself -- see "Loading
+memory on a resumed invocation" under "Checkpointing and resume" below for the full,
+separately-stated contract. Do not read this section's "exactly once" as "the whole run,
+across every process that ever touches it, loads memory only a single time" -- that is
+not the contract, and claiming a resumed run "only loaded memory once" when two
+processes were actually involved misrepresents what happened.
+
+1. Read `ASSIGNMENT.md` and `PROJECT_SPEC.md` as before (unrelated to memory, still the
+   authoritative sources for what this harness must do and what already exists).
+2. Call `live_cli.py`'s `load_memory` operation once, with this run's `run_id` and the
+   free-form request text (post-`--dry-run`-stripping, pre-Discovery-reasoning) as
+   `raw_prompt`. This performs the entire Part 3 sequence in one call: reads
+   `memory/facts.jsonl` and `memory/lessons-learned.md`, validates every entry
+   (malformed/unsupported/duplicate/secret-shaped entries are skipped and named, never
+   silently dropped or allowed to block a later valid entry), derives deterministic
+   keywords from `raw_prompt`, and selects `relevant_facts`/`relevant_lessons` by plain
+   tag/keyword intersection -- never your own judgment about what "feels related." It
+   retains its own `memory_loaded` policy event automatically; do not additionally
+   retain that event by hand.
+3. Treat `relevant_facts`/`relevant_lessons` as labeled prior context for Discovery's
+   own reasoning in step 2 below -- state plainly, in your own Discovery reasoning, which
+   (if any) relevant entries you are holding in mind, citing their `id`. This is *not*
+   the same as applying one: see "Memory: loaded vs. applied" below for what actually
+   earns a `memory_applied` record. Standing rule 14 governs what memory may never do to
+   `scope.json`'s own fields.
+4. If `load_memory` returns zero relevant facts and zero relevant lessons, continue
+   normally -- an honest empty relevant set is not a failure and needs no special
+   handling; proceed straight to Phase 1.
+
+## Memory: loaded vs. applied
+
+Loading memory only proves it was considered -- it proves nothing about whether it
+changed anything. Retain a `memory_applied` event (via `record_memory_applied`) if and
+only if, at the moment you make it, all of the following are true:
+
+- A specific fact or lesson `id` (from this run's own `load_memory` result, or a valid
+  entry you can independently confirm) is the reason for a concrete decision you are
+  making right now -- not "this seems generally relevant," but "I am choosing X instead
+  of Y because of entry `<id>`."
+- You can point at where that decision is visible in this run's own retained evidence
+  (a `scope.json` constraint, a `findings.json` note, an `implementation-report.json`
+  field, a specific test command, a policy event you are about to retain) -- this
+  becomes `evidence_path`. `record_memory_applied` independently re-checks that this
+  path resolves to a real, existing file and refuses (`status: "blocked"`,
+  `memory_applied_rejected` retained instead) if it does not -- never invent a plausible
+  path to get past this check.
+- `phase` is the actual phase you are in when the decision is made
+  (`discovery`/`research`/`implementation`/`verification`).
+
+Never call `record_memory_applied` merely because a relevant fact or lesson was
+mentioned in a subagent's prompt, read during Discovery, or generally "kept in mind" --
+that is exactly the "loaded, not applied" case standing rule 14 forbids treating as
+influence. It is entirely normal, and not a defect, for a run to load relevant memory
+and retain zero `memory_applied` events because nothing in the run actually turned on
+it -- report that honestly rather than manufacturing a citation.
 
 # Phase 1: Discovery (main session, no subagent)
 
-1. Read `ASSIGNMENT.md`, `PROJECT_SPEC.md`, and (if it exists) `memory/lessons-learned.md`
-   -- it does not exist yet in this milestone; note that plainly and continue rather than
-   blocking on it.
-2. Investigate the target area of the repository yourself (`Read`/`Grep`/`Glob`) enough
+1. Investigate the target area of the repository yourself (`Read`/`Grep`/`Glob`) enough
    to ground `objective`, `in_scope`, `out_of_scope`, `constraints`, `acceptance_criteria`,
    and a `task_graph` covering the phases this request actually needs. A trivial request
    may legitimately skip Research or Implementation -- say so explicitly in the task
-   graph rather than defaulting to all four phases unexamined.
-3. Author the scope candidate as a `scope.schema.json`-shaped object with
+   graph rather than defaulting to all four phases unexamined. Any relevant fact or
+   lesson Phase 0 surfaced may inform this reasoning, but never substitutes for reading
+   the actual repository yourself -- ground every scope field in real, current repository
+   evidence, per standing rule 14.
+2. Author the scope candidate as a `scope.schema.json`-shaped object with
    `status: "approved"` (or `"refused"` with a `refusal_reason`, if the pre-dispatch
    checklist in `ASSIGNMENT.md` §2.1 fails -- e.g. the request targets a Protected Path
    or isn't a real product change).
-4. `retain_attempt` (`phase: "discovery"`, `attempt_n: 1`, the candidate as JSON text)
+3. `retain_attempt` (`phase: "discovery"`, `attempt_n: 1`, the candidate as JSON text)
    -- always, before validating.
-5. `validate_scope` against the candidate. If invalid, the run ends here: still write a
+4. `validate_scope` against the candidate. If invalid, the run ends here: still write a
    `run-summary.json` (`write_run_summary`, `state: "discovery_invalid"`) referencing the
    retained raw attempt, and report the failure honestly. Do not retry by silently
    patching the candidate more than once without re-grounding in the repository.
-6. If valid, `promote_artifact` (`phase: "discovery"`) to produce the canonical
+5. If valid, `promote_artifact` (`phase: "discovery"`) to produce the canonical
    `scope.json`. If `status` was `"refused"`, the run also ends here (a refusal is a
    legitimate, promoted outcome -- `state: "discovery_refused"` for the run summary),
    without dispatching the Architect and **without** writing a checkpoint (a refusal is
    terminal, not forward progress worth checkpointing -- see "Checkpointing and resume").
-7. If `status` was `"approved"`, `write_checkpoint` (`kind: "progress"`,
+6. If `status` was `"approved"`, `write_checkpoint` (`kind: "progress"`,
    `completed_phases: ["discovery"]`, `artifact_refs: {"discovery": "<scope.json path>"}`,
    `target_repo_path` as supplied to this run) before dispatching the Architect. This is
    the first of four progress checkpoints -- see "Checkpointing and resume" below.
@@ -752,7 +832,7 @@ outcome gets exactly one more checkpoint write, made once the final verdict is k
   with `completed_phases`/`artifact_refs` limited to the phases that actually produced a
   safely reusable artifact and `reason` stating plainly why the run stopped.
 - **No checkpoint at all** for `discovery_invalid`/`discovery_refused` -- Discovery
-  itself never got far enough to be worth checkpointing (see Phase 1 step 6/7 above).
+  itself never got far enough to be worth checkpointing (see Phase 1 step 5/6 above).
 - If a same-run logic-bug repair cycle (see that section above) is in progress, do not
   write a terminal checkpoint until the repair cycle itself reaches a final outcome
   (`pass` after repair, or repair-budget exhaustion) -- write once, for that final
@@ -763,6 +843,15 @@ outcome gets exactly one more checkpoint write, made once the final verdict is k
 Never call `write_checkpoint` twice for the same phase with the same `kind` in the same
 run, and never call it for a phase whose artifact was not actually just promoted --
 checkpointing is evidence of real progress, not a formality.
+
+**Memory is never appended on an interruption.** A `kind: "progress"` or
+`kind: "interruption"` checkpoint write is not a terminal outcome -- do not call
+`append_memory` at any point before a genuine terminal verdict is known. "Terminal
+memory append" below runs exactly once, only from the terminal branch (a `kind:
+"completion"` or `kind: "terminal_failure"` checkpoint write), whether this run reaches
+that terminal branch on its first attempt or after a resume. An interrupted run that
+never reaches a terminal outcome in this process must not pretend a lesson was learned
+from an unfinished attempt.
 
 ## Resuming an interrupted run (`/work --resume <run_id>`)
 
@@ -798,15 +887,26 @@ triggered:
    never re-derive or re-guess any of these. `created_at` for the rest of this run is the
    `created_at` field inside the promoted `scope.json` (read it yourself; it is not part
    of `evaluate_resume`'s own response).
-4. For every phase in `completed_phases`: this phase is **reused**, not
+4. Call `load_memory` (`run_id` is this same, resumed run's `run_id`; `raw_prompt` is the
+   original free-form request text, read from `scope.json`'s own `source.raw_prompt`,
+   never re-typed from memory) -- see "Loading memory on a resumed invocation" below for
+   the full contract this step follows. This is this *process's own* single memory load
+   (per "Phase 0: Memory load" above, one load per process invocation); it is a second,
+   independent `memory_loaded` event under the same `run_id` as the original process's
+   own load, not a duplicate of it and not a violation of "load memory exactly once" --
+   that guarantee is per-process, not per-`run_id`, exactly as Phase 0 now states.
+5. For every phase in `completed_phases`: this phase is **reused**, not
    redispatched -- do not call the `Agent` tool for it, do not construct a new
    `agent_dispatch` policy event for it (the original dispatch already has one, still
    retained, from whatever process wrote the checkpoint), and treat its promoted
    artifact as already-validated. `retain_policy_event` (`kind: "phase_reused"`, payload
    naming the phase and its `artifact_refs` path) once per reused phase. In particular:
    if `research` is in `completed_phases`, the Architect must not run again; if
-   `implementation` is in `completed_phases`, the Engineer must not run again.
-5. `evaluate_resume`'s `next_phase` is the one incomplete phase. `retain_policy_event`
+   `implementation` is in `completed_phases`, the Engineer must not run again. Memory
+   loaded in step 4 above must never be used to revisit, second-guess, or reinterpret a
+   reused phase's already-promoted artifact -- see "Loading memory on a resumed
+   invocation" below.
+6. `evaluate_resume`'s `next_phase` is the one incomplete phase. `retain_policy_event`
    (`kind: "phase_restarted"`, payload naming `next_phase`) once, then resume normal
    phase execution starting there, exactly as Phase 2/3/4 above already describe --
    with one binding difference: **dispatch a brand-new agent instance** (a fresh `Agent`
@@ -816,18 +916,108 @@ triggered:
    continuing," only as a fresh dispatch for a restarted phase. Every phase after
    `next_phase` proceeds normally (also a fresh dispatch each, exactly as in a
    non-resumed run) and continues getting its own progress checkpoint as it completes.
-6. Before promoting any canonical artifact for the restarted phase, confirm the
+   This restarted phase, and everything after it, is exactly what step 4's memory load
+   may legitimately inform (e.g. a `memory_applied` citation in this phase or later).
+7. Before promoting any canonical artifact for the restarted phase, confirm the
    canonical path does not already exist from an earlier, uncounted attempt (`Read`/
    `Bash ls` it, or simply attempt the promotion and treat a `blocked`/collision result
    from `promote_artifact` as a hard stop) -- never silently overwrite existing evidence
    to "make room" for a fresh attempt.
-7. On the run's own final `run-summary.json` (`write_run_summary`), include
+8. On the run's own final `run-summary.json` (`write_run_summary`), include
    `phases_reused` (exactly `completed_phases` from step 3) and `phases_restarted`
-   (exactly `[next_phase]` from step 5 -- any phase *after* `next_phase` that also ran in
+   (exactly `[next_phase]` from step 6 -- any phase *after* `next_phase` that also ran in
    this same resumed invocation is ordinary forward progress, not a restart, since no
    process ever attempted it before). Retain `resume_completed`
    (`kind: "resume_completed"`, payload naming the final verdict and `phases_completed`)
-   immediately before reporting the run's outcome to the user.
+   immediately before reporting the run's outcome to the user. Call `summarize_memory`
+   as part of the same terminal-reporting sequence "Terminal memory append" below
+   describes -- its `memory_loaded`/`memory_influenced_run`/`memory_refs_used` fields
+   are derived from *all* of this run's retained events (both processes' `memory_loaded`
+   events, and any `memory_applied` event either process retained), never from only the
+   most recent process's own activity.
+
+## Loading memory on a resumed invocation
+
+A resumed run's memory story spans two processes, and both loads are genuine, retained,
+auditable facts about this run -- neither is fabricated, and neither is hidden:
+
+- The **first process** (the one later interrupted) called `load_memory` once, per Phase
+  0, before its own Discovery. That `memory_loaded` event remains retained, unmodified,
+  in `logs/policy-events.jsonl` regardless of what happens afterward.
+- The **resuming process** calls `load_memory` again, once, per step 4 above -- its own
+  single load for its own single process invocation, immediately after `evaluate_resume`
+  confirms a resumable checkpoint and before dispatching the restarted phase's fresh
+  agent. This is a second, independent event under the same `run_id`, not a
+  re-interpretation or replacement of the first.
+- Both events are real and both remain in the log -- this is precisely what "memory load
+  events remain auditable across a resumed run" means, and it is what
+  `harness/orchestrator/memory.py::_relevant_ids_from_memory_loaded_events` relies on:
+  a `memory_applied` claim made in the resumed process may cite an entry that was only
+  surfaced as relevant by *either* of this run's two loads, since both genuinely
+  happened in this run.
+- What newly loaded memory from the resuming process's own load may **not** do:
+  retroactively change, second-guess, or supply new justification for a phase that
+  `completed_phases` already marks reused. A `scope.json`, `findings.json`, or
+  `implementation-report.json` promoted by the first process is not reopened because the
+  second process's memory load surfaced something that would have changed it -- that
+  artifact is already-validated, reused evidence, not a draft. Newly loaded memory may
+  only inform the restarted phase (`next_phase`) and any phase after it in this same
+  invocation, exactly as step 5's closing sentence and step 6's closing sentence state.
+- Never report a resumed run as having "loaded memory once" -- state plainly, in the
+  final report (see "Reporting" below), that two processes were involved and that each
+  called `load_memory` for itself.
+
+## Terminal memory append
+
+Runs exactly once per run, immediately after the run's one terminal `write_checkpoint`
+call (`kind: "completion"` or `kind: "terminal_failure"`) and before `write_run_summary`
+-- never earlier (see "Memory is never appended on an interruption" above), and never a
+second time even if this same terminal branch is somehow re-entered. This "once" is the
+primary orchestration contract, not a hope backed only by duplicate suppression: a run
+whose `checkpoint.json` already shows `status: "complete"` or `status: "failed"` -- i.e.
+a run that already reached this step once -- is refused outright by `evaluate_resume`
+(`terminal_complete`/`terminal_failed`, "Resuming an interrupted run" step 2 above)
+before a second process could ever reach this step for the same `run_id` again. An
+interrupted run (never terminal) never reaches this step at all, by construction --
+Phase 0/step 4's memory *loads* still happen on resume, but nothing here appends. Only
+if this designed structure were ever somehow bypassed would
+`append_fact`/`append_lessons`'s own duplicate suppression matter, as a secondary safety
+net (see `harness/orchestrator/memory.py`'s docstrings) -- it is not the mechanism this
+contract actually relies on.
+
+1. **Evaluate candidate facts.** Look back over this run's own retained evidence (policy
+   events, `implementation-report.json`, `verification-report.json`, anything you
+   personally observed) for durable, evidence-backed facts worth persisting -- an
+   environment quirk, a workflow correction, real project state. Every candidate needs a
+   stable `id`, non-empty `content`, `source_run_id` (this run's `run_id`),
+   `evidence_ref` (a path that genuinely exists, ideally under this run's own
+   `runs/<run_id>/`), `recorded_at` (today's absolute date -- convert any relative date
+   like "yesterday" before writing it), and `status` (`"confirmed"` or `"provisional"`).
+   For each, call `append_memory` (`kind: "fact"`) individually. A rejected or duplicate
+   result is a legitimate, expected outcome, not a failure to fix -- do not retry a
+   rejected candidate with softened content to force it through.
+2. **Evaluate candidate lessons.** Look for reusable insight about *harness workflow,
+   validation, orchestration, or engineering process* -- never task-specific product
+   trivia (e.g. "loans under $X get a lower risk band" is product trivia; "a bounded
+   correction budget prevents an infinite transport-repair loop" is a workflow lesson),
+   and never a speculative recommendation dressed up as settled fact -- ground each
+   candidate in what this run's own evidence actually showed. Build a `candidates` list
+   (each with `id`, `text`, `source_run_id`, `evidence_ref`, `date`, optional `tags`) and
+   call `append_memory` (`kind: "lesson"`) **once**, with the whole list -- never one
+   call per candidate, since the operation's own cap (`max_new`, default 5) and duplicate
+   suppression are only meaningful across a single call's candidate ordering. Zero
+   legitimate candidates is a fully acceptable outcome; never invent a candidate merely
+   to have something to append.
+3. Call `summarize_memory` (`run_id` only) and copy its three fields
+   (`memory_loaded`/`memory_influenced_run`/`memory_refs_used`) verbatim into the
+   `run-summary.json` document you are about to write -- never assert these yourself,
+   even if you are confident memory mattered; only a real, retained `memory_applied`
+   event (per "Memory: loaded vs. applied" above) can make `memory_influenced_run` true,
+   and `summarize_memory` is what actually checks that.
+4. Set `run-summary.json`'s `lessons_learned_appended` to the `text` of every lesson
+   `append_memory` actually appended in step 2 (empty list if none) -- this is a
+   pre-existing field (see `run-summary.schema.json`); populate it now rather than
+   leaving it unset.
 
 # Reporting
 
@@ -863,5 +1053,16 @@ State plainly, every time:
   citing `evaluate_resume`'s own `completed_phases`/`next_phase`.
 - For a dry run: that Implementation and Verification were intentionally not attempted,
   and that this is not a completed pipeline run.
+- What memory was loaded (`valid_fact_count`/`valid_lesson_count`/relevant entry ids from
+  Phase 0) versus what was actually applied (every `memory_applied` id retained, the
+  phase, and the decision it influenced) -- these are different claims; never conflate
+  them. State plainly whether `memory_influenced_run` ended up `true` or `false` and, in
+  the terminal-append step, how many facts/lessons were actually appended (zero is a
+  normal, expected answer, not an omission).
+- If this run was resumed, that memory was loaded twice -- once by the original process,
+  once by the resuming process, each retaining its own `memory_loaded` event under the
+  same `run_id` -- never described as a single load for the whole run. State which of the
+  two loads (if either) is what any `memory_applied` citation in this run actually came
+  from.
 - Any evidence gap. If required evidence is missing, say the run cannot be called
   successful -- do not soften this into "mostly done."

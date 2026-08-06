@@ -1,0 +1,5 @@
+{
+  "operation": "load_memory",
+  "run_id": "run-20260806-memoryloop-002",
+  "raw_prompt": "Add a fixture-level pre-check confirming a new staged agent's raw JSON transport (no Markdown code fence, no leading or trailing prose) is validated before any semantic or schema parsing is attempted."
+}

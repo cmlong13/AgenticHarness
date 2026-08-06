@@ -478,3 +478,82 @@ class TestCheckpointingAndResume:
         assert "checkpoint.json" in self.text
         assert "which phases were reused" in self.flat_text.lower() or "which single phase was restarted" in self.flat_text.lower()
         assert "not evidence" in self.flat_text.lower()
+
+
+class TestMemoryLoop:
+    def setup_method(self) -> None:
+        self.text = SKILL_PATH.read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+
+    def test_canonical_order_stated(self) -> None:
+        assert "memory load -> Discovery -> Research -> Implementation -> Verification -> terminal memory append" in self.flat_text
+
+    def test_memory_loaded_before_discovery(self) -> None:
+        assert "# Phase 0: Memory load" in self.text
+        assert self.text.index("# Phase 0: Memory load") < self.text.index("# Phase 1: Discovery")
+
+    def test_load_memory_operation_documented_and_retains_event(self) -> None:
+        assert "`load_memory`" in self.text
+        assert "memory_loaded" in self.text
+        assert "retains its own `memory_loaded` policy event automatically" in self.flat_text
+
+    def test_memory_is_context_not_authority(self) -> None:
+        assert "never authority" in self.flat_text
+        assert "never overrides the Protected Path list" in self.flat_text or "never overrides" in self.flat_text
+
+    def test_loaded_versus_applied_distinction_documented(self) -> None:
+        assert "Memory: loaded vs. applied" in self.text
+        assert "record_memory_applied" in self.text
+        assert "Never call `record_memory_applied` merely because" in self.text
+
+    def test_memory_applied_requires_real_evidence_path(self) -> None:
+        assert "evidence_path" in self.text
+        assert "refuses" in self.flat_text.lower()
+
+    def test_terminal_memory_append_documented(self) -> None:
+        assert "## Terminal memory append" in self.text
+        assert "Runs exactly once per run" in self.flat_text
+
+    def test_lesson_cap_of_five_documented(self) -> None:
+        assert "max_new" in self.text or "cap" in self.flat_text.lower()
+        assert "5" in self.text
+
+    def test_memory_never_appended_on_interruption(self) -> None:
+        assert "Memory is never appended on an interruption" in self.flat_text
+
+    def test_summarize_memory_feeds_run_summary_before_write(self) -> None:
+        assert "`summarize_memory`" in self.text
+        assert "memory_influenced_run" in self.text
+        assert "memory_refs_used" in self.text
+
+    def test_reporting_states_loaded_versus_applied(self) -> None:
+        assert "these are different claims" in self.flat_text.lower()
+
+    def test_fresh_invocation_load_is_scoped_to_one_process_not_one_run_id(self) -> None:
+        assert "one load per process invocation, not one load per run_id" in self.flat_text
+
+    def test_resumed_invocation_loads_memory_again(self) -> None:
+        assert "## Loading memory on a resumed invocation" in self.text
+        assert "Call `load_memory`" in self.text
+        assert "second, independent `memory_loaded` event under the same `run_id`" in self.flat_text
+
+    def test_resumed_memory_load_step_precedes_reused_and_restarted_phase_handling(self) -> None:
+        resume_section = self.text[self.text.index("## Resuming an interrupted run"):]
+        load_memory_idx = resume_section.index("Call `load_memory`")
+        reused_idx = resume_section.index("this phase is **reused**")
+        restarted_idx = resume_section.index("dispatch a brand-new agent instance")
+        assert load_memory_idx < reused_idx < restarted_idx
+
+    def test_resumed_memory_never_reinterprets_reused_phases(self) -> None:
+        assert "must never be used to revisit, second-guess, or reinterpret a" in self.flat_text
+        assert "not reopened because the" in self.flat_text.lower() or "not a draft" in self.flat_text.lower()
+
+    def test_never_claim_single_load_for_resumed_run(self) -> None:
+        assert 'never report a resumed run as having "loaded memory once"' in self.flat_text.lower()
+
+    def test_terminal_append_relies_on_resume_refusal_not_only_duplicate_suppression(self) -> None:
+        assert "is refused outright by `evaluate_resume`" in self.text
+        assert "secondary safety" in self.flat_text.lower()
+
+    def test_reporting_states_two_loads_on_resume(self) -> None:
+        assert "memory was loaded twice" in self.flat_text.lower()

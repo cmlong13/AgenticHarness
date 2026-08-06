@@ -1,0 +1,11 @@
+{
+  "operation": "record_memory_applied",
+  "run_id": "run-20260806-memoryloop-002",
+  "entry_id": "L-20260806-TRANSPORT-BUDGET",
+  "entry_type": "lesson",
+  "source_run_id": "run-20260803-riskband-001",
+  "current_run_id": "run-20260806-memoryloop-002",
+  "phase": "discovery",
+  "decision": "scope.json's constraints and AC-1 require that a new staged agent's raw JSON transport format (no fence, no prose) is validated and, if malformed, handled as a transport failure BEFORE any semantic/schema validation of its content -- adopted directly from lesson L-20260806-TRANSPORT-BUDGET rather than decided independently.",
+  "evidence_path": "runs/run-20260806-memoryloop-002/scope.json"
+}

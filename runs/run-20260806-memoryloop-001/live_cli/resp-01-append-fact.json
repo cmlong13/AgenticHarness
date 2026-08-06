@@ -1,0 +1,19 @@
+{
+  "operation": "append_memory",
+  "kind": "fact",
+  "status": "appended",
+  "fact": {
+    "id": "FACT-20260803-ARCHFENCE",
+    "content": "In run-20260803-riskband-001, the live Architect dispatch returned findings wrapped in a Markdown code fence, violating architect.md's no-fence Output contract; harness/orchestrator/core.py's no-fence-stripping policy required treating this as a parse failure and blocking Research rather than silently repairing the response.",
+    "source_run_id": "run-20260803-riskband-001",
+    "evidence_ref": "runs/run-20260803-riskband-001/logs/policy-events.jsonl",
+    "recorded_at": "2026-08-06",
+    "status": "confirmed",
+    "tags": [
+      "transport",
+      "architect",
+      "fence",
+      "research"
+    ]
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "operation": "load_memory",
+  "status": "ok",
+  "files_read": [
+    "memory/facts.jsonl",
+    "memory/lessons-learned.md"
+  ],
+  "keywords": [
+    "add",
+    "fixture-level",
+    "pre-check",
+    "confirming",
+    "new",
+    "staged",
+    "agent",
+    "raw",
+    "json",
+    "transport",
+    "markdown",
+    "code",
+    "fence",
+    "leading",
+    "trailing",
+    "prose",
+    "validated",
+    "before",
+    "any",
+    "semantic",
+    "schema",
+    "parsing",
+    "attempted"
+  ],
+  "valid_fact_count": 1,
+  "valid_lesson_count": 1,
+  "skipped": [],
+  "relevant_facts": [
+    {
+      "content": "In run-20260803-riskband-001, the live Architect dispatch returned findings wrapped in a Markdown code fence, violating architect.md's no-fence Output contract; harness/orchestrator/core.py's no-fence-stripping policy required treating this as a parse failure and blocking Research rather than silently repairing the response.",
+      "evidence_ref": "runs/run-20260803-riskband-001/logs/policy-events.jsonl",
+      "id": "FACT-20260803-ARCHFENCE",
+      "recorded_at": "2026-08-06",
+      "source_run_id": "run-20260803-riskband-001",
+      "status": "confirmed",
+      "tags": [
+        "transport",
+        "architect",
+        "fence",
+        "research"
+      ]
+    }
+  ],
+  "relevant_lessons": [
+    {
+      "id": "L-20260806-TRANSPORT-BUDGET",
+      "source_run_id": "run-20260803-riskband-001",
+      "evidence_ref": "runs/run-20260803-riskband-001/logs/policy-events.jsonl",
+      "date": "2026-08-06",
+      "tags": [
+        "transport",
+        "validation",
+        "json",
+        "correction-budget"
+      ],
+      "text": "Strict JSON transport failures (a fenced or prose-wrapped raw agent reply) must be classified and repaired separately from content failures, before any semantic or schema validation is attempted, and are only ever granted a single bounded correction attempt per phase rather than an unbounded retry loop."
+    }
+  ]
+}

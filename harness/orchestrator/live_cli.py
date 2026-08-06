@@ -47,7 +47,7 @@ from harness.evidence import (
     validate_verification_report_semantics,
 )
 
-from . import checkpoint, discovery, evidence_io, paths
+from . import checkpoint, discovery, evidence_io, memory, paths
 from .state import FINAL_VERDICT_BY_STATE, State
 
 REPO_ROOT = paths.REPO_ROOT
@@ -73,10 +73,18 @@ SEMANTIC_VALIDATORS = {
 # response["status"] values that represent an affirmative outcome (exit code 0).
 # Every other status a handler can return ("invalid", "blocked", "mismatch", "refused")
 # is a well-formed negative result (exit code 1), not a CLI failure.
-OK_STATUSES = {"valid", "match", "ok", "retained", "promoted", "written", "resumable"}
+OK_STATUSES = {"valid", "match", "ok", "retained", "promoted", "written", "resumable", "appended"}
 
 # op_write_checkpoint's `kind` field selects which checkpoint.py record_* builder runs.
 _CHECKPOINT_KINDS = {"progress", "completion", "interruption", "terminal_failure"}
+
+# op_append_memory's `kind` field selects fact-append vs. lesson-append behavior --
+# mirrors op_write_checkpoint's own kind-dispatch convention above.
+_MEMORY_KINDS = {"fact", "lesson"}
+
+_MEMORY_APPLIED_FIELDS = (
+    "entry_id", "entry_type", "source_run_id", "current_run_id", "phase", "decision", "evidence_path",
+)
 
 _IDENTITY_FIELDS = ("task_id", "run_id", "command_id", "command", "working_directory")
 
@@ -453,6 +461,147 @@ def op_evaluate_resume(req: dict) -> dict:
     }
 
 
+def op_load_memory(req: dict) -> dict:
+    """12. The one canonical memory-load operation, used before Discovery -- delegates
+    entirely to memory.load_memory (read facts.jsonl + lessons-learned.md, validate
+    every entry, derive deterministic keywords from `raw_prompt`, select relevant
+    entries by tag/keyword intersection). Read-only except for the memory_loaded policy
+    event it retains, naming what was considered (valid_fact_count/valid_lesson_count/
+    skipped_count) and what was selected (relevant_fact_ids/relevant_lesson_ids) -- this
+    is the evidence trail Part 3 requires distinguishing loaded from used. Never touches
+    scope.json or any other canonical artifact; an empty relevant set is a legitimate,
+    honestly-reported outcome, not an error (always status "ok")."""
+    run_id = _require_str(req, "run_id")
+    raw_prompt = _require_str(req, "raw_prompt")
+    memory_dir = REPO_ROOT / "memory"
+
+    result = memory.load_memory(memory_dir, raw_prompt=raw_prompt, repo_root=REPO_ROOT)
+
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    evidence_io.ensure_run_dirs(run_directory)
+    files_read = [_rel(p) for p in result.files_read]
+    evidence_io.retain_policy_event(
+        run_directory,
+        "memory_loaded",
+        {
+            "files_read": files_read,
+            "keywords": result.keywords,
+            "valid_fact_count": result.valid_fact_count,
+            "valid_lesson_count": result.valid_lesson_count,
+            "skipped_count": len(result.skipped),
+            "relevant_fact_ids": [f["id"] for f in result.relevant_facts],
+            "relevant_lesson_ids": [lesson["id"] for lesson in result.relevant_lessons],
+        },
+    )
+
+    return {
+        "operation": "load_memory",
+        "status": "ok",
+        "files_read": files_read,
+        "keywords": result.keywords,
+        "valid_fact_count": result.valid_fact_count,
+        "valid_lesson_count": result.valid_lesson_count,
+        "skipped": result.skipped,
+        "relevant_facts": result.relevant_facts,
+        "relevant_lessons": result.relevant_lessons,
+    }
+
+
+def op_append_memory(req: dict) -> dict:
+    """13. Append new, evidence-backed memory -- delegates entirely to
+    memory.append_fact / memory.append_lessons (never reimplemented here). `kind`
+    selects which: "fact" appends at most one fact from the `fact` field; "lesson"
+    appends up to `max_new` (default memory.MAX_LESSONS_PER_RUN = 5) candidates from the
+    `candidates` list, in order, skipping the rest with an explicit reason once the cap
+    is reached. Every candidate is independently validated (provenance, real evidence,
+    no secrets, no duplicates) regardless of what the caller believes about it. Retains
+    a memory_fact_append / memory_lessons_append policy event either way, so a rejected
+    or duplicate candidate is visible evidence, not a silent no-op."""
+    kind = _require_str(req, "kind")
+    if kind not in _MEMORY_KINDS:
+        raise LiveCliUsageError(f"'kind' must be one of {sorted(_MEMORY_KINDS)}, got {kind!r}")
+    run_id = _require_str(req, "run_id")
+    memory_dir = REPO_ROOT / "memory"
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    evidence_io.ensure_run_dirs(run_directory)
+
+    if kind == "fact":
+        candidate = _get_doc(req, "fact")
+        result = memory.append_fact(memory_dir, candidate, repo_root=REPO_ROOT)
+        evidence_io.retain_policy_event(
+            run_directory,
+            "memory_fact_append",
+            {"candidate_id": candidate.get("id"), "result": result.status, "errors": result.errors},
+        )
+        if result.status != "appended":
+            return {"operation": "append_memory", "kind": "fact", "status": result.status, "errors": result.errors}
+        return {"operation": "append_memory", "kind": "fact", "status": "appended", "fact": result.appended}
+
+    candidates = req.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        raise LiveCliUsageError("'candidates' must be a non-empty list for kind='lesson'")
+    max_new = req.get("max_new", memory.MAX_LESSONS_PER_RUN)
+    if not isinstance(max_new, int) or isinstance(max_new, bool) or max_new < 0:
+        raise LiveCliUsageError("'max_new', if given, must be a non-negative integer")
+
+    result = memory.append_lessons(memory_dir, candidates, repo_root=REPO_ROOT, max_new=max_new)
+    evidence_io.retain_policy_event(
+        run_directory,
+        "memory_lessons_append",
+        {"appended_ids": [c["id"] for c in result.appended], "skipped": result.skipped},
+    )
+    return {
+        "operation": "append_memory",
+        "kind": "lesson",
+        "status": "ok",
+        "appended": result.appended,
+        "skipped": result.skipped,
+    }
+
+
+def op_record_memory_applied(req: dict) -> dict:
+    """14. Retain a memory_applied event -- delegates entirely to
+    memory.validate_memory_applied, which refuses (status "blocked") unless: entry_id
+    resolves to a currently-valid fact/lesson of the claimed type; entry_id was actually
+    selected as relevant by one of *this run's own* retained memory_loaded events (never
+    a globally-valid entry this run never loaded and selected); and evidence_path
+    resolves to a real, existing, regular file under repo_root whose own content cites
+    entry_id by exact id. This operation exists specifically so neither "the entry was
+    included in a prompt" nor "the entry exists somewhere in memory" nor "a file exists
+    at this path" can ever by itself become a retained memory_applied record -- only a
+    caller that can point at this run's own genuine selection AND decision evidence that
+    actually names the entry gets one."""
+    run_id = _require_str(req, "run_id")
+    memory_dir = REPO_ROOT / "memory"
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    payload = {field_name: req.get(field_name) for field_name in _MEMORY_APPLIED_FIELDS}
+
+    errors = memory.validate_memory_applied(
+        payload, memory_dir=memory_dir, repo_root=REPO_ROOT, run_directory=run_directory
+    )
+    evidence_io.ensure_run_dirs(run_directory)
+
+    if errors:
+        evidence_io.retain_policy_event(run_directory, "memory_applied_rejected", {**payload, "errors": errors})
+        return {"operation": "record_memory_applied", "status": "blocked", "errors": errors}
+
+    evidence_io.retain_policy_event(run_directory, "memory_applied", payload)
+    return {"operation": "record_memory_applied", "status": "retained", "event": payload}
+
+
+def op_summarize_memory(req: dict) -> dict:
+    """15. Read-only: derives the run summary's memory_loaded/memory_influenced_run/
+    memory_refs_used fields from this run's own retained policy-events.jsonl (delegates
+    entirely to memory.summarize_memory_events) -- never from caller assertion. Callers
+    invoke this immediately before write_run_summary and merge its three fields into the
+    summary document, so "memory influenced the run" can only ever be true because a
+    real memory_applied event was actually retained earlier in this same run."""
+    run_id = _require_str(req, "run_id")
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    result = memory.summarize_memory_events(run_directory)
+    return {"operation": "summarize_memory", "status": "ok", **result}
+
+
 OPERATIONS = {
     "validate_scope": op_validate_scope,
     "retain_attempt": op_retain_attempt,
@@ -465,6 +614,10 @@ OPERATIONS = {
     "write_run_summary": op_write_run_summary,
     "write_checkpoint": op_write_checkpoint,
     "evaluate_resume": op_evaluate_resume,
+    "load_memory": op_load_memory,
+    "append_memory": op_append_memory,
+    "record_memory_applied": op_record_memory_applied,
+    "summarize_memory": op_summarize_memory,
 }
 
 

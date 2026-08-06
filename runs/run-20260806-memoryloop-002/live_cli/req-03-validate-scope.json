@@ -1,0 +1,7 @@
+{
+  "operation": "validate_scope",
+  "expected_task_id": "T-MEMLOOP-B",
+  "expected_run_id": "run-20260806-memoryloop-002",
+  "target_repo_path": "demo-repo",
+  "candidate_ref": "runs/run-20260806-memoryloop-002/live_cli/scope-candidate.json"
+}

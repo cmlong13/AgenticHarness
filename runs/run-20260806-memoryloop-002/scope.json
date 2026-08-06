@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-MEMLOOP-B",
+  "run_id": "run-20260806-memoryloop-002",
+  "created_at": "2026-08-06T18:19:08Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "Add a fixture-level pre-check confirming a new staged agent's raw JSON transport (no Markdown code fence, no leading or trailing prose) is validated before any semantic or schema parsing is attempted."
+  },
+  "objective": "Confirm and document that a new staged agent's raw JSON transport format is validated (fence/prose rejected) before any semantic or schema parsing is attempted, applying the memory-loop's prior transport lesson to this task's own acceptance criteria.",
+  "in_scope": [
+    "demo-repo/tests/unit/test_explanations.py"
+  ],
+  "out_of_scope": [
+    "demo-repo/src/loanflow/explanations.py"
+  ],
+  "constraints": [
+    "Apply lesson L-20260806-TRANSPORT-BUDGET (source run run-20260803-riskband-001, memory/lessons-learned.md): a new staged agent's raw JSON transport format (no Markdown code fence, no leading/trailing prose) must be validated and, if malformed, classified as a transport failure and handled via the one-per-phase correction budget BEFORE any semantic or schema validation of its content is attempted -- never validate content first and treat transport as an afterthought."
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "Given a raw agent reply, the transport-format check (strict JSON parse, no fence, no prose) runs and can block before any semantic/schema validator is ever invoked on that reply, matching lesson L-20260806-TRANSPORT-BUDGET's ordering requirement."
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-1",
+      "description": "Confirm transport-before-semantic validation ordering is real in the current codebase (harness/orchestrator/core.py's _parse_raw/_drive_staged_protocol) and cite it as the evidence for AC-1 -- a Research-only task; no code change is in scope for this narrow demonstration.",
+      "phase": "research",
+      "depends_on": []
+    }
+  ],
+  "status": "approved"
+}
