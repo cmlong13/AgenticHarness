@@ -47,7 +47,7 @@ from harness.evidence import (
     validate_verification_report_semantics,
 )
 
-from . import checkpoint, discovery, evidence_io, memory, paths
+from . import checkpoint, discovery, evidence_io, memory, paths, usage
 from .state import FINAL_VERDICT_BY_STATE, State
 
 REPO_ROOT = paths.REPO_ROOT
@@ -73,7 +73,7 @@ SEMANTIC_VALIDATORS = {
 # response["status"] values that represent an affirmative outcome (exit code 0).
 # Every other status a handler can return ("invalid", "blocked", "mismatch", "refused")
 # is a well-formed negative result (exit code 1), not a CLI failure.
-OK_STATUSES = {"valid", "match", "ok", "retained", "promoted", "written", "resumable", "appended"}
+OK_STATUSES = {"valid", "match", "ok", "retained", "promoted", "written", "resumable", "appended", "captured"}
 
 # op_write_checkpoint's `kind` field selects which checkpoint.py record_* builder runs.
 _CHECKPOINT_KINDS = {"progress", "completion", "interruption", "terminal_failure"}
@@ -602,6 +602,35 @@ def op_summarize_memory(req: dict) -> dict:
     return {"operation": "summarize_memory", "status": "ok", **result}
 
 
+def op_build_usage_summary(req: dict) -> dict:
+    """16. Read-only aggregation + write: builds runs/<run_id>/usage-summary.json from
+    every per-agent usage record real SubagentStop hook captures already retained under
+    runs/<run_id>/usage/*.json -- delegates entirely to usage.build_run_usage_summary /
+    usage.write_run_usage_summary (never reimplemented here). Distinguishes a
+    subagent_subtotal from the orchestrator's own (this-milestone-unmeasured) usage and
+    from a full_pipeline_total, which is always null this milestone with an explicit
+    reason -- see usage.py's own module docstring. Callers (the /work skill, at
+    Reporting time) may fold this summary's path into run-summary.json's own optional
+    usage_summary_ref field; this operation does not touch run-summary.json itself."""
+    run_id = _require_str(req, "run_id")
+    path = usage.write_run_usage_summary(run_id, repo_root=REPO_ROOT)
+    return {"operation": "build_usage_summary", "status": "written", "path": _rel(path)}
+
+
+def op_reconcile_quarantined_usage(req: dict) -> dict:
+    """17. Called immediately after retain_policy_event(kind: "agent_dispatch") for a
+    fresh (non-staged) dispatch -- re-attempts identity matching for a per-agent usage
+    record that the real SubagentStop hook necessarily quarantined moments earlier,
+    since it fires before this very turn resumes to retain that dispatch evidence (see
+    usage.py's own docstring for the confirmed live timing). Delegates entirely to
+    usage.reconcile_quarantined_usage -- never re-implemented here. A quarantine record
+    that still does not match anything is left in place, unconsumed, and this returns
+    its own honest status rather than fabricating a match."""
+    agent_id = _require_str(req, "agent_id")
+    result = usage.reconcile_quarantined_usage(agent_id, repo_root=REPO_ROOT)
+    return {"operation": "reconcile_quarantined_usage", **result}
+
+
 OPERATIONS = {
     "validate_scope": op_validate_scope,
     "retain_attempt": op_retain_attempt,
@@ -618,6 +647,8 @@ OPERATIONS = {
     "append_memory": op_append_memory,
     "record_memory_applied": op_record_memory_applied,
     "summarize_memory": op_summarize_memory,
+    "build_usage_summary": op_build_usage_summary,
+    "reconcile_quarantined_usage": op_reconcile_quarantined_usage,
 }
 
 

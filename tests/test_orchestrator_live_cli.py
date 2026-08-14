@@ -18,6 +18,7 @@ REPO_ROOT) -- every test validates against the real, checked-in schemas.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -920,3 +921,156 @@ class TestRecordMemoryAppliedRunScopedAndEvidenceCites:
         assert exit_code == 1
         assert resp["status"] == "blocked"
         assert any("does not contain entry_id" in e for e in resp["errors"])
+
+
+# ---------------------------------------------------------------------------
+# build_usage_summary (usage/cost-accounting milestone, 2026-08-14)
+# ---------------------------------------------------------------------------
+
+
+class TestBuildUsageSummary:
+    def test_aggregates_a_real_captured_agent_record(self, repo_root, capsys) -> None:
+        from harness.orchestrator import usage
+
+        run_directory = repo_root / "runs" / "run-1"
+        evidence_io.ensure_run_dirs(run_directory)
+        evidence_io.retain_policy_event(
+            run_directory, "agent_dispatch",
+            {"phase": "research", "subagent_type": "architect", "agent_id": "agent-1", "dispatch_sequence": 1},
+        )
+        (repo_root / "harness").mkdir(parents=True, exist_ok=True)
+        real_pricing = Path(__file__).resolve().parent.parent / "harness" / "model-pricing.json"
+        (repo_root / "harness" / "model-pricing.json").write_text(real_pricing.read_text(encoding="utf-8"), encoding="utf-8")
+
+        transcript_path = repo_root / "t.jsonl"
+        transcript_path.write_text(
+            json.dumps({
+                "type": "assistant",
+                "message": {
+                    "model": "claude-sonnet-5",
+                    "usage": {
+                        "input_tokens": 2, "output_tokens": 10, "cache_read_input_tokens": 0,
+                        "cache_creation_input_tokens": 0,
+                        "cache_creation": {"ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 0},
+                    },
+                },
+            }) + "\n",
+            encoding="utf-8",
+        )
+        usage.capture_subagent_usage(
+            {"hook_event_name": "SubagentStop", "agent_id": "agent-1", "agent_transcript_path": str(transcript_path)},
+            repo_root=repo_root,
+        )
+
+        exit_code, resp = _run_main(repo_root, {"operation": "build_usage_summary", "run_id": "run-1"}, capsys)
+        assert exit_code == 0
+        assert resp["status"] == "written"
+        summary_path = repo_root / "runs" / "run-1" / "usage-summary.json"
+        assert summary_path.is_file()
+        doc = json.loads(summary_path.read_text(encoding="utf-8"))
+        assert doc["subagent_subtotal"]["agent_count"] == 1
+        assert doc["coverage_status"] == "partial"
+        assert doc["full_pipeline_total"] is None
+
+    def test_empty_run_still_writes_a_zeroed_summary(self, repo_root, capsys) -> None:
+        exit_code, resp = _run_main(repo_root, {"operation": "build_usage_summary", "run_id": "run-empty"}, capsys)
+        assert exit_code == 0
+        doc = json.loads((repo_root / "runs" / "run-empty" / "usage-summary.json").read_text(encoding="utf-8"))
+        assert doc["subagent_subtotal"]["agent_count"] == 0
+
+    def test_missing_run_id_is_a_usage_error(self, repo_root, capsys) -> None:
+        exit_code, resp = _run_main(repo_root, {"operation": "build_usage_summary"}, capsys)
+        assert exit_code == 2
+        assert resp["status"] == "error"
+
+
+# ---------------------------------------------------------------------------
+# run-summary integration: usage_summary_ref is optional and schema-valid
+# ---------------------------------------------------------------------------
+
+
+class TestUsageSummaryRefOnRunSummary:
+    def test_run_summary_accepts_optional_usage_summary_ref(self, repo_root, capsys) -> None:
+        summary = {
+            "schema_version": "1.0", "task_id": "T-1", "run_id": "run-1",
+            "created_at": "2026-08-14T00:00:00Z", "objective_summary": "x",
+            "artifact_refs": {"scope": "runs/run-1/scope.json"},
+            "final_verdict": "pass", "phases_completed": ["discovery"],
+            "usage_summary_ref": "runs/run-1/usage-summary.json",
+        }
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "write_run_summary", "run_id": "run-1", "summary": summary}, capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "written"
+        doc = json.loads((repo_root / "runs" / "run-1" / "run-summary.json").read_text(encoding="utf-8"))
+        assert doc["usage_summary_ref"] == "runs/run-1/usage-summary.json"
+
+    def test_run_summary_without_usage_summary_ref_still_valid(self, repo_root, capsys) -> None:
+        summary = {
+            "schema_version": "1.0", "task_id": "T-1", "run_id": "run-1",
+            "created_at": "2026-08-14T00:00:00Z", "objective_summary": "x",
+            "artifact_refs": {"scope": "runs/run-1/scope.json"},
+            "final_verdict": "pass", "phases_completed": ["discovery"],
+        }
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "write_run_summary", "run_id": "run-1", "summary": summary}, capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "written"
+
+
+class TestReconcileQuarantinedUsage:
+    def test_reconciles_a_real_quarantined_record_via_live_cli(self, repo_root, capsys) -> None:
+        from harness.orchestrator import usage
+
+        (repo_root / "harness").mkdir(parents=True, exist_ok=True)
+        real_pricing = Path(__file__).resolve().parent.parent / "harness" / "model-pricing.json"
+        (repo_root / "harness" / "model-pricing.json").write_text(real_pricing.read_text(encoding="utf-8"), encoding="utf-8")
+
+        transcript_path = repo_root / "t.jsonl"
+        transcript_path.write_text(
+            json.dumps({
+                "type": "assistant",
+                "message": {
+                    "model": "claude-sonnet-5",
+                    "usage": {
+                        "input_tokens": 2, "output_tokens": 10, "cache_read_input_tokens": 0,
+                        "cache_creation_input_tokens": 0,
+                        "cache_creation": {"ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 0},
+                    },
+                },
+            }) + "\n",
+            encoding="utf-8",
+        )
+        # Simulates the real observed ordering: SubagentStop-driven capture happens
+        # before the orchestrator retains the agent_dispatch event.
+        usage.capture_subagent_usage(
+            {"hook_event_name": "SubagentStop", "agent_id": "agent-1", "agent_transcript_path": str(transcript_path)},
+            repo_root=repo_root,
+        )
+        assert (repo_root / "runs" / usage.UNMATCHED_USAGE_DIRNAME).is_dir()
+
+        run_directory = repo_root / "runs" / "run-1"
+        evidence_io.ensure_run_dirs(run_directory)
+        evidence_io.retain_policy_event(
+            run_directory, "agent_dispatch",
+            {"phase": "research", "subagent_type": "architect", "agent_id": "agent-1", "dispatch_sequence": 1},
+        )
+
+        exit_code, resp = _run_main(repo_root, {"operation": "reconcile_quarantined_usage", "agent_id": "agent-1"}, capsys)
+        assert exit_code == 0
+        assert resp["status"] == "captured"
+        assert resp["run_id"] == "run-1"
+        assert usage.usage_record_path(run_directory, "agent-1").is_file()
+
+    def test_missing_agent_id_is_a_usage_error(self, repo_root, capsys) -> None:
+        exit_code, resp = _run_main(repo_root, {"operation": "reconcile_quarantined_usage"}, capsys)
+        assert exit_code == 2
+
+    def test_no_quarantine_record_reports_honestly(self, repo_root, capsys) -> None:
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "reconcile_quarantined_usage", "agent_id": "never-seen"}, capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "no_quarantine_record"

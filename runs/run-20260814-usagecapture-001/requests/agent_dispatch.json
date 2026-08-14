@@ -1,0 +1,12 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260814-usagecapture-001",
+  "kind": "agent_dispatch",
+  "payload": {
+    "phase": "usage_capture_demo",
+    "subagent_type": "general-purpose",
+    "agent_id": "a0afd1446050e7213",
+    "dispatch_sequence": 1,
+    "note": "Controlled single-agent usage-capture demonstration for the token-usage/cost-accounting milestone (2026-08-14) -- not a real four-phase /work pipeline run."
+  }
+}

@@ -1,4 +1,4 @@
-"""Deterministic tests for the three .claude/hooks/*.py scripts (Part 3 of this milestone).
+"""Deterministic tests for the .claude/hooks/*.py scripts.
 
 Each hook is loaded as a real module (importlib, since .claude/hooks/ is not a Python
 package) and exercised through its actual main() entry point with stdin monkeypatched to
@@ -6,12 +6,15 @@ a crafted JSON payload -- this runs the real hook logic, not a reimplementation 
 REPO_ROOT (and any path computed from it at import time) is monkeypatched to pytest's
 tmp_path so no test ever touches the real repository's runs/ or .claude/hooks/logs/.
 
-Live, real-tool-layer blocked-case demonstrations for all three hooks (a genuine Bash
-bypass of run_command.py, a genuine Bash write attempt into demo-repo/, and a genuine
+Live, real-tool-layer blocked-case demonstrations for the original three hooks (a genuine
+Bash bypass of run_command.py, a genuine Bash write attempt into demo-repo/, and a genuine
 Agent dispatch refused before any subagent was ever created) are retained at
 docs/hooks-permission-verification.md -- this file covers exhaustive branch coverage
 deterministically, the doc covers "this really works at the tool layer," not just in a
-unit test.
+unit test. TestRecordAgentUsage (usage/cost-accounting milestone, 2026-08-14) covers the
+fourth hook, record_agent_usage.py, deterministically the same way; its own real,
+tool-layer-live demonstration is a controlled single-agent capture, not a crafted payload
+-- see the milestone's own retained run evidence.
 """
 from __future__ import annotations
 
@@ -460,3 +463,126 @@ class TestCompletionGuardrail:
         monkeypatch.setattr(sys, "stdin", io.StringIO("{not valid json"))
         exit_code = completion_guardrail.main()
         assert exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# record_agent_usage.py
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def record_agent_usage(tmp_path, monkeypatch):
+    module = _load_hook("record_agent_usage")
+    monkeypatch.setattr(module, "REPO_ROOT", tmp_path)
+    return module
+
+
+def _assistant_usage_line(*, model: str = "claude-sonnet-5", input_tokens: int = 2, output_tokens: int = 10) -> str:
+    return json.dumps({
+        "type": "assistant",
+        "message": {
+            "model": model,
+            "usage": {
+                "input_tokens": input_tokens, "output_tokens": output_tokens,
+                "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0,
+                "cache_creation": {"ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 0},
+            },
+        },
+    })
+
+
+class TestRecordAgentUsage:
+    def _setup_dispatched_run(self, tmp_path, run_id: str, agent_id: str) -> Path:
+        from harness.orchestrator import evidence_io
+
+        run_directory = evidence_io.run_dir(tmp_path, run_id)
+        evidence_io.ensure_run_dirs(run_directory)
+        evidence_io.retain_policy_event(
+            run_directory, "agent_dispatch",
+            {"phase": "research", "subagent_type": "architect", "agent_id": agent_id, "dispatch_sequence": 1},
+        )
+        return run_directory
+
+    def _write_transcript(self, tmp_path, name: str) -> Path:
+        path = tmp_path / "transcripts" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(_assistant_usage_line() + "\n", encoding="utf-8")
+        return path
+
+    def test_subagent_stop_captures_real_per_agent_record(self, record_agent_usage, monkeypatch, tmp_path) -> None:
+        from harness.orchestrator import usage
+
+        (tmp_path / "harness").mkdir(parents=True, exist_ok=True)
+        pricing_src = Path(__file__).resolve().parent.parent / "harness" / "model-pricing.json"
+        (tmp_path / "harness" / "model-pricing.json").write_text(pricing_src.read_text(encoding="utf-8"), encoding="utf-8")
+
+        self._setup_dispatched_run(tmp_path, "run-1", "agent-1")
+        transcript_path = self._write_transcript(tmp_path, "agent-1.jsonl")
+        payload = {
+            "hook_event_name": "SubagentStop", "agent_id": "agent-1", "agent_type": "architect",
+            "agent_transcript_path": str(transcript_path),
+        }
+        exit_code, _ = _run_hook(record_agent_usage, payload, monkeypatch)
+        assert exit_code == 0
+        record_path = usage.usage_record_path(tmp_path / "runs" / "run-1", "agent-1")
+        assert record_path.is_file()
+
+    def test_post_tool_use_agent_records_corroboration(self, record_agent_usage, monkeypatch, tmp_path) -> None:
+        from harness.orchestrator import usage
+
+        payload = {
+            "hook_event_name": "PostToolUse", "tool_name": "Agent", "tool_use_id": "toolu_01",
+            "tool_response": {"agentId": "agent-1", "resolvedModel": "claude-sonnet-5", "usage": {"input_tokens": 2}},
+        }
+        exit_code, _ = _run_hook(record_agent_usage, payload, monkeypatch)
+        assert exit_code == 0
+        assert usage.corroboration_record_path(tmp_path, "agent-1").is_file()
+
+    def test_unrelated_event_is_a_noop(self, record_agent_usage, monkeypatch, tmp_path) -> None:
+        exit_code, _ = _run_hook(record_agent_usage, {"hook_event_name": "PreToolUse", "tool_name": "Bash"}, monkeypatch)
+        assert exit_code == 0
+        assert not (tmp_path / "runs").exists()
+
+    def test_post_tool_use_wrong_tool_name_is_a_noop(self, record_agent_usage, monkeypatch, tmp_path) -> None:
+        exit_code, _ = _run_hook(
+            record_agent_usage, {"hook_event_name": "PostToolUse", "tool_name": "Bash"}, monkeypatch,
+        )
+        assert exit_code == 0
+        assert not (tmp_path / "runs" / "_usage_corroboration").exists()
+
+    def test_malformed_stdin_fails_open(self, record_agent_usage, monkeypatch) -> None:
+        monkeypatch.setattr(sys, "stdin", io.StringIO("{not valid json"))
+        exit_code = record_agent_usage.main()
+        assert exit_code == 0
+
+    def test_non_object_stdin_fails_open(self, record_agent_usage, monkeypatch) -> None:
+        monkeypatch.setattr(sys, "stdin", io.StringIO("[1, 2, 3]"))
+        exit_code = record_agent_usage.main()
+        assert exit_code == 0
+
+    def test_internal_error_during_capture_fails_open(self, record_agent_usage, monkeypatch, tmp_path) -> None:
+        def _boom(*args, **kwargs):
+            raise RuntimeError("simulated internal failure")
+
+        monkeypatch.setattr(record_agent_usage.usage, "capture_subagent_usage", _boom)
+        payload = {"hook_event_name": "SubagentStop", "agent_id": "a", "agent_transcript_path": "nope.jsonl"}
+        exit_code, _ = _run_hook(record_agent_usage, payload, monkeypatch)
+        assert exit_code == 0
+
+    def test_unmatched_agent_is_quarantined_not_silently_dropped(self, record_agent_usage, monkeypatch, tmp_path) -> None:
+        from harness.orchestrator import usage
+
+        (tmp_path / "harness").mkdir(parents=True, exist_ok=True)
+        pricing_src = Path(__file__).resolve().parent.parent / "harness" / "model-pricing.json"
+        (tmp_path / "harness" / "model-pricing.json").write_text(pricing_src.read_text(encoding="utf-8"), encoding="utf-8")
+
+        transcript_path = self._write_transcript(tmp_path, "orphan.jsonl")
+        payload = {
+            "hook_event_name": "SubagentStop", "agent_id": "never-dispatched-by-any-run",
+            "agent_transcript_path": str(transcript_path),
+        }
+        exit_code, _ = _run_hook(record_agent_usage, payload, monkeypatch)
+        assert exit_code == 0
+        quarantine_dir = tmp_path / "runs" / usage.UNMATCHED_USAGE_DIRNAME
+        assert quarantine_dir.is_dir()
+        assert len(list(quarantine_dir.glob("*.json"))) == 1

@@ -85,6 +85,25 @@ $ARGUMENTS
     `memory_applied` event was retained in *this* run -- never because a fact or lesson
     merely appeared in a prompt. See "Phase 0: Memory load," "Memory: loaded vs.
     applied," and "Terminal memory append" below.
+15. After every fresh `Agent` dispatch's own `retain_policy_event(kind: "agent_dispatch")`
+    call -- Architect, Engineer, Quality Engineer, and a checkpoint-resume's freshly
+    restarted-phase dispatch alike -- immediately call `reconcile_quarantined_usage` for
+    that same `agent_id`. See "Per-agent usage accounting" below for the full protocol,
+    including how to treat each possible result honestly. Never call it a second time for
+    the same `agent_id` merely because that agent was later resumed via `SendMessage`
+    (a transport repair, a staged continuation turn, or a same-run route-back) -- none of
+    those are a fresh dispatch, and re-reconciling an already-matched identity is not
+    required for its usage to keep being captured correctly.
+16. Per-agent token/cost accounting is evidence, not verdict. A missing, quarantined, or
+    otherwise incomplete usage record for an agent never changes that agent's own
+    artifact validity, never turns a genuine passing verification into a failure, and
+    never blocks a phase -- accounting coverage and pipeline correctness are reported as
+    two separate things, always (see "Per-agent usage accounting" and "Terminal usage
+    summary" below). Conversely, a `run-summary.json`'s `usage_summary_ref` may only ever
+    point at a path `build_usage_summary` itself returned; its target document's own
+    `subagent_subtotal` may never be described, in this document's own procedures or in
+    any report to the user, as the run's "total pipeline cost" -- that claim requires a
+    genuinely measured orchestrator usage figure, which this milestone does not capture.
 
 # Parsing $ARGUMENTS
 
@@ -154,6 +173,67 @@ function's own docstring for the authoritative field-level contract):
 | `append_memory` | Appends new, evidence-backed memory. `kind: "fact"` appends at most one fact (`fact` field); `kind: "lesson"` appends up to 5 candidates (`candidates` field, in order -- the cap and duplicate suppression are enforced by the operation itself, not by counting carefully). Every candidate is independently validated (provenance, real evidence, no secrets, no duplicates, and for lessons, harness-workflow relevance) regardless of what you believe about it -- a rejected or duplicate candidate is a legitimate, well-formed negative result, not a bug. Retains its own `memory_fact_append`/`memory_lessons_append` policy event automatically. |
 | `record_memory_applied` | Retains a `memory_applied` event -- and only a `memory_applied` event -- when a concrete decision in this run genuinely used a specific prior fact or lesson. Refuses (`status: "blocked"`, retains `memory_applied_rejected` instead) unless `entry_id` resolves to a currently-valid fact/lesson and `evidence_path` resolves to a real, existing file. Never call this merely because a fact or lesson was included in a prompt -- see "Memory: loaded vs. applied" below. |
 | `summarize_memory` | Read-only. Derives `memory_loaded`/`memory_influenced_run`/`memory_refs_used` from this run's own retained `logs/policy-events.jsonl` -- never from assertion. Call this immediately before `write_run_summary` and merge its three fields into the summary document; see "Terminal memory append" below. |
+| `reconcile_quarantined_usage` | Call immediately after every `retain_policy_event(kind: "agent_dispatch")` for a *fresh* `Agent` dispatch (never for a `SendMessage` resume of an existing identity). Re-attempts identity matching for the per-agent usage record the real `SubagentStop` hook almost certainly already quarantined -- see "Per-agent usage accounting" below for why this ordering is expected, not an error. Returns `status: "captured"` (normal), `"no_quarantine_record"` / `"quarantined"` / `"ambiguous"` / `"error"` (an honest accounting gap, never a pipeline failure -- see below). |
+| `build_usage_summary` | Call exactly once per run, immediately before `write_run_summary`, for **every** terminal outcome of this run -- not only a genuine `pass`. Aggregates every per-agent usage record this run's own `usage/` directory holds into `runs/<run_id>/usage-summary.json` and returns its `path`; never hand-author usage totals inside `run-summary.json` yourself. See "Terminal usage summary" below. |
+
+# Per-agent usage accounting (after every fresh `Agent` dispatch)
+
+Real, live evidence (`docs/usage-hook-signal-verification.md`,
+`runs/run-20260814-usagecapture-001/`) established that the real `SubagentStop` hook --
+`.claude/hooks/record_agent_usage.py`, which captures per-agent token usage into
+`runs/<run_id>/usage/<agent_id>.json` -- fires and completes its capture attempt
+**before** this session's own turn resumes to retain that dispatch's `agent_dispatch`
+policy event. A fresh dispatch's usage record is therefore legitimately quarantined
+(`runs/_unmatched_usage/`) at the moment `retain_policy_event(kind: "agent_dispatch")`
+finally runs -- this is expected, normal, and not a defect to work around.
+
+**The fixed sequence, for every fresh `Agent` dispatch in this run** (Architect in Phase
+2, Engineer in Phase 3, Quality Engineer in Phase 4, and a checkpoint-resume's freshly
+restarted-phase dispatch -- see "Checkpointing and resume" below -- alike; Discovery
+dispatches no subagent, so it has none of this):
+
+1. Dispatch with the `Agent` tool exactly as that phase's own steps already document.
+2. Capture the returned `agent_id` and `retain_policy_event(kind: "agent_dispatch")`
+   exactly as that phase's own steps already document -- unchanged by this section.
+3. **Immediately** call `reconcile_quarantined_usage` with that same `agent_id`. Do this
+   every time, not only when you suspect a quarantine happened -- the call is cheap and
+   idempotent (a genuinely already-matched `agent_id` simply returns
+   `"no_quarantine_record"`, which is itself a fine, expected outcome here, not a defect).
+4. Interpret the result honestly, and let it affect *only* accounting evidence, never the
+   phase's own pipeline logic:
+   - `status: "captured"` -- normal. This agent's usage is now accounted under this run's
+     own `usage/` directory. No further action.
+   - `status: "no_quarantine_record"` -- the hook has not (yet, or ever) produced a record
+     for this `agent_id` at all. This is an honest accounting gap, not a pipeline
+     failure: `retain_policy_event` (`kind: "usage_accounting_gap"`, payload naming the
+     phase, `agent_id`, and `reason: "no_quarantine_record"`) and continue the phase
+     exactly as if this section did not exist.
+   - `status: "quarantined"` (still unmatched after the reconciliation attempt) or
+     `status: "ambiguous"` (matched more than one run) -- a genuine accounting-coverage
+     defect, but still never a pipeline failure: `retain_policy_event` (`kind:
+     "usage_accounting_gap"`, payload naming the phase, `agent_id`, the returned
+     `status`, and any `reason`/`candidate_run_ids` it carried) and continue the phase.
+   - `status: "error"` -- treat identically to the two bullets above (retain the same
+     `usage_accounting_gap` event, naming the error; continue the phase).
+5. Never fabricate a usage record, never guess an `agent_id`, and never dispatch a
+   replacement or duplicate `Agent` call merely to try to obtain accounting evidence --
+   that would violate the same "never fabricate/replace an agent identity" rule this
+   document already enforces everywhere else (see "Staged continuation protocol" below),
+   now extended to cover accounting, not only pipeline correctness.
+
+**Resumed identities never repeat this sequence.** A `SendMessage` resume of an
+already-dispatched agent -- an Architect/Engineer/Quality-Engineer transport repair, a
+staged continuation turn (`pre_test_requested`/`post_test_requested`/
+`finalization_evidence_requested`/`attempt_requested`), or a same-run logic-bug
+route-back -- is never a fresh `Agent` call, so it never gets its own
+`retain_policy_event(kind: "agent_dispatch")` and never needs its own
+`reconcile_quarantined_usage` call. The *original* dispatch's `agent_dispatch` event
+already exists in this run's `logs/policy-events.jsonl` by the time any later
+`SubagentStop` fires for that same `agent_id`, so every later capture for a resumed
+identity matches directly (recomputing that one agent's full transcript-to-date, per
+`harness/orchestrator/usage.py`'s own idempotent-overwrite contract) without ever passing
+through quarantine again. This is exactly what keeps a resumed/repaired agent's usage
+attributed to one identity rather than fabricating a second one -- see standing rule 15.
 
 # Phase 0: Memory load (before Discovery)
 
@@ -262,7 +342,8 @@ it -- report that honestly rather than manufacturing a citation.
    `kind: "agent_dispatch"` and a payload of `{"phase": "research", "subagent_type":
    "architect", "agent_id": "<the returned id>", "dispatch_sequence": 1}` -- this is the
    evidence trail for "was the real Architect actually dispatched," independent of
-   anything the Architect itself claims.
+   anything the Architect itself claims. Then immediately call `reconcile_quarantined_usage`
+   for this `agent_id`, per "Per-agent usage accounting" above and standing rule 15.
 3. `retain_attempt` (`phase: "research"`, `attempt_n: 1`) with the Architect's raw final
    message, verbatim, before parsing it as JSON.
 4. `validate_artifact` (`phase: "research"`). If valid, skip straight to step 5. If
@@ -386,6 +467,10 @@ is not a completed four-phase run.
    classifications from the promoted `findings.json`.
 3. Capture the agent identifier. `retain_policy_event` (`kind: "agent_dispatch"`,
    `phase: "implementation"`, `subagent_type: "engineer"`, the id, dispatch sequence).
+   Then immediately call `reconcile_quarantined_usage` for this `agent_id`, per
+   "Per-agent usage accounting" above and standing rule 15 -- once only, here, for this
+   fresh dispatch; every later staged turn for this same Engineer (step 4 below, and any
+   same-run route-back) resumes this identity and never repeats this call.
 4. Enter the staged continuation protocol (below) for every subsequent turn:
    `pre_test_requested` -> mediate via the real `test-runner` Skill -> reply -> ... ->
    `post_test_requested` -> mediate -> reply -> `finalization_evidence_requested` ->
@@ -494,7 +579,11 @@ wire format only: it never asks the Engineer to redo work, change `changed_files
 # Phase 4: Verification (real Quality Engineer dispatch) -- not exercised in a dry run
 
 Broadly the same shape as Phase 3: dispatch, capture and retain the agent id as a policy
-event, retain every raw turn before parsing, mediate every `attempt_requested` through
+event -- then immediately call `reconcile_quarantined_usage` for this `agent_id`, exactly
+as Phase 3's own step 3 does, per "Per-agent usage accounting" above and standing rule 15
+(once only, here, for this fresh dispatch; the transport repair and any evidence-supported
+retry below resume this same identity and never repeat the call) -- retain every raw turn
+before parsing, mediate every `attempt_requested` through
 the real `test-runner` Skill, resume the *same* Quality Engineer for every reply
 including any evidence-supported `infrastructure_flake` retry (max 2, per
 `quality-engineer.md`), `validate_artifact`/`promote_artifact` (`phase: "verification"`,
@@ -913,7 +1002,13 @@ triggered:
    tool call) for this phase. There is no live handle from whatever process wrote the
    checkpoint for this new process to resume -- none is ever claimed to exist, and this
    new agent is never described as "the same Architect/Engineer/Quality Engineer
-   continuing," only as a fresh dispatch for a restarted phase. Every phase after
+   continuing," only as a fresh dispatch for a restarted phase. Because this genuinely is
+   a fresh dispatch (a new, distinct `agent_id` -- e.g. a fresh Engineer after a resumed
+   Implementation phase), it gets its own `retain_policy_event(kind: "agent_dispatch")`
+   and its own `reconcile_quarantined_usage` call, exactly as Phase 2/3/4's own steps
+   already require and exactly as an original, non-resumed dispatch of that phase would --
+   its usage is accounted as a wholly separate agent record from whatever the interrupted
+   process's own earlier dispatch (if any) produced. Every phase after
    `next_phase` proceeds normally (also a fresh dispatch each, exactly as in a
    non-resumed run) and continues getting its own progress checkpoint as it completes.
    This restarted phase, and everything after it, is exactly what step 4's memory load
@@ -1019,6 +1114,42 @@ contract actually relies on.
    pre-existing field (see `run-summary.schema.json`); populate it now rather than
    leaving it unset.
 
+## Terminal usage summary
+
+Unlike "Terminal memory append" above (scoped to only the two real terminal
+`write_checkpoint` kinds), this step runs immediately before **every** `write_run_summary`
+call this document makes, with no exception -- including `discovery_invalid` and
+`discovery_refused`, which write no checkpoint at all. The reason for the broader scope:
+a `build_usage_summary` call is cheap, safe, and honest even when zero agents were ever
+dispatched (it aggregates an empty `usage/` directory into a genuinely zero-agent summary,
+never an error) -- and every one of this document's terminal outcomes deserves the same
+accounting evidence, not only the ones that got far enough to checkpoint.
+
+1. Call `build_usage_summary` (`run_id` only) exactly once, immediately before the
+   `write_run_summary` call for this run's own terminal outcome -- after every fresh
+   dispatch this run made has already gone through "Per-agent usage accounting" above
+   (dispatch, `retain_policy_event(kind: "agent_dispatch")`,
+   `reconcile_quarantined_usage`), so its aggregation reflects every capture/reconciliation
+   attempt this run could possibly have made.
+2. Set `run-summary.json`'s `usage_summary_ref` to the exact `path` `build_usage_summary`
+   returned -- never a hand-constructed path, and never hand-authored token/cost totals
+   copied into `run-summary.json` itself. `usage_summary_ref` is a pointer, nothing more;
+   the actual `subagent_subtotal`/`orchestrator`/`coverage_status`/`full_pipeline_total`
+   detail lives only in the document it points at.
+3. State the accounting picture honestly when reporting this run (see "What to state,
+   every time" below) using that same document's own fields -- never restate or
+   re-summarize them from memory, and never describe `subagent_subtotal` as this run's
+   total pipeline cost. `full_pipeline_total` is `null` for every run this milestone
+   produces (orchestrator usage is not captured -- see "Per-agent usage accounting"
+   above and `harness/orchestrator/usage.py`'s own module docstring for why), and that
+   `null` must be reported as exactly what it is, not glossed over or omitted.
+4. Any `usage_accounting_gap` policy events this run retained (per "Per-agent usage
+   accounting" above) are accounting evidence, not pipeline evidence -- report them as
+   what they are (an incomplete accounting picture for a specific agent) and never let
+   their presence change this run's own `final_verdict`, `phases_completed`, or any
+   artifact's validity. A run can genuinely be `final_verdict: "pass"` with incomplete
+   usage accounting; the two are independent claims, always (standing rule 16).
+
 # Reporting
 
 ## Completion-guardrail marker (required before reporting any run as complete)
@@ -1066,3 +1197,11 @@ State plainly, every time:
   from.
 - Any evidence gap. If required evidence is missing, say the run cannot be called
   successful -- do not soften this into "mostly done."
+- Per-agent usage/cost accounting, read from `usage-summary.json` at `usage_summary_ref`
+  (never restated from memory): every agent's `identity.match_status` (and, for any that
+  are not `"matched"`, the `usage_accounting_gap` policy event this run retained for it --
+  state this as an accounting gap, not a pipeline problem), the `subagent_subtotal`'s own
+  token/cost figures, and that `orchestrator` usage was not measured this run and
+  `full_pipeline_total` is therefore `null`. Never call the `subagent_subtotal` this run's
+  total pipeline cost (standing rule 16) -- state it as exactly what it is, a subtotal
+  over the agents this run's own accounting actually captured.

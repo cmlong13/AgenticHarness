@@ -1,0 +1,56 @@
+{
+  "_meta": {
+    "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "verified_date": "2026-08-14",
+    "externally_verified": true,
+    "verification_method": "WebFetch of the live official pricing page during this milestone (not reused from any prior cached/dated table)",
+    "note": "The 2026-08-06 milestone's own pricing note (Claude Sonnet 5 introductory $2/$10 through 2026-08-31, reverting to $3/$15 on 2026-09-01) is SUPERSEDED. The live page fetched on 2026-08-14 states the scheduled increase 'will not occur' and $2/$10 is now the permanent standard price for claude-sonnet-5. All amounts are USD per million tokens (MTok), as decimal strings for exact Decimal parsing -- never float. cache_write_5m/cache_write_1h/cache_read are absolute per-MTok rates (already multiplied out from the base-input-price multipliers the pricing page states: 1.25x/2x/0.1x), not multipliers themselves, so callers never need to re-derive them.",
+    "unpriced_model_policy": "A model string not present as a key below is unpriced -- callers must report cost as unavailable (priced: false) rather than guessing a nearby model's rate or defaulting to any entry here."
+  },
+  "models": {
+    "claude-fable-5": {
+      "input": "10.00", "output": "50.00",
+      "cache_write_5m": "12.50", "cache_write_1h": "20.00", "cache_read": "1.00"
+    },
+    "claude-mythos-5": {
+      "input": "10.00", "output": "50.00",
+      "cache_write_5m": "12.50", "cache_write_1h": "20.00", "cache_read": "1.00"
+    },
+    "claude-opus-5": {
+      "input": "5.00", "output": "25.00",
+      "cache_write_5m": "6.25", "cache_write_1h": "10.00", "cache_read": "0.50"
+    },
+    "claude-opus-4-8": {
+      "input": "5.00", "output": "25.00",
+      "cache_write_5m": "6.25", "cache_write_1h": "10.00", "cache_read": "0.50"
+    },
+    "claude-opus-4-7": {
+      "input": "5.00", "output": "25.00",
+      "cache_write_5m": "6.25", "cache_write_1h": "10.00", "cache_read": "0.50"
+    },
+    "claude-opus-4-6": {
+      "input": "5.00", "output": "25.00",
+      "cache_write_5m": "6.25", "cache_write_1h": "10.00", "cache_read": "0.50"
+    },
+    "claude-opus-4-5": {
+      "input": "5.00", "output": "25.00",
+      "cache_write_5m": "6.25", "cache_write_1h": "10.00", "cache_read": "0.50"
+    },
+    "claude-sonnet-5": {
+      "input": "2.00", "output": "10.00",
+      "cache_write_5m": "2.50", "cache_write_1h": "4.00", "cache_read": "0.20"
+    },
+    "claude-sonnet-4-6": {
+      "input": "3.00", "output": "15.00",
+      "cache_write_5m": "3.75", "cache_write_1h": "6.00", "cache_read": "0.30"
+    },
+    "claude-sonnet-4-5": {
+      "input": "3.00", "output": "15.00",
+      "cache_write_5m": "3.75", "cache_write_1h": "6.00", "cache_read": "0.30"
+    },
+    "claude-haiku-4-5": {
+      "input": "1.00", "output": "5.00",
+      "cache_write_5m": "1.25", "cache_write_1h": "2.00", "cache_read": "0.10"
+    }
+  }
+}

@@ -273,6 +273,176 @@ is unchanged and was not reprocessed; only this document's prose was corrected. 
 (including Run A's and Run B's own retained files) was modified, and nothing was
 committed or pushed.
 
+**Milestone update (2026-08-14): per-agent token usage and cost accounting.** This
+session closes the fourth hook the assignment names (`ASSIGNMENT.md` §2.5's "post-agent
+hook that extracts usage") and the accompanying cost-accounting milestone, continuing
+from a prior interrupted session that had already performed the sanctioned diagnostic
+(`docs/usage-hook-signal-verification.md`, `runs/hooks-diagnostic/
+usage-hook-diagnostic-log.jsonl`) but had not begun implementation. (1)
+`harness/orchestrator/usage.py` (new) -- transcript parsing (exact structured
+`input_tokens`/`output_tokens`/`cache_creation_input_tokens`/`cache_read_input_tokens`
+categories, with the `cache_creation` 5m/1h sub-split preserved for correct per-rate
+pricing; never the rounded `totalTokens` convenience figure), `agent_id` ->
+retained-`agent_dispatch`-policy-event identity matching (matched / unmatched /
+ambiguous, scanning every run's own `logs/policy-events.jsonl`), Decimal-exact pricing
+against a repository-local pricing table, and `build_run_usage_summary`'s explicit
+subagent-subtotal-vs-orchestrator-vs-full-pipeline coverage semantics -- never reporting
+a subagent subtotal as the full pipeline cost. (2) `harness/model-pricing.json` (new) --
+official Anthropic per-model USD rates, live-fetched and verified this session
+(2026-08-14) directly from `https://platform.claude.com/docs/en/about-claude/pricing`,
+**not** reused from the prior interrupted session's own 2026-08-06 pricing note: that
+fetch surfaced a real, material pricing change -- Claude Sonnet 5's introductory $2/$10
+per-MTok rate, which the 2026-08-06 note recorded as reverting to $3/$15 on
+2026-09-01, has since been made the permanent standard price, and Anthropic's own page
+states the scheduled increase "will not occur." Reusing the stale note would have
+silently mispriced every Sonnet-5 agent by 50%. (3) `.claude/hooks/record_agent_usage.py`
+(new), registered in `.claude/settings.json` for both `SubagentStop` (no matcher) --
+the authoritative capture path, since it fires on every stop of a staged agent
+including every `SendMessage` resume, confirmed by the retained diagnostic evidence --
+and `PostToolUse` (matcher `Agent`) -- a secondary, explicitly non-authoritative
+corroboration signal retained as its own sidecar record, never merged into or allowed to
+override the authoritative per-agent total. Both branches fail open unconditionally (an
+evidence-capture hook, never a guardrail). (4) A real architectural finding, made before
+and confirmed during this session's own live demonstration: `SubagentStop` fires (and
+the hook's capture runs) *before* the orchestrator's own turn resumes to retain that
+dispatch's `agent_dispatch` policy event, so a fresh (non-staged) dispatch's *first*
+capture attempt is always identity-unmatched by construction, not by defect. `usage.py`
+gained `reconcile_quarantined_usage` (exposed via `live_cli.py`'s
+`reconcile_quarantined_usage` operation) for the orchestrator to call immediately after
+retaining the dispatch event -- it re-derives the record from the same already-retained
+transcript path, and, once matched, moves it into the run's own `usage/` directory and
+marks the original quarantine record consumed (renamed to `.reconciled`, content
+unchanged -- evidence is preserved, never deleted). (5) `live_cli.py` also gained
+`build_usage_summary`, a thin delegation to `usage.build_run_usage_summary`/
+`write_run_usage_summary`. (6) `run-summary.schema.json` gained one optional field,
+`usage_summary_ref` (a pointer to `runs/<run_id>/usage-summary.json`, produced only by
+`build_usage_summary`, never hand-authored), following the same additive-optional-field
+pattern the checkpoint/resume and memory-loop milestones already established. 56 new
+deterministic tests (40 in the new `tests/test_orchestrator_usage.py`, 8 added to
+`tests/test_hooks.py`, and 8 added to `tests/test_orchestrator_live_cli.py` -- confirmed
+by `git diff`'s own added/removed-function count, not estimated: zero existing test
+functions were removed or modified in either file, the only deletions being four
+docstring lines in `test_hooks.py`'s module header, and no test in this milestone uses
+`@pytest.mark.parametrize`), covering parsing, identity, Decimal pricing,
+idempotent/duplicate/resumed capture, quarantine, reconciliation, the corroboration
+sidecar, run-summary aggregation, the real hook script, and run-summary schema
+integration); full suite 635 passing (up from 579 -- 579 + 56 = 635, exactly), `demo-repo/`
+unaffected (106 tests, unchanged). (A prior draft of this note miscounted the new tests as
+"62"; that arithmetic did not even reconcile against its own claimed 579-to-635 delta and
+is corrected here after an explicit `git diff`/`pytest --collect-only`-based recount --
+see the "Integration audit (2026-08-14, same day)" note below for the full accounting of
+the discrepancy.) **Live-demonstrated the same day**: a single, brand-new, read-only
+`Agent` dispatch (`run-20260814-usagecapture-001`, agent id `a0afd1446050e7213`, task
+"read README.md's first line") produced a real `SubagentStop` event that the real,
+registered hook captured and (as predicted) initially quarantined as unmatched; a real
+`retain_policy_event(kind: "agent_dispatch")` call followed by a real
+`reconcile_quarantined_usage` call moved it into
+`runs/run-20260814-usagecapture-001/usage/a0afd1446050e7213.json` with exact captured
+tokens (`input_tokens: 6`, `output_tokens: 130`, `cache_creation_input_tokens: 39679`,
+`cache_read_input_tokens: 19201`, model `claude-sonnet-5`) and a genuine Decimal cost
+(`$0.1043497`, independently verified by hand against `model-pricing.json`'s own rates);
+a real `PostToolUse:Agent` corroboration sidecar was also captured
+(`runs/_usage_corroboration/a0afd1446050e7213.json`), showing a smaller, single-iteration
+usage snapshot than the full transcript recompute -- live, first-hand confirmation of
+why `PostToolUse:Agent` alone would have undercounted; `build_usage_summary` produced
+`runs/run-20260814-usagecapture-001/usage-summary.json` with `coverage_status:
+"partial"` and `full_pipeline_total: null` (orchestrator usage genuinely not captured
+this milestone). No Engineer/Quality-Engineer records were manufactured, `demo-repo/`
+was not touched, no historical run evidence was modified, and nothing was committed or
+pushed. Not built this session, per the assignment's explicit exclusions and this
+milestone's own scope: GitHub/Jira, Obsidian, REST fallback, false-push/flaky-test
+demos, architecture diagrams, the final write-up, and orchestrator-side usage capture
+(structurally deferred -- see `usage.py`'s own module docstring for why the run summary
+is always written before the orchestrator's own `Stop` event could ever reveal its final
+usage).
+
+**Integration audit (2026-08-14, same day): usage accounting wired into `/work`, test-count
+correction, evidence-tracking review.** A narrowly-scoped follow-up audit of the
+per-agent usage/cost-accounting milestone above, closing integration/documentation gaps
+before commit -- no GitHub/Jira/Obsidian/connector/false-push/flaky-test/architecture-
+diagram/write-up work, no `demo-repo/` product changes, no historical run evidence
+modified, nothing committed or pushed. (1) **`/work` now actually calls the accounting
+operations the prior note only implemented.** `work/SKILL.md` gained: two new rows in
+the `live_cli.py` operations table (`reconcile_quarantined_usage`, `build_usage_summary`);
+a new "Per-agent usage accounting" section stating the fixed post-dispatch sequence
+(dispatch -> `retain_policy_event(kind: "agent_dispatch")` -> immediately
+`reconcile_quarantined_usage`) and how to interpret every possible result
+(`"captured"` normal; `"no_quarantine_record"`/`"quarantined"`/`"ambiguous"`/`"error"`
+all retained as a `usage_accounting_gap` policy event and treated as an accounting gap,
+never a pipeline failure -- never fabricating a record, never redispatching solely for
+accounting); explicit wiring of that sequence into Phase 2 (Architect), Phase 3
+(Engineer), Phase 4 (Quality Engineer), and the checkpoint-resume section's freshly
+restarted-phase dispatch (a genuinely new `agent_id`, reconciled as its own separate
+record); an explicit statement that resumed/staged identities (transport repairs, staged
+continuation turns, same-run route-back) never repeat the sequence, since the original
+dispatch's own `agent_dispatch` event already lets every later `SubagentStop` capture for
+that same `agent_id` match directly without quarantine; a new "Terminal usage summary"
+section calling `build_usage_summary` immediately before **every** `write_run_summary`
+call this document makes (deliberately broader than "Terminal memory append"'s
+checkpoint-gated scope -- including `discovery_invalid`/`discovery_refused`, which write
+no checkpoint at all, since an empty usage summary is still honest, cheap evidence) and
+setting `run-summary.json`'s `usage_summary_ref` to the exact returned path, never a
+hand-authored total; two new standing rules (15: dispatch-time reconciliation: 16:
+accounting is evidence, not verdict -- a `usage_accounting_gap` never changes
+`final_verdict`/`phases_completed`/any artifact's validity, and `subagent_subtotal` may
+never be described as "total pipeline cost"); and a "What to state, every time" bullet
+requiring every report to read the usage picture from `usage-summary.json` itself,
+including the honest `full_pipeline_total: null`. 25 new deterministic tests (20 in
+`tests/test_work_skill.py::TestUsageAccounting`, proving -- via string/ordering checks
+against the real document text, the same technique every other `TestWork*`/`Test*`
+class in that file already uses -- that each phase's dispatch step precedes its
+reconciliation call, that resumed identities are documented as never repeating it, and
+that the coverage-vs-pipeline-correctness distinction is stated explicitly; 5 in
+`tests/test_orchestrator_usage.py::TestAccountingFailureNeverCorruptsPipelineResult`,
+proving at the code level -- not just by prose assertion -- that a quarantined, errored,
+or gap-reporting usage capture/reconciliation/summary call leaves a real
+`verification-report.json` and `run-summary.json` byte-for-byte untouched, and that
+`build_run_usage_summary`'s own return value contains no `final_verdict` key at all, so
+there is no code path by which accounting could veto a pass). No live `/work` run was
+performed for this audit -- deterministic integration tests were sufficient to prove the
+wiring; see §10 for why a new live four-phase run was judged unnecessary here. (2)
+**Test-count discrepancy corrected.** The prior note's own "62 new tests" claim was
+simply wrong arithmetic -- it did not even reconcile against its own stated 579-to-635
+delta (579 + 62 = 641 != 635). A `git diff`/`pytest --collect-only`-based recount found
+the true figure: 56 new tests for the implementation milestone (40 in the new
+`tests/test_orchestrator_usage.py`, 8 added to `tests/test_hooks.py`, 8 added to
+`tests/test_orchestrator_live_cli.py` -- confirmed via `git diff`'s own added-function
+count; zero existing tests were removed, replaced, or modified in either modified file
+beyond four docstring lines in `test_hooks.py`'s module header; no test in this milestone
+uses `@pytest.mark.parametrize`, so parametrization explains none of the discrepancy),
+579 + 56 = 635 exactly. This audit then added a further 25 (per item 1 above),
+635 + 25 = **660**, the harness suite's current, confirmed-by-`pytest --collect-only`
+total. (3) **Evidence-tracking reviewed.** `docs/usage-hook-signal-verification.md` and
+`runs/hooks-diagnostic/usage-hook-diagnostic-log.jsonl` were, at the start of this audit,
+real but still-untracked working-tree files (confirmed via `git ls-files`) -- exactly the
+same untracked state every other file this two-part milestone touched was in, since
+nothing has been committed yet; they are not ephemeral or unsafe, and are the intended
+milestone file set precisely as `docs/hooks-signal-verification.md` and
+`runs/hooks-diagnostic/skill-enforcement-events.jsonl` already established the committed
+precedent for (git history confirms those two are tracked, from the earlier
+skill-enforcement diagnostic). Both new files were re-scanned this audit for
+credential/secret-shaped content (`api_key`/`secret`/`password`/`bearer`/`token`/
+`sk-ant`/`ghp_`-style patterns) and found clean; no sanitized-summary substitute was
+needed. `runs/_unmatched_usage/`, `runs/_usage_corroboration/`, and
+`runs/run-20260814-usagecapture-001/` were likewise re-scanned and confirmed to hold only
+small, minimal, appropriate evidence (39-46 lines per file: aggregated token counts and
+identity metadata only -- never a copied-in full subagent transcript, which remains
+referenced only by its absolute path, outside the repository, exactly as designed).
+Nothing was deleted from any of these to make `git status` prettier. (4) **"Subagent
+accounting coverage: complete" wording corrected.** The prior session's final report
+conflated two different claims: that the capture *mechanism* (transcript parsing,
+identity matching, pricing) supports every controlled subagent type -- true, and
+unchanged -- versus that *live, operational* accounting had been demonstrated across a
+full four-phase `/work` pipeline -- which was never actually true; reconciliation was
+still manual and `/work` had not yet been wired to call it. The retained evidence remains
+exactly what it always was: one real, controlled single-agent dispatch
+(`run-20260814-usagecapture-001`), not a live four-phase proof. This document, and any
+future report, should state the two claims separately: the capture mechanism is
+complete and covers Architect/Engineer/Quality-Engineer alike (now wired into `/work`
+itself, per item 1); a live demonstration of accounting across an actual four-phase
+`/work` run remains open, alongside the still-open live route-back/hooks-against-a-real-run
+demonstration item already tracked elsewhere in this document.
+
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
 followed. Implementation should track this spec; if the two diverge, update this file first.
@@ -477,8 +647,29 @@ MCP server in favor of curl-based skills for reliability/debuggability).
   `Stop`-event blocks. Depends on `/work` cooperatively writing `.completion_claim.json`; an
   orchestrator turn that never writes that marker is not caught by this hook — a known
   cooperation boundary, not a claim of unconditional enforcement (see §10).
-- Post-agent cost hook — extracts per-agent token/cost usage so a full pipeline run's total cost
-  is knowable. **Not started.**
+- Post-agent cost hook — extracts per-agent token/cost usage. **COMPLETE (2026-08-14)**:
+  `.claude/hooks/record_agent_usage.py`, registered for both `SubagentStop` (authoritative
+  capture -- fires on every stop of a staged agent, including resumes) and `PostToolUse`
+  (matcher `Agent`; secondary, non-authoritative corroboration only). Delegates entirely to
+  `harness/orchestrator/usage.py`: transcript parsing of exact structured token categories,
+  `agent_id` -> retained-`agent_dispatch` identity matching (quarantining unmatched/ambiguous
+  identities rather than guessing, with a `reconcile_quarantined_usage` path for the common
+  case where `SubagentStop` fires before the orchestrator retains the dispatch event), and
+  Decimal-exact pricing against `harness/model-pricing.json` (live-verified 2026-08-14).
+  `live_cli.py` gained `build_usage_summary`/`reconcile_quarantined_usage`; a run's total
+  cost is knowable per-agent and as an explicitly-labeled subagent subtotal --
+  **not** yet as a genuine full-pipeline total, since orchestrator-side usage is not
+  captured this milestone (structurally deferred; see the usage-accounting milestone note
+  above and `usage.py`'s own module docstring). 56 new tests (implementation) + 25 new
+  tests (the same-day integration audit that wired this into `/work` itself -- see below);
+  capture/reconciliation live-demonstrated the same day against a real, brand-new
+  single-agent dispatch (`runs/run-20260814-usagecapture-001/`) -- one real subagent, not
+  a live four-phase pipeline. The capture *mechanism* covers Architect/Engineer/Quality
+  Engineer alike and is now wired into every controlled `/work` dispatch (per the
+  "Integration audit (2026-08-14, same day)" note below); a live demonstration of
+  accounting across an actual four-phase `/work` run remains open -- these are two
+  different claims, not to be conflated. See the "Milestone update (2026-08-14)" and
+  "Integration audit (2026-08-14, same day)" notes above for the full account.
 
 ### Memory loop
 - `memory/lessons-learned.md` — loaded before every run (`live_cli.py`'s `load_memory`
@@ -583,7 +774,8 @@ MCP server in favor of curl-based skills for reliability/debuggability).
 - ~~Skill-enforcement hook~~ **COMPLETE** (2026-08-05) — implemented ahead of this list's
   original schedule as part of the hooks milestone; see §3 "Hooks" and §10 "Hooks and same-run
   route-back milestone (2026-08-05)"
-- Post-agent cost/token-tracking hook
+- ~~Post-agent cost/token-tracking hook~~ **COMPLETE** (2026-08-14) — see §3 "Hooks" and
+  the "Milestone update (2026-08-14): per-agent token usage and cost accounting" note
 - MCP-vs-REST dual implementation + write-up decision
 - Flaky-vs-logic classification with retry/backoff
 - Planted-bug demo scenarios (flaky test, logic bug, deleted evidence, false push claim)
@@ -622,7 +814,12 @@ AgenticHarness/
 │   │   ├── skill_enforcement.py
 │   │   ├── pre_dispatch_check.py
 │   │   ├── completion_guardrail.py
-│   │   └── post_agent_cost.py
+│   │   └── record_agent_usage.py  # [DONE] (usage/cost-accounting milestone, 2026-08-14) --
+│   │                              #        this file map originally planned post_agent_cost.py
+│   │                              #        as the name; implemented as record_agent_usage.py
+│   │                              #        instead for parity with the other hook filenames'
+│   │                              #        verb_noun convention (skill_enforcement,
+│   │                              #        pre_dispatch_check, completion_guardrail)
 │
 ├── .mcp.json                      # GitHub / Obsidian / Atlassian MCP server config (repo root)
 │
@@ -634,7 +831,13 @@ AgenticHarness/
 │   │                              #        planned, for the same relative-import consistency
 │   │                              #        reason discovery.py/evidence_io.py/paths.py do
 │   ├── evidence.py                # [DONE] schema + semantic artifact validation, incl. validate_scope_semantics
-│   ├── cost.py                    # token/cost aggregation across a run
+│   ├── model-pricing.json         # [DONE] (usage/cost-accounting milestone, 2026-08-14) --
+│   │                              #        official Anthropic per-model USD pricing, live-verified
+│   │                              #        2026-08-14; this file map originally planned a
+│   │                              #        harness/cost.py module -- token/cost aggregation instead
+│   │                              #        lives in harness/orchestrator/usage.py (below), for the
+│   │                              #        same relative-import consistency reason checkpoint.py/
+│   │                              #        memory.py/discovery.py/evidence_io.py/paths.py do
 │   ├── schemas/                   # [DONE] the six *.schema.json artifact contracts
 │   ├── artifacts/
 │   │   └── examples/              # [DONE] the six *.example.json reference artifacts
@@ -653,13 +856,24 @@ AgenticHarness/
 │       │                          #        as this file map originally planned, for the same
 │       │                          #        relative-import consistency reason checkpoint.py/discovery.py/
 │       │                          #        evidence_io.py/paths.py do
+│       ├── usage.py               # [DONE] (usage/cost-accounting milestone, 2026-08-14) --
+│       │                          #        transcript parsing, agent_id -> agent_dispatch identity
+│       │                          #        matching (+ quarantine reconciliation), Decimal pricing,
+│       │                          #        run-usage-summary aggregation with explicit
+│       │                          #        subagent-subtotal/orchestrator/full-pipeline coverage
+│       │                          #        semantics -- lives under harness/orchestrator/ for the
+│       │                          #        same relative-import consistency reason memory.py/
+│       │                          #        checkpoint.py/discovery.py/evidence_io.py/paths.py do
 │       └── live_cli.py            # [DONE] thin JSON-in/JSON-out bridge the /work skill calls -- no agent
 │                                   #        reasoning; deterministically tested (see §10 "Live architecture
-│                                   #        decision (Option C)"); the memory-loop milestone's four new
+│                                   #        decision (Option C)"); the memory-loop milestone's four
 │                                   #        operations (load_memory/append_memory/record_memory_applied/
 │                                   #        summarize_memory) have been exercised for real via a deterministic
 │                                   #        two-run demonstration (Run A/Run B, §10), not through a literal
-│                                   #        /work slash-command invocation
+│                                   #        /work slash-command invocation; the usage-accounting milestone's
+│                                   #        two new operations (build_usage_summary/
+│                                   #        reconcile_quarantined_usage) have been exercised via a real,
+│                                   #        live single-agent dispatch (run-20260814-usagecapture-001, §10)
 │
 ├── memory/                        # [DONE] (memory-loop milestone, 2026-08-06)
 │   ├── facts.jsonl                # append-only fact index -- see §3 "Memory loop"; supersedes this file
@@ -735,8 +949,11 @@ AgenticHarness/
    (`memory/lessons-learned.md`, `memory/facts.jsonl`) — **COMPLETE, demonstrated
    (2026-08-06) via a real, two-run `live_cli.py` CLI demonstration** (not a live
    `/work` pipeline run), see the memory-loop milestone note above and §10's
-   "Memory-loop milestone (2026-08-06)". The post-agent cost/token-tracking hook remains
-   **not started**.
+   "Memory-loop milestone (2026-08-06)". The post-agent cost/token-tracking hook —
+   **COMPLETE (2026-08-14)**: `.claude/hooks/record_agent_usage.py` +
+   `harness/orchestrator/usage.py`, live-demonstrated against a real single-agent
+   dispatch (`run-20260814-usagecapture-001`) — see the "Milestone update (2026-08-14)"
+   note above.
 10. Independent GitHub push-verification path. **Not started** — no commit/push has been
     performed by the harness in any live run to date (by design; see `work/SKILL.md` standing
     rule 12).
@@ -1614,7 +1831,9 @@ requiring correction:
   is still a real version-sensitivity risk worth stating rather than treating this signal
   as permanently guaranteed).
 - **Post-agent cost/token-tracking hook remains not started** -- the fourth hook this part
-  of the assignment names, out of scope for this milestone.
+  of the assignment names, out of scope for this milestone. (Superseded: **COMPLETE
+  2026-08-14** -- see the "Milestone update (2026-08-14): per-agent token usage and cost
+  accounting" note above.)
 - Repository hygiene, corrected 2026-08-05: `.gitignore` already covered `__pycache__/`
   (confirmed via `git check-ignore`, so `.claude/hooks/__pycache__/*.pyc` is excluded
   automatically, no change needed). `.claude/hooks/logs/skill-enforcement-events.jsonl`
@@ -1883,8 +2102,10 @@ event, via a dedicated fixture rather than a live `/work` run — see §10 "Live
 demonstration (`completion-guardrail-live-001`, 2026-08-05)". **Update (2026-08-06):**
 checkpoint/resume is now complete — see the checkpoint/resume milestone notes above for the
 current, authoritative account. **Update (2026-08-06, same day):** the memory loop is now
-also complete — see the memory-loop milestone notes above. The post-agent cost hook and a
-live demonstration of route-back/hooks against a real `/work` run both remain open.
+also complete — see the memory-loop milestone notes above. **Update (2026-08-14):** the
+post-agent cost/token-usage-accounting hook is now also complete and live-demonstrated —
+see the "Milestone update (2026-08-14)" note above. A live demonstration of
+route-back/hooks against a real, full four-phase `/work` run remains open.
 
 ### Eight-day MVP planning target
 
@@ -1933,7 +2154,9 @@ documentation may require additional time after the working MVP closes.
    are implemented, deterministically tested (62+ new tests, plus a post-audit hardening
    pass), and demonstrated via a real, two-run `live_cli.py` CLI demonstration (Run A/
    Run B) — not a live `/work` pipeline run — see the memory-loop milestone notes above.
-   The post-agent cost hook remains **not started.**
+   ~~The post-agent cost hook.~~ **COMPLETE (2026-08-14)**: `record_agent_usage.py` +
+   `usage.py`, live-demonstrated against a real single-agent dispatch — see the
+   "Milestone update (2026-08-14)" note above.
 8. ~~First complete evidence-backed pipeline run.~~ **COMPLETE** — `run-20260804-riskband-003`,
    `final_verdict: "pass"`. See §10 "Live evidence (`run-20260804-riskband-003`) — completed."
 9. Deferred integrations and final assignment demonstrations (includes `github/`/`jira/` skill

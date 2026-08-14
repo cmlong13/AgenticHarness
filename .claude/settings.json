@@ -20,6 +20,27 @@
         ]
       }
     ],
+    "PostToolUse": [
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/record_agent_usage.py"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/record_agent_usage.py"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

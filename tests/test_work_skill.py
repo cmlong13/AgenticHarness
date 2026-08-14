@@ -557,3 +557,115 @@ class TestMemoryLoop:
 
     def test_reporting_states_two_loads_on_resume(self) -> None:
         assert "memory was loaded twice" in self.flat_text.lower()
+
+
+class TestUsageAccounting:
+    """Structural checks for the per-agent usage/cost-accounting integration into /work
+    (integration audit, 2026-08-14): every fresh Agent dispatch is followed by
+    reconcile_quarantined_usage, resumed/staged turns never repeat that call, terminal
+    reporting builds and references a usage summary, and accounting coverage is kept
+    strictly separate from pipeline correctness."""
+
+    def setup_method(self) -> None:
+        self.text = SKILL_PATH.read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+
+    def test_per_agent_usage_accounting_section_exists(self) -> None:
+        assert "# Per-agent usage accounting" in self.text
+
+    def test_reconcile_quarantined_usage_operation_documented(self) -> None:
+        assert "`reconcile_quarantined_usage`" in self.text
+        assert "no_quarantine_record" in self.text
+        assert "ambiguous" in self.text
+
+    def test_build_usage_summary_operation_documented(self) -> None:
+        assert "`build_usage_summary`" in self.text
+
+    def test_standing_rules_cover_dispatch_time_reconciliation_and_coverage_semantics(self) -> None:
+        assert "15. After every fresh `Agent` dispatch's own" in self.text
+        assert "16. Per-agent token/cost accounting is evidence, not verdict." in self.text
+
+    def _phase_slice(self, start_marker: str, end_marker: str) -> str:
+        start = self.text.index(start_marker)
+        end = self.text.index(end_marker, start)
+        return self.text[start:end]
+
+    def test_architect_dispatch_is_followed_by_reconciliation(self) -> None:
+        phase = self._phase_slice("# Phase 2: Research", "# Dry-run boundary")
+        dispatch_idx = phase.index('"agent_id": "<the returned id>"')
+        reconcile_idx = phase.index("reconcile_quarantined_usage")
+        assert dispatch_idx < reconcile_idx
+
+    def test_engineer_dispatch_is_followed_by_reconciliation(self) -> None:
+        phase = self._phase_slice("# Phase 3: Implementation", "## Engineer transport repair")
+        dispatch_idx = phase.index('`kind: "agent_dispatch"`,\n   `phase: "implementation"`')
+        reconcile_idx = phase.index("reconcile_quarantined_usage")
+        assert dispatch_idx < reconcile_idx
+
+    def test_quality_engineer_dispatch_is_followed_by_reconciliation(self) -> None:
+        phase = self._phase_slice("# Phase 4: Verification", "## Same-run logic-failure route-back")
+        dispatch_idx = phase.index("capture and retain the agent id as a policy")
+        reconcile_idx = phase.index("reconcile_quarantined_usage")
+        assert dispatch_idx < reconcile_idx
+
+    def test_restarted_fresh_engineer_after_resume_is_reconciled_as_a_new_identity(self) -> None:
+        resume_section = self._phase_slice("## Resuming an interrupted run", "## Loading memory on a resumed invocation")
+        assert "reconcile_quarantined_usage" in resume_section
+        assert "wholly separate agent record" in resume_section
+
+    def test_resumed_identities_never_repeat_the_dispatch_time_sequence(self) -> None:
+        usage_section = self._phase_slice("# Per-agent usage accounting", "# Phase 0: Memory load")
+        assert "Resumed identities never repeat this sequence" in usage_section
+        assert "never gets its own" in usage_section
+
+    def test_same_run_route_back_is_documented_as_a_resume_not_a_fresh_dispatch(self) -> None:
+        # The route-back section itself never calls a fresh Agent tool for the Engineer
+        # (SendMessage to the same agent id only) -- this is what keeps repair-cycle usage
+        # attributed to one identity; asserted structurally via the existing route-back
+        # prose plus the usage-accounting section's own governing rule.
+        route_back = self._phase_slice("## Same-run logic-failure route-back", "## Quality Engineer transport repair")
+        assert "never a new `Agent` call" in route_back
+        assert "`SendMessage` to that **exact same Engineer agent id**" in route_back
+
+    def test_engineer_transport_repair_is_documented_as_a_resume(self) -> None:
+        repair = self._phase_slice("## Engineer transport repair", "# Phase 4: Verification")
+        assert "SendMessage to that exact agent id" in repair or "same Engineer agent id" in repair
+
+    def test_terminal_usage_summary_section_exists_and_runs_before_write_run_summary(self) -> None:
+        assert "## Terminal usage summary" in self.text
+        terminal_usage = self._phase_slice("## Terminal usage summary", "# Reporting")
+        build_idx = terminal_usage.index("Call `build_usage_summary`")
+        ref_idx = terminal_usage.index("usage_summary_ref")
+        assert build_idx < ref_idx
+
+    def test_terminal_usage_summary_applies_to_every_write_run_summary_call(self) -> None:
+        terminal_usage = self._phase_slice("## Terminal usage summary", "# Reporting")
+        assert "discovery_invalid" in terminal_usage
+        assert "discovery_refused" in terminal_usage
+        assert "no exception" in terminal_usage.lower()
+
+    def test_usage_summary_ref_is_a_pointer_never_hand_authored(self) -> None:
+        assert "never hand-authored token/cost totals" in self.flat_text.lower() or "never hand-author usage totals" in self.flat_text.lower()
+
+    def test_full_pipeline_total_stays_null_and_is_reported_as_such(self) -> None:
+        assert "full_pipeline_total` is `null` for every run this milestone" in self.flat_text
+
+    def test_subagent_subtotal_never_described_as_total_pipeline_cost(self) -> None:
+        assert "never describe" in self.flat_text.lower() and "total pipeline cost" in self.flat_text.lower()
+        assert "never call the" in self.flat_text.lower() and "subagent_subtotal" in self.flat_text
+
+    def test_accounting_gaps_never_change_pipeline_verdict(self) -> None:
+        assert "never let their presence change this run's own" in self.flat_text
+        assert "final_verdict" in self.text
+
+    def test_accounting_and_pipeline_correctness_are_independent_claims(self) -> None:
+        assert "the two are independent claims, always" in self.flat_text.lower()
+
+    def test_never_fabricate_or_redispatch_solely_for_accounting(self) -> None:
+        usage_section = self._phase_slice("# Per-agent usage accounting", "# Phase 0: Memory load")
+        assert "never fabricate a usage record" in usage_section.lower()
+        assert "never dispatch a" in usage_section.lower()
+
+    def test_reporting_states_usage_accounting_picture(self) -> None:
+        assert "Per-agent usage/cost accounting" in self.text
+        assert "usage_accounting_gap" in self.text
