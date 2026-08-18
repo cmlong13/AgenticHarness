@@ -599,6 +599,53 @@ only this document's own prose (the paragraph above); it did not touch
 `github` Skill, or `work/SKILL.md` -- re-running the full suite after this audit still
 shows 743 passing, unchanged. No commit or push occurred.
 
+**Milestone update (2026-08-18, later same day): live successful GitHub push-verification
+demonstration.** The one item the GitHub-skill milestone above left open -- a live
+demonstration of a genuine successful `verify_push` against the real `origin/main` remote
+-- is now closed. Retained evidence lives at `runs/run-20260818-githubpush-001/` (task
+`GITHUB-LIVE-001`): (1) `git/commit-evidence.json` -- the real implementation commit,
+`f2fd7187d8d3ea96a4a958b67cb4ff1c115b1612` on branch `main`, retained via
+`retain_commit_evidence`; (2) `git/push-attempt.json` -- a real, normal push to
+`origin/main` (`https://github.com/cmlong13/AgenticHarness.git`, `refs/heads/main`),
+retained via `retain_push_attempt` with its own expected local SHA
+(`f2fd7187d8d3ea96a4a958b67cb4ff1c115b1612`) recorded up front -- the `git push` command's
+own output/exit code was never itself treated as proof of a successful push, exactly as the
+`github` Skill's cardinal rule and `work/SKILL.md` standing rule 17 require; (3)
+`git/push-verification.json` -- the production `verify_push` path independently ran a real
+`git ls-remote origin refs/heads/main` (never `gh`, per `github.py`'s own design), retaining
+the raw command, its exit code (`0`), stdout
+(`f2fd7187d8d3ea96a4a958b67cb4ff1c115b1612	refs/heads/main`), and stderr (empty)
+alongside the classification: `status: "verified"`, `observed_sha` exactly equal to
+`expected_sha`, reason `"observed remote SHA matches expected local SHA"`; (4)
+`logs/policy-events.jsonl` records the full evidence chain in order -- `git_commit_evidence`,
+`git_push_attempt`, `push_verification` (`status: "verified"`). The user separately ran the
+identical `git ls-remote origin refs/heads/main` command by hand, outside the harness, and
+confirmed the same remote SHA (`f2fd7187d8d3ea96a4a958b67cb4ff1c115b1612`) -- an independent
+external sanity check matching the harness's own result, not itself part of the production
+evidence chain. This closes the live successful independent push-verification criterion.
+
+One distinction stays explicit, unchanged by this demonstration: the production
+push-verification *mechanism* (`github.py`, `verify_push`, the five `live_cli.py`
+operations, the `github` Skill) is now **LIVE-PROVEN** against a real commit and a real
+remote; the deterministic false-push (mismatch) rejection proven earlier the same day
+(`tests/test_orchestrator_github.py::TestClassifyLsRemoteResult::
+test_false_push_claim_is_classified_mismatch`,
+`tests/test_orchestrator_live_cli.py::TestVerifyPush::
+test_mismatch_is_retained_honestly_never_reported_as_verified`) remains exactly what it
+always was -- a controlled fixture with an expected SHA deliberately differing from a
+simulated remote SHA, classified `mismatch`, never described as a real failed GitHub push;
+these are two separate proofs, not to be conflated. A full `/work` pipeline that naturally
+reaches the "GitHub / Git delivery" section and invokes standing rule 17 in the course of an
+actual four-phase run remains **not** live-demonstrated, unless a future run's own retained
+evidence proves otherwise -- this evidence was retained directly through the same
+`live_cli.py` operations `/work` itself calls, not through a literal `/work` invocation, the
+same documented substitution pattern the memory-loop and usage-accounting milestones already
+used for their own live proofs. This documentation-only closeout pass corrects
+`PROJECT_SPEC.md`'s prose to reflect the already-retained evidence above; it did not itself
+commit, push, or modify any implementation or test file. Not built this session, consistent
+with this closeout's own scope: Jira, Obsidian, MCP-vs-REST connector comparison, a
+flaky-test demonstration, architecture diagrams, and the final write-up remain untouched.
+
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
 followed. Implementation should track this spec; if the two diverge, update this file first.
@@ -739,7 +786,11 @@ reused rather than reimplemented.
   covering repository identity, working-tree/branch/diff inspection, staging, commit
   creation, push, independent remote verification (`git ls-remote`, never `gh`), `gh`
   metadata, and failure/mismatch reporting — required by `work/SKILL.md` standing rule
-  17 before any commit/push. This satisfies `ASSIGNMENT.md` §2.3's github-skill
+  17 before any commit/push. **LIVE-PROVEN (2026-08-18)** against a real commit and a
+  real push to `origin/main`, independently verified by a real `git ls-remote`
+  (`runs/run-20260818-githubpush-001/`; see the "live successful GitHub
+  push-verification demonstration" milestone note above) — not deterministic-only. This
+  satisfies `ASSIGNMENT.md` §2.3's github-skill
   requirement as this milestone scoped it (Git delivery + false-push detection); the
   broader `pr-create`/`read-file`/`search-code`/`commit-history`/`pr-review` breadth
   this file map originally sketched for GitHub-API code/PR access remains **not
@@ -925,11 +976,18 @@ MCP server in favor of curl-based skills for reliability/debuggability).
 - Checkpoint/resume for the pipeline — **COMPLETE and live-demonstrated (2026-08-06)**: see
   the checkpoint/resume milestone note above and §10.
 - GitHub access via `gh`/`git` CLI (real commits + independent push verification via
-  `git ls-remote`/`git rev-parse`) — **deterministic layer COMPLETE (2026-08-18)**:
+  `git ls-remote`/`git rev-parse`) — **COMPLETE and LIVE-PROVEN (2026-08-18)**:
   `harness/orchestrator/github.py` + five `live_cli.py` operations + the `github` Skill;
-  see the "GitHub skill and independent push-verification layer" milestone note above.
-  No commit/push has been performed against the real remote by the harness in any live
-  run to date — a live demonstration remains open pending user authorization (§10).
+  see the "GitHub skill and independent push-verification layer" and "live successful
+  GitHub push-verification demonstration" milestone notes above. A real commit
+  (`f2fd7187d8d3ea96a4a958b67cb4ff1c115b1612` on `main`) was pushed to `origin`, and the
+  production `verify_push` path independently ran a real `git ls-remote origin
+  refs/heads/main` and retained `status: "verified"`, expected SHA exactly matching
+  observed SHA (`runs/run-20260818-githubpush-001/`). The deterministic false-push
+  (mismatch) rejection proven the same day remains a separate, still-valid proof of the
+  opposite case (§10). A full `/work` pipeline that naturally reaches this section via a
+  real four-phase run remains not live-demonstrated, unless a future run's evidence
+  proves otherwise.
 - A real target repo (≥50 files) to run against — **complete**: `demo-repo/loanflow`, 55 files,
   verified compatible with the test-runner wrapper and mutation-safe (§10); not yet used by a
   live orchestrator run
@@ -1122,15 +1180,19 @@ AgenticHarness/
    `harness/orchestrator/usage.py`, live-demonstrated against a real single-agent
    dispatch (`run-20260814-usagecapture-001`) — see the "Milestone update (2026-08-14)"
    note above.
-10. Independent GitHub push-verification path. **Deterministic layer COMPLETE
+10. Independent GitHub push-verification path. **COMPLETE and LIVE-PROVEN
     (2026-08-18)** — `harness/orchestrator/github.py`, five `live_cli.py` operations,
     the `github` Skill, and `work/SKILL.md`'s "GitHub / Git delivery" section +
-    standing rule 17, including a deterministic false-push (mismatch) proof; see the
-    "GitHub skill and independent push-verification layer" milestone note above. No
-    commit/push has been performed by the harness against the real remote in any live
-    run to date (by design; see `work/SKILL.md` standing rule 12) — a live
-    demonstration of a genuine successful `verify_push` remains open, pending user
-    authorization.
+    standing rule 17, including both a deterministic false-push (mismatch) proof and a
+    live, real push-verification proof; see the "GitHub skill and independent
+    push-verification layer" and "live successful GitHub push-verification
+    demonstration" milestone notes above. A real commit
+    (`f2fd7187d8d3ea96a4a958b67cb4ff1c115b1612`) was pushed to `origin/main`, and the
+    production `verify_push` path independently ran a real `git ls-remote` that
+    retained `status: "verified"` (`runs/run-20260818-githubpush-001/`). Still open: a
+    full `/work` pipeline that naturally reaches the GitHub delivery section and
+    invokes standing rule 17 in the course of a real four-phase run, unless a future
+    run's own retained evidence proves otherwise.
 11. Close one complete free-form prompt pipeline with real evidence — **COMPLETE**:
     `run-20260804-riskband-003`, `final_verdict: "pass"`, all four canonical artifacts promoted,
     102 demo tests passing, no commit/push performed.
@@ -1229,8 +1291,13 @@ Demonstrated live, on a repo with ≥50 files:
       reporting a different observed SHA, and confirm the verification layer classifies
       it `mismatch` (never `verified`) and retains that classification honestly in
       `push-verification.json`. This is a deterministic mismatch fixture, not a real
-      failed GitHub push — no live push against a real remote has been attempted or
-      falsely claimed in this project to date (§10).
+      failed GitHub push. A separate, genuine live push against the real remote has
+      since been attempted and independently verified as successful — never falsely
+      claimed — via a real `git ls-remote` (`runs/run-20260818-githubpush-001/`; see
+      the "live successful GitHub push-verification demonstration" milestone note
+      above). The two remain distinct proofs, not to be conflated: the false-push
+      rejection above is deterministic-fixture-proven; a genuine successful push and
+      its independent verification are now **live-proven** (§10).
 - [ ] Obsidian vault receives a run summary (**not started** — separate, later work, per
       the assignment's explicit exclusion of Obsidian integration from this milestone);
       `lessons-learned.md` gains ≤5 bullets; a second run visibly uses a lesson from the

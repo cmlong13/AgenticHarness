@@ -1,0 +1,23 @@
+{
+  "task_id": "GITHUB-LIVE-001",
+  "run_id": "run-20260818-githubpush-001",
+  "target_repo_path": ".",
+  "verified_at": "2026-08-18T17:53:41Z",
+  "status": "verified",
+  "remote": "origin",
+  "ref": "refs/heads/main",
+  "expected_sha": "f2fd7187d8d3ea96a4a958b67cb4ff1c115b1612",
+  "observed_sha": "f2fd7187d8d3ea96a4a958b67cb4ff1c115b1612",
+  "reason": "observed remote SHA matches expected local SHA",
+  "raw_command": {
+    "args": [
+      "git",
+      "ls-remote",
+      "origin",
+      "refs/heads/main"
+    ],
+    "exit_code": 0,
+    "stdout": "f2fd7187d8d3ea96a4a958b67cb4ff1c115b1612\trefs/heads/main\n",
+    "stderr": ""
+  }
+}
