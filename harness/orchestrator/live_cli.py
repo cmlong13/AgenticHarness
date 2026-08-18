@@ -47,7 +47,7 @@ from harness.evidence import (
     validate_verification_report_semantics,
 )
 
-from . import checkpoint, discovery, evidence_io, memory, paths, usage
+from . import checkpoint, discovery, evidence_io, github, memory, paths, usage
 from .state import FINAL_VERDICT_BY_STATE, State
 
 REPO_ROOT = paths.REPO_ROOT
@@ -72,8 +72,15 @@ SEMANTIC_VALIDATORS = {
 
 # response["status"] values that represent an affirmative outcome (exit code 0).
 # Every other status a handler can return ("invalid", "blocked", "mismatch", "refused")
-# is a well-formed negative result (exit code 1), not a CLI failure.
-OK_STATUSES = {"valid", "match", "ok", "retained", "promoted", "written", "resumable", "appended", "captured"}
+# is a well-formed negative result (exit code 1), not a CLI failure. "verified" is
+# op_verify_push's own affirmative classification (harness.orchestrator.github); its five
+# sibling classifications ("mismatch", "remote_ref_missing", "command_failed",
+# "invalid_output", "wrong_repository") are deliberately absent here -- each is a
+# well-formed negative push-verification outcome the /work skill must treat exactly like
+# any other blocked result, never as evidence of a verified push.
+OK_STATUSES = {
+    "valid", "match", "ok", "retained", "promoted", "written", "resumable", "appended", "captured", "verified",
+}
 
 # op_write_checkpoint's `kind` field selects which checkpoint.py record_* builder runs.
 _CHECKPOINT_KINDS = {"progress", "completion", "interruption", "terminal_failure"}
@@ -631,6 +638,181 @@ def op_reconcile_quarantined_usage(req: dict) -> dict:
     return {"operation": "reconcile_quarantined_usage", **result}
 
 
+def op_git_repo_identity(req: dict) -> dict:
+    """18. Read-only: repository identity (harness.orchestrator.github) -- real repo
+    root, current branch, local HEAD SHA, and configured remote URL, resolved via real
+    `git` subprocess calls, never asserted by a caller. Optionally rejects the wrong
+    repository (`expected_repo`, an "owner/name" slug) before returning anything else.
+    Never writes evidence -- callers needing a retained identity record should follow up
+    with retain_commit_evidence/retain_push_attempt/verify_push below, which each
+    independently re-derive what they need rather than trusting this call's output."""
+    target_repo_path = req.get("target_repo_path", ".")
+    remote = req.get("remote", "origin")
+    expected_repo = req.get("expected_repo")
+    try:
+        repo_path = github.resolve_repo_path(target_repo_path, repo_root=REPO_ROOT)
+    except paths.PathSafetyError as exc:
+        return {"operation": "git_repo_identity", "status": "invalid", "error": exc.message, "code": exc.code}
+    try:
+        git_root = github.get_repo_root(repo_path)
+        branch = github.get_current_branch(repo_path)
+        head_sha = github.get_local_head_sha(repo_path)
+        remote_url = github.get_remote_url(repo_path, remote)
+    except github.GitError as exc:
+        return {"operation": "git_repo_identity", "status": exc.code, "error": exc.message}
+    if expected_repo is not None and not github.repository_identity_matches(remote_url, expected_repo):
+        return {
+            "operation": "git_repo_identity", "status": "wrong_repository",
+            "error": f"remote {remote!r} ({remote_url}) does not resolve to expected repository {expected_repo!r}",
+        }
+    return {
+        "operation": "git_repo_identity", "status": "ok", "repo_root": git_root, "current_branch": branch,
+        "local_head_sha": head_sha, "remote": remote, "remote_url": remote_url,
+    }
+
+
+def op_retain_commit_evidence(req: dict) -> dict:
+    """19. Retain evidence that a local commit genuinely exists -- independently
+    re-derives the current branch and HEAD SHA via real `git` subprocess calls (never
+    trusts a caller-supplied SHA claim), then writes runs/<run_id>/git/commit-evidence.json
+    (evidence_io.retain_git_evidence, collision-guarded). If `expected_branch` is given
+    and does not match the real current branch, refuses (status "blocked") and writes
+    nothing -- proves only what Git itself can currently attest to, never what a
+    subagent or the caller believes the state to be."""
+    run_id = _require_str(req, "run_id")
+    task_id = _require_str(req, "task_id")
+    target_repo_path = req.get("target_repo_path", ".")
+    expected_branch = req.get("expected_branch")
+    filename = req.get("filename", "commit-evidence.json")
+    try:
+        repo_path = github.resolve_repo_path(target_repo_path, repo_root=REPO_ROOT)
+    except paths.PathSafetyError as exc:
+        return {"operation": "retain_commit_evidence", "status": "invalid", "error": exc.message, "code": exc.code}
+    try:
+        branch = github.get_current_branch(repo_path)
+        commit_sha = github.get_local_head_sha(repo_path)
+    except github.GitError as exc:
+        return {"operation": "retain_commit_evidence", "status": exc.code, "error": exc.message}
+    if expected_branch is not None and branch != expected_branch:
+        return {
+            "operation": "retain_commit_evidence", "status": "blocked",
+            "error": f"current branch {branch!r} does not match expected_branch {expected_branch!r}",
+        }
+    doc = {
+        "task_id": task_id, "run_id": run_id, "target_repo_path": target_repo_path,
+        "branch": branch, "commit_sha": commit_sha, "retained_at": _utc_now_iso(),
+    }
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    evidence_io.ensure_run_dirs(run_directory)
+    try:
+        path = evidence_io.retain_git_evidence(run_directory, filename, doc)
+    except evidence_io.EvidenceCollisionError as exc:
+        return {"operation": "retain_commit_evidence", "status": "blocked", "error": str(exc)}
+    evidence_io.retain_policy_event(run_directory, "git_commit_evidence", doc)
+    return {"operation": "retain_commit_evidence", "status": "retained", "path": _rel(path), "commit_sha": commit_sha}
+
+
+def op_retain_push_attempt(req: dict) -> dict:
+    """20. Retain evidence that a push was *attempted* -- this proves nothing about
+    whether the push reached the remote; only verify_push (below) can prove that. If
+    `expected_sha` is supplied, independently confirms it still equals the real current
+    HEAD SHA before retaining anything (refuses, status "blocked", if HEAD moved since
+    the caller last checked -- e.g. the commit-evidence step); otherwise the current HEAD
+    SHA is used directly. Writes runs/<run_id>/git/push-attempt.json
+    (evidence_io.retain_git_evidence, collision-guarded)."""
+    run_id = _require_str(req, "run_id")
+    task_id = _require_str(req, "task_id")
+    branch = _require_str(req, "branch")
+    target_repo_path = req.get("target_repo_path", ".")
+    remote = req.get("remote", "origin")
+    filename = req.get("filename", "push-attempt.json")
+    try:
+        repo_path = github.resolve_repo_path(target_repo_path, repo_root=REPO_ROOT)
+        ref = github.derive_expected_ref(branch)
+    except (paths.PathSafetyError, github.GitError) as exc:
+        return {"operation": "retain_push_attempt", "status": "invalid", "error": exc.message}
+    try:
+        remote_url = github.get_remote_url(repo_path, remote)
+        current_head_sha = github.get_local_head_sha(repo_path)
+    except github.GitError as exc:
+        return {"operation": "retain_push_attempt", "status": exc.code, "error": exc.message}
+    claimed_sha = req.get("expected_sha", current_head_sha)
+    if claimed_sha != current_head_sha:
+        return {
+            "operation": "retain_push_attempt", "status": "blocked",
+            "error": f"expected_sha {claimed_sha!r} no longer matches current HEAD {current_head_sha!r}",
+        }
+    doc = {
+        "task_id": task_id, "run_id": run_id, "target_repo_path": target_repo_path, "remote": remote,
+        "remote_url": remote_url, "branch": branch, "ref": ref, "expected_local_sha": current_head_sha,
+        "attempted_at": _utc_now_iso(),
+    }
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    evidence_io.ensure_run_dirs(run_directory)
+    try:
+        path = evidence_io.retain_git_evidence(run_directory, filename, doc)
+    except evidence_io.EvidenceCollisionError as exc:
+        return {"operation": "retain_push_attempt", "status": "blocked", "error": str(exc)}
+    evidence_io.retain_policy_event(run_directory, "git_push_attempt", doc)
+    return {"operation": "retain_push_attempt", "status": "retained", "path": _rel(path), "expected_local_sha": current_head_sha}
+
+
+def op_verify_push(req: dict) -> dict:
+    """21. The one independent push-verification entry point (ASSIGNMENT.md's cardinal
+    rule): runs a real `git ls-remote <remote> refs/heads/<branch>` (always the real
+    subprocess -- harness.orchestrator.github's simulated command-result seam is
+    deliberately never exposed here, see that module's docstring) and classifies the
+    result against `expected_sha` -- one of `verified` / `mismatch` /
+    `remote_ref_missing` / `command_failed` / `invalid_output` / `wrong_repository`,
+    never a bare boolean. Always retains runs/<run_id>/git/push-verification.json
+    (evidence_io.retain_git_evidence, collision-guarded) and a matching
+    `push_verification` policy event, regardless of the classification -- a mismatch is
+    retained exactly as faithfully as a verified match, never silently dropped."""
+    run_id = _require_str(req, "run_id")
+    task_id = _require_str(req, "task_id")
+    branch = _require_str(req, "branch")
+    expected_sha = _require_str(req, "expected_sha")
+    target_repo_path = req.get("target_repo_path", ".")
+    remote = req.get("remote", "origin")
+    expected_repo = req.get("expected_repo")
+    filename = req.get("filename", "push-verification.json")
+    try:
+        repo_path = github.resolve_repo_path(target_repo_path, repo_root=REPO_ROOT)
+    except paths.PathSafetyError as exc:
+        return {"operation": "verify_push", "status": "invalid", "error": exc.message, "code": exc.code}
+
+    result = github.verify_push(
+        repo_path=repo_path, remote=remote, branch=branch, expected_sha=expected_sha, expected_repo=expected_repo,
+    )
+    doc = {"task_id": task_id, "run_id": run_id, "target_repo_path": target_repo_path, "verified_at": _utc_now_iso(),
+           **result.as_dict()}
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    evidence_io.ensure_run_dirs(run_directory)
+    try:
+        path = evidence_io.retain_git_evidence(run_directory, filename, doc)
+    except evidence_io.EvidenceCollisionError as exc:
+        return {"operation": "verify_push", "status": "blocked", "error": str(exc)}
+    evidence_io.retain_policy_event(
+        run_directory, "push_verification",
+        {"status": result.status, "remote": result.remote, "ref": result.ref,
+         "expected_sha": result.expected_sha, "observed_sha": result.observed_sha},
+    )
+    return {"operation": "verify_push", "status": result.status, "path": _rel(path), **result.as_dict()}
+
+
+def op_gh_repo_metadata(req: dict) -> dict:
+    """22. Read-only GitHub-side metadata via `gh repo view` (ASSIGNMENT.md Part 9) --
+    never a substitute for verify_push's git ls-remote check. Useful only for
+    information git itself does not have (e.g. the server-recorded default branch)."""
+    target_repo_path = req.get("target_repo_path", ".")
+    try:
+        repo_path = github.resolve_repo_path(target_repo_path, repo_root=REPO_ROOT)
+    except paths.PathSafetyError as exc:
+        return {"operation": "gh_repo_metadata", "status": "invalid", "error": exc.message, "code": exc.code}
+    result = github.gh_repo_metadata(repo_path=repo_path)
+    return {"operation": "gh_repo_metadata", **result}
+
+
 OPERATIONS = {
     "validate_scope": op_validate_scope,
     "retain_attempt": op_retain_attempt,
@@ -649,6 +831,11 @@ OPERATIONS = {
     "summarize_memory": op_summarize_memory,
     "build_usage_summary": op_build_usage_summary,
     "reconcile_quarantined_usage": op_reconcile_quarantined_usage,
+    "git_repo_identity": op_git_repo_identity,
+    "retain_commit_evidence": op_retain_commit_evidence,
+    "retain_push_attempt": op_retain_push_attempt,
+    "verify_push": op_verify_push,
+    "gh_repo_metadata": op_gh_repo_metadata,
 }
 
 

@@ -160,3 +160,67 @@ class TestTestRunnerSkill:
 
     def test_run_command_script_exists(self) -> None:
         assert (SKILLS_DIR / "test-runner" / "scripts" / "run_command.py").exists()
+
+
+class TestGithubSkill:
+    def setup_method(self) -> None:
+        self.path = SKILLS_DIR / "github" / "SKILL.md"
+        assert self.path.exists(), "github/SKILL.md must exist"
+        self.text = self.path.read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+        self.fields = parse_frontmatter(self.path)
+
+    def test_name(self) -> None:
+        assert self.fields.get("name") == "github"
+
+    def test_no_tools_frontmatter_field(self) -> None:
+        # Like code-craftsmanship, this skill has no independent tool allowlist of its
+        # own -- it is a procedure the orchestrator's own already-granted tools follow,
+        # not a forked, tool-restricted script wrapper like test-runner.
+        assert "tools" not in self.fields
+        assert "allowed-tools" not in self.fields
+        assert "disallowed-tools" not in self.fields
+        assert "context" not in self.fields
+
+    def test_cardinal_rule_present(self) -> None:
+        for phrase in [
+            "A local commit is not a verified push",
+            "not independently sufficient",
+            "is not evidence",
+            "Remote verification is mandatory",
+        ]:
+            assert phrase in self.flat_text, f"expected cardinal-rule phrase {phrase!r} in SKILL.md"
+
+    def test_required_coverage_areas_present(self) -> None:
+        for heading in [
+            "# 1. Repository identity",
+            "# 2. Working-tree inspection",
+            "# 3. Branch inspection",
+            "# 4. Diff review",
+            "# 5. Staging",
+            "# 6. Commit creation",
+            "# 7. Push",
+            "# 8. Independent remote verification",
+            "# 9. GitHub metadata via",
+            "# 10. Failure and mismatch reporting",
+        ]:
+            assert heading in self.text, f"expected section {heading!r} in SKILL.md"
+
+    def test_all_six_classifications_documented(self) -> None:
+        for status in ("verified", "mismatch", "remote_ref_missing", "command_failed", "invalid_output", "wrong_repository"):
+            assert status in self.text
+
+    def test_gh_never_substitutes_for_ls_remote(self) -> None:
+        assert "never a substitute for `git ls-remote`" in self.flat_text
+
+    def test_safe_operations_present(self) -> None:
+        for phrase in ["Never change Git config globally", "Never force-push", "rewrite history", "move `origin/"]:
+            assert phrase in self.flat_text
+
+    def test_boundaries_present(self) -> None:
+        for phrase in ["must not", "Decide whether a commit or push is authorized", "Fabricate", "Duplicate the test-runner"]:
+            assert phrase in self.flat_text
+
+    def test_live_cli_operations_named(self) -> None:
+        for op in ("git_repo_identity", "retain_commit_evidence", "retain_push_attempt", "verify_push", "gh_repo_metadata"):
+            assert op in self.text

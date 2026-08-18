@@ -63,6 +63,9 @@ $ARGUMENTS
     `harness/orchestrator/paths.py` -- never restate it by hand; call `live_cli.py`.
 12. Never commit or push. No ticket in this milestone authorizes it. A future ticket
     that explicitly authorizes a commit/push may change this -- this one does not.
+    Whenever a future ticket does authorize it, the real `github` Skill (`Skill` tool,
+    `skill: "github"`) is required first -- see standing rule 17 and "GitHub / Git
+    delivery" below; this milestone's own work never actually exercises that path.
 13. Every orchestrator-owned test-runner request -- including the orchestrator's own
     independent re-verification commands (`ORCH-1`, `ORCH-2`, ...), not only
     staged-agent-requested commands (`C-*`, `V-*`) -- receives the same
@@ -104,6 +107,18 @@ $ARGUMENTS
     `subagent_subtotal` may never be described, in this document's own procedures or in
     any report to the user, as the run's "total pipeline cost" -- that claim requires a
     genuinely measured orchestrator usage figure, which this milestone does not capture.
+17. Any Git commit or push this session performs (only ever when a ticket explicitly
+    authorizes it, per standing rule 12) is always preceded by invoking the real
+    `github` Skill (`Skill` tool, `skill: "github"`) in this same turn sequence -- never
+    a bare `git commit`/`git push` run from memory of "how this usually goes." A local
+    commit is never treated as a verified push (`ASSIGNMENT.md`'s cardinal rule): every
+    push is followed by an independent `verify_push` call (`live_cli.py`, which runs a
+    real `git ls-remote` -- never inferred from `git push`'s own exit code, never from
+    an agent's or a prior turn's "pushed" claim, never from a GitHub UI assumption).
+    `verify_push`'s classification (`verified` / `mismatch` / `remote_ref_missing` /
+    `command_failed` / `invalid_output` / `wrong_repository`) is reported exactly as
+    returned -- only `"verified"` may ever be described as a successful push. See
+    "GitHub / Git delivery" below for the full protocol.
 
 # Parsing $ARGUMENTS
 
@@ -174,6 +189,11 @@ function's own docstring for the authoritative field-level contract):
 | `record_memory_applied` | Retains a `memory_applied` event -- and only a `memory_applied` event -- when a concrete decision in this run genuinely used a specific prior fact or lesson. Refuses (`status: "blocked"`, retains `memory_applied_rejected` instead) unless `entry_id` resolves to a currently-valid fact/lesson and `evidence_path` resolves to a real, existing file. Never call this merely because a fact or lesson was included in a prompt -- see "Memory: loaded vs. applied" below. |
 | `summarize_memory` | Read-only. Derives `memory_loaded`/`memory_influenced_run`/`memory_refs_used` from this run's own retained `logs/policy-events.jsonl` -- never from assertion. Call this immediately before `write_run_summary` and merge its three fields into the summary document; see "Terminal memory append" below. |
 | `reconcile_quarantined_usage` | Call immediately after every `retain_policy_event(kind: "agent_dispatch")` for a *fresh* `Agent` dispatch (never for a `SendMessage` resume of an existing identity). Re-attempts identity matching for the per-agent usage record the real `SubagentStop` hook almost certainly already quarantined -- see "Per-agent usage accounting" below for why this ordering is expected, not an error. Returns `status: "captured"` (normal), `"no_quarantine_record"` / `"quarantined"` / `"ambiguous"` / `"error"` (an honest accounting gap, never a pipeline failure -- see below). |
+| `git_repo_identity` | Read-only: real repo root, current branch, local HEAD SHA, and configured remote URL (`harness/orchestrator/github.py`), via real `git` subprocess calls -- never asserted. Optional `expected_repo` (`"owner/name"`) rejects the wrong repository before returning anything else. |
+| `retain_commit_evidence` | Independently re-derives the current branch and HEAD SHA (never trusts a caller-supplied SHA) and retains `runs/<run_id>/git/commit-evidence.json`. Optional `expected_branch` refuses (`status: "blocked"`, writes nothing) if the real current branch does not match. |
+| `retain_push_attempt` | Records only that a push was *attempted* -- proves nothing about delivery. Independently re-derives the remote URL and current HEAD SHA and retains `runs/<run_id>/git/push-attempt.json`. Refuses if a caller-supplied `expected_sha` no longer matches the real current HEAD (it moved since the caller last checked). |
+| `verify_push` | The one independent push-verification call (ASSIGNMENT.md's cardinal rule). Runs a real `git ls-remote <remote> refs/heads/<branch>` and classifies the result: `verified` / `mismatch` / `remote_ref_missing` / `command_failed` / `invalid_output` / `wrong_repository`. Always retains `runs/<run_id>/git/push-verification.json`, whatever the classification. Never accepts a simulated result -- the real subprocess runs every time this operation is called. |
+| `gh_repo_metadata` | Read-only GitHub-side metadata via `gh repo view` (nameWithOwner/url/defaultBranchRef) -- never a substitute for `verify_push`'s `git ls-remote` check. |
 | `build_usage_summary` | Call exactly once per run, immediately before `write_run_summary`, for **every** terminal outcome of this run -- not only a genuine `pass`. Aggregates every per-agent usage record this run's own `usage/` directory holds into `runs/<run_id>/usage-summary.json` and returns its `path`; never hand-author usage totals inside `run-summary.json` yourself. See "Terminal usage summary" below. |
 
 # Per-agent usage accounting (after every fresh `Agent` dispatch)
@@ -234,6 +254,61 @@ identity matches directly (recomputing that one agent's full transcript-to-date,
 `harness/orchestrator/usage.py`'s own idempotent-overwrite contract) without ever passing
 through quarantine again. This is exactly what keeps a resumed/repaired agent's usage
 attributed to one identity rather than fabricating a second one -- see standing rule 15.
+
+# GitHub / Git delivery (commit, push, independent verification)
+
+**Not exercised by this milestone's own work.** Standing rule 12 governs: no ticket in
+this milestone authorizes a commit or push, so this section is never actually entered
+during this milestone's own runs. It is fully specified now so that the moment a future
+ticket does authorize a commit/push, the required protocol is already in place --
+"whether the GitHub Skill is actually required when `/work` performs Git/GitHub
+actions" is answered by this section applying unconditionally whenever that happens,
+not by inventing a process after the fact.
+
+Whenever a task's approved `scope.json` genuinely authorizes a commit and/or push:
+
+1. Invoke the real `github` Skill (`Skill` tool, `skill: "github"`) before performing
+   any of the steps below -- it is not a forked skill (no tool restriction of its own;
+   it documents the procedure this section's own steps already implement), but it must
+   still be genuinely invoked, not merely known about, exactly as the test-runner Skill
+   must be genuinely invoked (standing rule 8) rather than its wrapper called directly.
+2. `git_repo_identity` (`target_repo_path`, `remote`, and, if known,
+   `expected_repo`) -- confirm which repository, remote, branch, and local commit are
+   about to be acted on before touching anything.
+3. Independently inspect the working tree yourself: `git status --short` and
+   `git diff` / `git diff --staged` (via `Bash`) -- confirm exactly which paths changed,
+   that none is a Protected Path or outside `scope.json`'s `in_scope`, and that no
+   secret-shaped or diagnostic-scratch content is present. Never trust a subagent's own
+   self-check on this alone (mirrors the "Mandatory TDD orchestration check" pattern
+   already used in Phase 3).
+4. Stage explicit paths (`git add <path> ...`, never a bare `git add .`), then commit
+   with an explicit message (`git commit -m "..."`).
+5. `retain_commit_evidence` (`run_id`, `task_id`, `target_repo_path`) immediately after
+   the commit -- this is the evidence that answers "was a commit actually created
+   locally," independent of anything anyone claims about it.
+6. Push normally (`git push <remote> <branch>`) -- never `--force`/`--force-with-lease`,
+   never a branch other than the one just committed on, never a destructive `reset`, and
+   never a global (`--global`) Git config change.
+7. `retain_push_attempt` (`run_id`, `task_id`, `target_repo_path`, `branch`) immediately
+   after the push command returns, regardless of what its own output looked like -- this
+   records only that a push was *attempted*, never that it succeeded.
+8. **Mandatory, every time, no exception:** `verify_push` (`run_id`, `task_id`,
+   `target_repo_path`, `remote`, `branch`, `expected_sha` read back from the
+   `commit-evidence.json`/`push-attempt.json` just retained -- never re-typed from
+   memory). This runs a real `git ls-remote` and classifies the result. Report the push
+   as successful if, and only if, the returned status is exactly `"verified"`. Any of
+   `mismatch` / `remote_ref_missing` / `command_failed` / `invalid_output` /
+   `wrong_repository` is a genuine Git-delivery failure -- state the exact classification
+   and `reason`, cite both the expected and observed SHA, and report it as a failure, not
+   as "should be there" or "probably pushed."
+9. A Git-delivery failure is independent of product/test correctness: a genuinely
+   passing `verification-report.json` is never rewritten, reinterpreted, or treated as
+   failed because a push could not later be verified -- and a push-verification failure
+   never becomes an excuse to fabricate or soften a real test result. Report both facts
+   plainly, as two separate claims, in "What to state, every time" below.
+10. Optionally use `gh_repo_metadata` for GitHub-side information `git` itself cannot
+    provide (e.g. the server-recorded default branch) -- never in place of step 8's
+    `verify_push` call.
 
 # Phase 0: Memory load (before Discovery)
 
@@ -1197,6 +1272,13 @@ State plainly, every time:
   from.
 - Any evidence gap. If required evidence is missing, say the run cannot be called
   successful -- do not soften this into "mostly done."
+- Git delivery status, whenever this run performed a commit/push (see "GitHub / Git
+  delivery" above): whether a commit was created (citing `commit-evidence.json`),
+  whether a push was attempted (citing `push-attempt.json`), and the exact
+  `verify_push` classification and reason (citing `push-verification.json`) -- state
+  plainly that only `"verified"` counts as a successful push, and that this is a claim
+  independent of the run's own product/test correctness. A run with no commit/push this
+  milestone (the normal case, per standing rule 12) states that plainly instead.
 - Per-agent usage/cost accounting, read from `usage-summary.json` at `usage_summary_ref`
   (never restated from memory): every agent's `identity.match_status` (and, for any that
   are not `"matched"`, the `usage_accounting_gap` policy event this run retained for it --

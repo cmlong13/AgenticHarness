@@ -63,6 +63,40 @@ def test_promote_canonical_collision_is_rejected(tmp_path):
     assert on_disk == {"a": 1}
 
 
+def test_retain_git_evidence_writes_under_git_subdirectory(tmp_path):
+    run_directory = evidence_io.run_dir(tmp_path, "run-1")
+    evidence_io.ensure_run_dirs(run_directory)
+
+    path = evidence_io.retain_git_evidence(run_directory, "push-attempt.json", {"remote": "origin"})
+
+    assert path == run_directory / "git" / "push-attempt.json"
+    assert json.loads(path.read_text(encoding="utf-8")) == {"remote": "origin"}
+
+
+def test_retain_git_evidence_creates_git_subdirectory_on_demand(tmp_path):
+    # No ensure_run_dirs call at all -- retain_git_evidence must create its own
+    # parent directory, exactly as promote_canonical/retain_raw_attempt already do
+    # via atomic_write's own mkdir(parents=True, exist_ok=True).
+    run_directory = evidence_io.run_dir(tmp_path, "run-1")
+
+    path = evidence_io.retain_git_evidence(run_directory, "commit-evidence.json", {"commit_sha": "a" * 40})
+
+    assert path.is_file()
+
+
+def test_retain_git_evidence_collision_is_rejected(tmp_path):
+    run_directory = evidence_io.run_dir(tmp_path, "run-1")
+    evidence_io.ensure_run_dirs(run_directory)
+    evidence_io.retain_git_evidence(run_directory, "push-verification.json", {"status": "verified"})
+
+    with pytest.raises(evidence_io.EvidenceCollisionError):
+        evidence_io.retain_git_evidence(run_directory, "push-verification.json", {"status": "mismatch"})
+
+    # The original evidence must survive the rejected overwrite attempt unchanged.
+    doc = json.loads((run_directory / "git" / "push-verification.json").read_text(encoding="utf-8"))
+    assert doc == {"status": "verified"}
+
+
 def test_promote_canonical_writes_valid_json(tmp_path):
     run_directory = evidence_io.run_dir(tmp_path, "run-1")
     evidence_io.ensure_run_dirs(run_directory)

@@ -443,6 +443,162 @@ itself, per item 1); a live demonstration of accounting across an actual four-ph
 `/work` run remains open, alongside the still-open live route-back/hooks-against-a-real-run
 demonstration item already tracked elsewhere in this document.
 
+**Milestone update (2026-08-18): GitHub skill and independent push-verification
+layer.** This session closes the "GitHub skill + real Git/GitHub integration +
+independent remote push verification + false-push detection" milestone
+(`ASSIGNMENT.md` §2.3.1/§2.4/§4's cardinal rule; this milestone's own explicit scope --
+Jira, Obsidian, MCP-vs-REST comparison, flaky-test demos, architecture diagrams, and the
+final write-up were all explicitly out of scope and are untouched). (1)
+`harness/orchestrator/github.py` (new) -- deterministic, evidence-only Git/GitHub
+support: real `git`/`gh` subprocess calls through one swappable `CommandRunner` seam
+(`DEFAULT_RUNNER` in production; a fake runner only ever used by tests), repository
+identity (`get_repo_root`/`get_current_branch`/`get_local_head_sha`/`get_remote_url`),
+strict full-40-character-SHA validation (`is_full_sha` -- a short SHA can never satisfy
+it, so no accidental prefix-equality is possible), `git ls-remote` output parsing
+tolerant of CRLF/blank lines but strict about malformed content
+(`parse_ls_remote_output`), and the one push-verification classifier
+(`classify_ls_remote_result`/`verify_push`) returning exactly one of `verified` /
+`mismatch` / `remote_ref_missing` / `command_failed` / `invalid_output` /
+`wrong_repository` -- never a bare boolean. `gh` is wired for metadata only
+(`gh_auth_status`/`gh_repo_metadata`), never as a substitute for `git ls-remote`, per
+`ASSIGNMENT.md` Part 9. (2) `harness/orchestrator/evidence_io.py` gained one new
+function, `retain_git_evidence` -- the same collision-guarded write
+`promote_canonical`/`retain_raw_attempt` already use, redirected to a new
+`runs/<run_id>/git/` subdirectory for Git evidence that is not one of the four canonical
+phase artifacts. (3) `harness/orchestrator/live_cli.py` gained five new operations
+(`git_repo_identity`, `retain_commit_evidence`, `retain_push_attempt`, `verify_push`,
+`gh_repo_metadata`), each delegating entirely to `github.py`/`evidence_io.py` and each
+independently re-deriving the facts it retains (branch, HEAD SHA, remote URL) via real
+`git` calls rather than trusting a caller-supplied claim; `verify_push` never accepts a
+simulated result through this boundary -- the real subprocess always runs, so a live
+`/work` run can never fabricate a push outcome, even though `github.py`'s own functions
+are testable with a fake `CommandRunner`. `"verified"` was added to `live_cli.py`'s
+`OK_STATUSES` (exit code 0); its five sibling classifications are deliberately absent,
+so `/work` treats a `mismatch`/`remote_ref_missing`/etc. exactly like any other blocked
+result. (4) `.claude/skills/github/SKILL.md` (new) -- a procedural skill (no
+`allowed-tools`/`disallowed-tools`/`context: fork`, mirroring `code-craftsmanship`'s
+shape, not `test-runner`'s forked-wrapper shape, since git/gh commands here are run
+directly by the trusted orchestrator, not mediated on behalf of an untrusted agent)
+covering repository identity, working-tree inspection, branch inspection, diff review,
+staging, commit creation, push, independent remote verification, `gh` metadata, and
+failure/mismatch reporting, per `ASSIGNMENT.md` §2.3's github-skill requirement. States
+explicitly, as its own cardinal rule: a local commit is not a verified push; `git
+push`'s exit code is not independently sufficient; an agent's "pushed" claim is not
+evidence; a GitHub UI assumption is not evidence; remote verification is mandatory
+before reporting a push as successful. (5) `work/SKILL.md` gained: a new "GitHub / Git
+delivery" section (Skill invocation -> repo identity -> working-tree/diff inspection ->
+explicit staging -> commit -> `retain_commit_evidence` -> push -> `retain_push_attempt`
+-> mandatory `verify_push` -> honest failure/mismatch reporting, with Git-delivery
+correctness kept explicitly independent of product/test correctness in both
+directions); standing rule 17 (any commit/push is always preceded by invoking the real
+`github` Skill, and only a `verify_push` status of exactly `"verified"` may ever be
+reported as a successful push); a cross-reference from standing rule 12 (which still
+governs -- no commit/push is authorized in this milestone's own work) to rule 17; five
+new operations added to the `live_cli.py` table; and a new "Git delivery status" bullet
+in "What to state, every time." This answers "is the GitHub Skill actually required
+when `/work` performs Git/GitHub actions" as a real, tested, standing documentary
+requirement, consistent with how every other cross-cutting `/work` protocol in this
+repository (staged continuation, transport-repair budgets, per-agent usage accounting)
+is enforced -- via `SKILL.md` prose plus structural tests
+(`tests/test_work_skill.py::TestGitHubDelivery`), not a new runtime hook; no existing
+hook was modified, and all four already-registered hooks remain exactly as configured
+in `.claude/settings.json`. (6) **False-push detection (`ASSIGNMENT.md` Part 6),
+deterministic**: `tests/test_orchestrator_github.py::TestClassifyLsRemoteResult::
+test_false_push_claim_is_classified_mismatch` constructs a claimed expected SHA
+(`"a" * 40`), a controlled fake `git ls-remote` command result reporting a different
+observed SHA (`"b" * 40`) via the `FakeRunner` command-result-boundary seam the module's
+own docstring names, and asserts the classification is `mismatch`, never `verified`;
+`tests/test_orchestrator_live_cli.py::TestVerifyPush::
+test_mismatch_is_retained_honestly_never_reported_as_verified` re-proves the identical
+scenario through the exact CLI boundary `/work` itself calls (a real temporary Git
+repository's real HEAD SHA as the expected value, `github.DEFAULT_RUNNER` monkeypatched
+only at the test boundary to return a fabricated remote SHA), confirming
+`runs/<run_id>/git/push-verification.json` retains `status: "mismatch"` honestly and
+`live_cli.main`'s own exit code is `1` (a well-formed negative result), never `0`. This
+is explicitly a **deterministic mismatch fixture**, not a real failed GitHub push --
+no real remote was ever contacted for either test. **83 new pytest cases were added,
+exactly matching the observed suite delta (660 at `HEAD` -> 743 now,
+`pytest --collect-only` on both), reconciled test-function-by-test-function against
+`git diff`/`git show HEAD:<path>` after an initial draft of this note miscounted two of
+the five files** (see the "Test-count reconciliation audit (2026-08-18, same day)" note
+below for the full, itemized correction). The verified per-file breakdown -- one new
+source-level `def test_...`/`def test_...(self)` line always contributes exactly one
+new collected pytest case here; nothing in this milestone's additions uses
+`@pytest.mark.parametrize` or a fixture that multiplies collection -- is: 45 in the new
+`tests/test_orchestrator_github.py` (repository identity, SHA handling including the
+explicit "no accidental short-SHA equality" case, `ls-remote` parsing including
+CRLF/whitespace/malformed/duplicate-line cases, the false-push proof, `gh` metadata, and
+`resolve_repo_path`'s reuse of `paths.py`), 3 in `tests/test_orchestrator_evidence_io.py`
+(`retain_git_evidence`'s subdirectory placement, on-demand directory creation, and
+collision guard; `HEAD` had 10 `test_*` functions, now 13), 13 in
+`tests/test_orchestrator_live_cli.py` (the five new operations, including two
+real-temporary-Git-repository success-path tests and the mismatch/false-push proof
+above; `HEAD` had 51, now 64), 9 in `tests/test_skill_definitions.py::TestGithubSkill`
+(`HEAD` had 18, now 27), and 13 in `tests/test_work_skill.py::TestGitHubDelivery`
+(`HEAD` had 118, now 131) -- 45 + 3 + 13 + 9 + 13 = 83. `git diff` across all four
+modified test files shows exactly one removed line in total (a single import-statement
+line in `tests/test_orchestrator_live_cli.py`, widened to add `inspect`/`subprocess`/
+`github`, not a deleted test) -- no pre-existing test function was deleted, renamed,
+merged, or replaced anywhere in this milestone. Full harness suite 743 passing (up from
+the confirmed 660 baseline at this session's start), `demo-repo/` unaffected (106 tests,
+unchanged; `git status --short -- demo-repo` empty both before and after). (7)
+**No live push was performed or verified this session**, per this milestone's own
+explicit instruction not to commit or push: `git status`/`git remote -v`/`gh auth
+status` were confirmed at the start (`main` synced with `origin/main`, clean tree,
+`origin` -> `https://github.com/cmlong13/AgenticHarness.git`, `gh` authenticated as
+`cmlong13`), but no commit was created and no `git push`/`retain_commit_evidence`/
+`retain_push_attempt`/`verify_push` call against the real remote was ever made --
+`ASSIGNMENT.md`'s "Controlled Real GitHub Demonstration" (Part 11) explicitly allows
+stopping here when performing it would require prematurely committing unreviewed
+milestone work, which this session's own instructions independently forbid regardless.
+A live demonstration of a genuine successful `verify_push` against `origin/main` (and,
+separately, of standing rule 17's Skill-invocation requirement against a real `/work`
+run that legitimately reaches this section) remains open, pending user review and
+explicit authorization to commit/push this milestone's own changes. Not built this
+session, per the assignment's explicit exclusions and this milestone's own scope: Jira,
+Obsidian, MCP-vs-REST connector comparison, flaky-test demonstration, architecture
+diagrams, the final write-up, and any change to checkpoint/memory/usage-accounting
+behavior (all confirmed unchanged: checkpoint/resume, memory-loop, and usage-accounting
+tests remain green, and all four existing hooks remain registered in
+`.claude/settings.json`, byte-for-byte unmodified this session).
+
+**Test-count reconciliation audit (2026-08-18, same day): corrected a real test-count
+contradiction, no feature work.** A narrowly-scoped follow-up audit of the GitHub-skill
+milestone above found that its own first-draft test-count prose was internally
+inconsistent -- it claimed "55 new focused tests" while the five per-file figures it
+listed summed to 88, and neither figure matched the actually-observed 660 -> 743 suite
+delta (83). Root cause, confirmed by direct measurement rather than re-guessing: two of
+the five per-file figures in the original draft were simply miscounted --
+`tests/test_orchestrator_live_cli.py` was reported as 16 new tests (actually 13) and
+`tests/test_work_skill.py` was reported as 15 (actually 13); the other three figures
+(`test_orchestrator_github.py` 45, `test_orchestrator_evidence_io.py` 3,
+`test_skill_definitions.py` 9) were already correct. 45 + 3 + 13 + 9 + 13 = 83, which is
+exactly the measured suite delta -- there was no hidden parametrization, fixture-driven
+multiplication, or deleted/re-added test inflating or deflating the true count; it was
+purely an arithmetic/transcription error in the prose, of the same general kind the
+2026-08-14 usage-accounting audit above also found and corrected for a different figure.
+Method used to reconcile (per this audit's own instruction not to guess): (1)
+`git stash push -u`, `pytest tests -q --collect-only` against the untouched `HEAD` tree
+(660 collected, confirming the stated baseline), `git stash pop` to restore the working
+tree exactly; (2) `pytest tests -q --collect-only` against the current working tree (743
+collected); (3) `git diff --numstat` against each of the four modified test files; (4)
+`git diff -- <file> | grep -E "^[+-].*def test_"` per file to see every added/removed
+test-function line; (5) `git show HEAD:<file> | grep -cE "^\s*def test_"` vs. the current
+file's own count, per file, as an independent cross-check of (4); (6) a plain
+`grep -cE "^\s*def test_"` count of the new, untracked `tests/test_orchestrator_github.py`
+in full (45, matching its own earlier standalone `pytest` run's "45 passed"). All three
+methods (diff-based line count, before/after function count, and standalone collection)
+agreed for every file. No test in this milestone's additions uses
+`@pytest.mark.parametrize`; the new fixtures (`git_repo`, `git_repo_root`, the
+`FakeRunner` helper class) are ordinary setup helpers, not collection multipliers, so
+"source-level test functions/methods added" and "pytest cases added" are the same
+number here (83) -- stated as two distinct concepts only because they are not always
+the same thing in general, not because they diverged in this case. This audit corrected
+only this document's own prose (the paragraph above); it did not touch
+`harness/orchestrator/github.py`, `live_cli.py`, `evidence_io.py`, any test file, the
+`github` Skill, or `work/SKILL.md` -- re-running the full suite after this audit still
+shows 743 passing, unchanged. No commit or push occurred.
+
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
 followed. Implementation should track this spec; if the two diverge, update this file first.
@@ -577,9 +733,17 @@ reused rather than reimplemented.
   command for real, diagnosed the actual root cause from source, and routed it back
   (`docs/quality-engineer-permission-verification.md`).
 
-### Skills (≥4 packs — 2 of 4 complete; see §10)
-- `github/` — small single-purpose skills: `pr-create`, `read-file`, `search-code`,
-  `commit-history`, `pr-review`. Thin `curl`/`gh` wrappers, not one mega-skill. **Not started.**
+### Skills (≥4 packs — 3 of 4 complete; see §10)
+- `github/` — **complete for this milestone's actual scope** (2026-08-18):
+  `.claude/skills/github/SKILL.md`, a procedural skill (no tool allowlist of its own)
+  covering repository identity, working-tree/branch/diff inspection, staging, commit
+  creation, push, independent remote verification (`git ls-remote`, never `gh`), `gh`
+  metadata, and failure/mismatch reporting — required by `work/SKILL.md` standing rule
+  17 before any commit/push. This satisfies `ASSIGNMENT.md` §2.3's github-skill
+  requirement as this milestone scoped it (Git delivery + false-push detection); the
+  broader `pr-create`/`read-file`/`search-code`/`commit-history`/`pr-review` breadth
+  this file map originally sketched for GitHub-API code/PR access remains **not
+  started** and is separate, later work (§4 "Later integrations").
 - `jira/` (Atlassian) — `create-ticket`, `read-ticket`, `edit-ticket`, plus a field-reference doc
   so agents don't guess custom field IDs. **Not started.**
 - Test-runner skill — encodes this repo's actual test command, thresholds, and report location.
@@ -761,7 +925,11 @@ MCP server in favor of curl-based skills for reliability/debuggability).
 - Checkpoint/resume for the pipeline — **COMPLETE and live-demonstrated (2026-08-06)**: see
   the checkpoint/resume milestone note above and §10.
 - GitHub access via `gh`/`git` CLI (real commits + independent push verification via
-  `git ls-remote`/`git rev-parse`)
+  `git ls-remote`/`git rev-parse`) — **deterministic layer COMPLETE (2026-08-18)**:
+  `harness/orchestrator/github.py` + five `live_cli.py` operations + the `github` Skill;
+  see the "GitHub skill and independent push-verification layer" milestone note above.
+  No commit/push has been performed against the real remote by the harness in any live
+  run to date — a live demonstration remains open pending user authorization (§10).
 - A real target repo (≥50 files) to run against — **complete**: `demo-repo/loanflow`, 55 files,
   verified compatible with the test-runner wrapper and mutation-safe (§10); not yet used by a
   live orchestrator run
@@ -954,9 +1122,15 @@ AgenticHarness/
    `harness/orchestrator/usage.py`, live-demonstrated against a real single-agent
    dispatch (`run-20260814-usagecapture-001`) — see the "Milestone update (2026-08-14)"
    note above.
-10. Independent GitHub push-verification path. **Not started** — no commit/push has been
-    performed by the harness in any live run to date (by design; see `work/SKILL.md` standing
-    rule 12).
+10. Independent GitHub push-verification path. **Deterministic layer COMPLETE
+    (2026-08-18)** — `harness/orchestrator/github.py`, five `live_cli.py` operations,
+    the `github` Skill, and `work/SKILL.md`'s "GitHub / Git delivery" section +
+    standing rule 17, including a deterministic false-push (mismatch) proof; see the
+    "GitHub skill and independent push-verification layer" milestone note above. No
+    commit/push has been performed by the harness against the real remote in any live
+    run to date (by design; see `work/SKILL.md` standing rule 12) — a live
+    demonstration of a genuine successful `verify_push` remains open, pending user
+    authorization.
 11. Close one complete free-form prompt pipeline with real evidence — **COMPLETE**:
     `run-20260804-riskband-003`, `final_verdict: "pass"`, all four canonical artifacts promoted,
     102 demo tests passing, no commit/push performed.
@@ -1047,7 +1221,16 @@ Demonstrated live, on a repo with ≥50 files:
       hand-built fixture, not a block encountered inside a completed live `/work` pipeline run
       — the known cooperation boundary stands: this hook activates only when `/work` itself
       writes `.completion_claim.json` (see §10).
-- [ ] Orchestrator catches a simulated false "pushed" claim via `git ls-remote`.
+- [x] Orchestrator catches a simulated false "pushed" claim via `git ls-remote`.
+      **Deterministically proven (2026-08-18)**:
+      `tests/test_orchestrator_github.py::TestClassifyLsRemoteResult::test_false_push_claim_is_classified_mismatch`
+      and `tests/test_orchestrator_live_cli.py::TestVerifyPush::test_mismatch_is_retained_honestly_never_reported_as_verified`
+      each construct a claimed expected SHA and a controlled fake `git ls-remote` result
+      reporting a different observed SHA, and confirm the verification layer classifies
+      it `mismatch` (never `verified`) and retains that classification honestly in
+      `push-verification.json`. This is a deterministic mismatch fixture, not a real
+      failed GitHub push — no live push against a real remote has been attempted or
+      falsely claimed in this project to date (§10).
 - [ ] Obsidian vault receives a run summary (**not started** — separate, later work, per
       the assignment's explicit exclusion of Obsidian integration from this milestone);
       `lessons-learned.md` gains ≤5 bullets; a second run visibly uses a lesson from the

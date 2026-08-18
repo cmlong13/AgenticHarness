@@ -17,12 +17,14 @@ REPO_ROOT) -- every test validates against the real, checked-in schemas.
 """
 from __future__ import annotations
 
+import inspect
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from harness.orchestrator import discovery, evidence_io, live_cli, paths
+from harness.orchestrator import discovery, evidence_io, github, live_cli, paths
 
 
 @pytest.fixture()
@@ -1074,3 +1076,222 @@ class TestReconcileQuarantinedUsage:
         )
         assert exit_code == 1
         assert resp["status"] == "no_quarantine_record"
+
+
+# ---------------------------------------------------------------------------
+# operations 18-22: git_repo_identity / retain_commit_evidence /
+# retain_push_attempt / verify_push / gh_repo_metadata
+# ---------------------------------------------------------------------------
+
+
+def _git(*args: str, cwd) -> None:
+    subprocess.run(["git", *args], cwd=str(cwd), check=True, capture_output=True, text=True)
+
+
+@pytest.fixture()
+def git_repo_root(repo_root):
+    """Turns the sandboxed `repo_root` fixture (already monkeypatched onto
+    live_cli.REPO_ROOT) into a real, disposable Git repository -- one commit on branch
+    "main", a fake "origin" remote URL. target_repo_path="." then resolves to this same
+    directory, exactly as it resolves to the real AgenticHarness repo root in
+    production."""
+    _git("init", "--initial-branch=main", cwd=repo_root)
+    _git("config", "user.email", "test@example.invalid", cwd=repo_root)
+    _git("config", "user.name", "Test", cwd=repo_root)
+    (repo_root / "file.txt").write_text("hello\n", encoding="utf-8")
+    _git("add", "file.txt", cwd=repo_root)
+    _git("commit", "-m", "initial commit", cwd=repo_root)
+    _git("remote", "add", "origin", "https://github.com/example-owner/example-repo.git", cwd=repo_root)
+    head_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(repo_root), capture_output=True, text=True, check=True
+    ).stdout.strip()
+    return repo_root, head_sha
+
+
+class TestGitRepoIdentity:
+    def test_real_repo_identity_reported(self, git_repo_root, capsys) -> None:
+        repo_root, head_sha = git_repo_root
+        exit_code, resp = _run_main(repo_root, {"operation": "git_repo_identity", "target_repo_path": "."}, capsys)
+        assert exit_code == 0
+        assert resp["status"] == "ok"
+        assert resp["current_branch"] == "main"
+        assert resp["local_head_sha"] == head_sha
+        assert resp["remote_url"] == "https://github.com/example-owner/example-repo.git"
+
+    def test_non_git_directory_is_command_failed(self, repo_root, capsys) -> None:
+        exit_code, resp = _run_main(repo_root, {"operation": "git_repo_identity", "target_repo_path": "."}, capsys)
+        assert exit_code == 1
+        assert resp["status"] == "command_failed"
+
+    def test_wrong_expected_repo_rejected(self, git_repo_root, capsys) -> None:
+        repo_root, _ = git_repo_root
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "git_repo_identity", "target_repo_path": ".", "expected_repo": "someone-else/other-repo"},
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "wrong_repository"
+
+    def test_protected_path_rejected(self, repo_root, capsys) -> None:
+        (repo_root / ".claude").mkdir()
+        (repo_root / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "git_repo_identity", "target_repo_path": ".claude/settings.json"}, capsys
+        )
+        assert exit_code == 1
+        assert resp["status"] == "invalid"
+        assert resp["code"] == "protected_path"
+
+
+class TestRetainCommitEvidence:
+    def test_commit_evidence_retained_with_real_head_sha(self, git_repo_root, capsys) -> None:
+        repo_root, head_sha = git_repo_root
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "retain_commit_evidence", "run_id": "run-1", "task_id": "T-1", "target_repo_path": "."},
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "retained"
+        assert resp["commit_sha"] == head_sha
+        doc = json.loads((repo_root / "runs" / "run-1" / "git" / "commit-evidence.json").read_text(encoding="utf-8"))
+        assert doc["commit_sha"] == head_sha
+        assert doc["branch"] == "main"
+
+    def test_expected_branch_mismatch_is_blocked_and_writes_nothing(self, git_repo_root, capsys) -> None:
+        repo_root, _ = git_repo_root
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "retain_commit_evidence", "run_id": "run-1", "task_id": "T-1",
+                "target_repo_path": ".", "expected_branch": "some-other-branch",
+            },
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "blocked"
+        assert not (repo_root / "runs" / "run-1" / "git" / "commit-evidence.json").exists()
+
+    def test_collision_is_blocked(self, git_repo_root, capsys) -> None:
+        repo_root, _ = git_repo_root
+        body = {"operation": "retain_commit_evidence", "run_id": "run-1", "task_id": "T-1", "target_repo_path": "."}
+        _run_main(repo_root, body, capsys)
+        exit_code, resp = _run_main(repo_root, body, capsys)
+        assert exit_code == 1
+        assert resp["status"] == "blocked"
+
+
+class TestRetainPushAttempt:
+    def test_push_attempt_retained(self, git_repo_root, capsys) -> None:
+        repo_root, head_sha = git_repo_root
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "retain_push_attempt", "run_id": "run-1", "task_id": "T-1",
+                "target_repo_path": ".", "branch": "main",
+            },
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "retained"
+        assert resp["expected_local_sha"] == head_sha
+        doc = json.loads((repo_root / "runs" / "run-1" / "git" / "push-attempt.json").read_text(encoding="utf-8"))
+        assert doc["ref"] == "refs/heads/main"
+        assert doc["remote_url"] == "https://github.com/example-owner/example-repo.git"
+
+    def test_stale_expected_sha_is_blocked(self, git_repo_root, capsys) -> None:
+        repo_root, _ = git_repo_root
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "retain_push_attempt", "run_id": "run-1", "task_id": "T-1", "target_repo_path": ".",
+                "branch": "main", "expected_sha": "a" * 40,
+            },
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "blocked"
+        assert not (repo_root / "runs" / "run-1" / "git" / "push-attempt.json").exists()
+
+
+class TestVerifyPush:
+    def test_mismatch_is_retained_honestly_never_reported_as_verified(self, git_repo_root, monkeypatch, capsys) -> None:
+        """The live_cli-level false-push proof: the real repo's HEAD SHA is used as
+        expected_sha, but the real subprocess `git ls-remote` call is monkeypatched at
+        github.DEFAULT_RUNNER to return a different, fabricated SHA -- proving
+        verify_push (as exercised through the exact CLI boundary /work itself calls)
+        refuses to report this as a verified push."""
+        repo_root, head_sha = git_repo_root
+        fabricated_remote_sha = "f" * 40
+
+        def fake_runner(argv, cwd):
+            if argv[:2] == ["git", "remote"]:
+                return github.CommandResult(
+                    exit_code=0, stdout="https://github.com/example-owner/example-repo.git\n", stderr=""
+                )
+            if argv[:2] == ["git", "ls-remote"]:
+                return github.CommandResult(
+                    exit_code=0, stdout=f"{fabricated_remote_sha}\trefs/heads/main\n", stderr=""
+                )
+            raise AssertionError(f"unexpected git invocation in test: {argv}")
+
+        monkeypatch.setattr(github, "DEFAULT_RUNNER", fake_runner)
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "verify_push", "run_id": "run-1", "task_id": "T-1", "target_repo_path": ".",
+                "branch": "main", "expected_sha": head_sha,
+            },
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "mismatch"
+        assert resp["observed_sha"] == fabricated_remote_sha
+        assert resp["expected_sha"] == head_sha
+        doc = json.loads((repo_root / "runs" / "run-1" / "git" / "push-verification.json").read_text(encoding="utf-8"))
+        assert doc["status"] == "mismatch"
+
+    def test_verified_when_remote_sha_matches(self, git_repo_root, monkeypatch, capsys) -> None:
+        repo_root, head_sha = git_repo_root
+
+        def fake_runner(argv, cwd):
+            if argv[:2] == ["git", "remote"]:
+                return github.CommandResult(
+                    exit_code=0, stdout="https://github.com/example-owner/example-repo.git\n", stderr=""
+                )
+            if argv[:2] == ["git", "ls-remote"]:
+                return github.CommandResult(exit_code=0, stdout=f"{head_sha}\trefs/heads/main\n", stderr="")
+            raise AssertionError(f"unexpected git invocation in test: {argv}")
+
+        monkeypatch.setattr(github, "DEFAULT_RUNNER", fake_runner)
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "verify_push", "run_id": "run-1", "task_id": "T-1", "target_repo_path": ".",
+                "branch": "main", "expected_sha": head_sha,
+            },
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "verified"
+
+    def test_verify_push_never_exposes_a_simulation_parameter(self) -> None:
+        # There is no request field that lets a caller inject a fake ls-remote result
+        # through the live CLI boundary -- op_verify_push always calls github.verify_push
+        # without a runner=, so DEFAULT_RUNNER (the real subprocess) is always used
+        # unless a test monkeypatches it directly, as the two tests above do.
+        sig = inspect.signature(live_cli.op_verify_push)
+        assert "runner" not in sig.parameters
+        assert "simulated" not in " ".join(sig.parameters).lower()
+
+
+class TestGhRepoMetadata:
+    def test_delegates_to_github_module(self, repo_root, monkeypatch, capsys) -> None:
+        monkeypatch.setattr(
+            github, "gh_repo_metadata",
+            lambda **kwargs: {"status": "ok", "metadata": {"nameWithOwner": "example-owner/example-repo"}, "raw": {}},
+        )
+        exit_code, resp = _run_main(repo_root, {"operation": "gh_repo_metadata", "target_repo_path": "."}, capsys)
+        assert exit_code == 0
+        assert resp["metadata"]["nameWithOwner"] == "example-owner/example-repo"

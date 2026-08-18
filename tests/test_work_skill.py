@@ -669,3 +669,82 @@ class TestUsageAccounting:
     def test_reporting_states_usage_accounting_picture(self) -> None:
         assert "Per-agent usage/cost accounting" in self.text
         assert "usage_accounting_gap" in self.text
+
+
+class TestGitHubDelivery:
+    """Structural checks for the GitHub/Git-delivery milestone: the github Skill is
+    required before any commit/push, every push is followed by independent
+    verification, and only a "verified" verify_push classification may ever be reported
+    as a successful push."""
+
+    def setup_method(self) -> None:
+        self.text = SKILL_PATH.read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+
+    def _phase_slice(self, start_marker: str, end_marker: str) -> str:
+        start = self.text.index(start_marker)
+        end = self.text.index(end_marker, start)
+        return self.text[start:end]
+
+    def test_github_delivery_section_exists(self) -> None:
+        assert "# GitHub / Git delivery" in self.text
+
+    def test_standing_rule_17_requires_the_github_skill_before_commit_or_push(self) -> None:
+        assert '17. Any Git commit or push this session performs' in self.text
+        assert 'skill: "github"' in self.text
+
+    def test_standing_rule_12_cross_references_standing_rule_17(self) -> None:
+        rule_12 = self._phase_slice("12. Never commit or push.", "13. Every orchestrator-owned")
+        assert "standing rule 17" in rule_12
+
+    def test_all_five_new_operations_documented_in_operations_table(self) -> None:
+        for op in (
+            "`git_repo_identity`", "`retain_commit_evidence`", "`retain_push_attempt`",
+            "`verify_push`", "`gh_repo_metadata`",
+        ):
+            assert op in self.text, f"expected operation {op!r} documented in the live_cli operations table"
+
+    def test_all_six_verification_classifications_documented(self) -> None:
+        for status in ("verified", "mismatch", "remote_ref_missing", "command_failed", "invalid_output", "wrong_repository"):
+            assert status in self.text
+
+    def test_github_skill_invocation_is_step_one(self) -> None:
+        section = self._phase_slice("# GitHub / Git delivery", "# Phase 0: Memory load")
+        skill_idx = section.index('skill: "github"')
+        commit_idx = section.index("git commit -m")
+        push_idx = section.index("git push <remote> <branch>")
+        verify_idx = section.index("Mandatory, every time, no exception")
+        assert skill_idx < commit_idx < push_idx < verify_idx
+
+    def test_commit_evidence_precedes_push_attempt_precedes_verification(self) -> None:
+        section = self._phase_slice("# GitHub / Git delivery", "# Phase 0: Memory load")
+        commit_evidence_idx = section.index("`retain_commit_evidence`")
+        push_attempt_idx = section.index("`retain_push_attempt`")
+        verify_idx = section.index("`verify_push`")
+        assert commit_evidence_idx < push_attempt_idx < verify_idx
+
+    def test_only_verified_status_may_be_reported_as_success(self) -> None:
+        section = self._phase_slice("# GitHub / Git delivery", "# Phase 0: Memory load")
+        assert 'if, and only if, the returned status is exactly `"verified"`' in section
+
+    def test_never_force_push_or_rewrite_history(self) -> None:
+        section = self._phase_slice("# GitHub / Git delivery", "# Phase 0: Memory load")
+        assert "--force" in section
+        assert "destructive `reset`" in section
+
+    def test_git_delivery_failure_never_falsifies_test_evidence(self) -> None:
+        section = self._phase_slice("# GitHub / Git delivery", "# Phase 0: Memory load")
+        assert "never rewritten, reinterpreted" in section
+        assert "never becomes an excuse to fabricate or soften a real test result" in section
+
+    def test_gh_never_substitutes_for_git_ls_remote(self) -> None:
+        assert "never a substitute for" in self.flat_text.lower() or "never in place of step 8" in self.flat_text
+
+    def test_github_skill_file_exists(self) -> None:
+        github_skill_path = REPO_ROOT / ".claude" / "skills" / "github" / "SKILL.md"
+        assert github_skill_path.is_file()
+
+    def test_reporting_states_git_delivery_status(self) -> None:
+        assert "Git delivery status" in self.text
+        assert "commit-evidence.json" in self.text
+        assert "push-verification.json" in self.text

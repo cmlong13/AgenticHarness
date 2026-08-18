@@ -102,3 +102,17 @@ def promote_canonical(run_directory: Path, filename: str, doc: dict) -> Path:
 
 def write_run_summary(run_directory: Path, doc: dict) -> Path:
     return promote_canonical(run_directory, "run-summary.json", doc)
+
+
+def retain_git_evidence(run_directory: Path, filename: str, doc: dict) -> Path:
+    """Collision-guarded write for Git/GitHub evidence documents (commit-evidence.json,
+    push-attempt.json, push-verification.json -- see harness/orchestrator/github.py),
+    retained under runs/<run_id>/git/ rather than the run root since these are not one of
+    the four canonical phase artifacts CANONICAL_FILENAMES enumerates. Shares
+    promote_canonical's collision guard: never silently overwrites already-retained Git
+    evidence -- a caller needing a second, independent record (e.g. a repair-round retry)
+    must pass a distinctly named filename, mirroring the implementation-report.repair-1.json
+    convention core.py's route-back path already establishes."""
+    path = run_directory / "git" / filename
+    _write_new(path, (json.dumps(doc, indent=2) + "\n").encode("utf-8"))
+    return path
