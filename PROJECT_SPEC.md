@@ -646,6 +646,220 @@ commit, push, or modify any implementation or test file. Not built this session,
 with this closeout's own scope: Jira, Obsidian, MCP-vs-REST connector comparison, a
 flaky-test demonstration, architecture diagrams, and the final write-up remain untouched.
 
+**Milestone update (2026-08-20): Jira skill and Jira-backed ticket-mode intake, resumed
+and finished after an API interruption.** This session closes the "Jira skill pack +
+ticket-mode intake + real connector boundary + requested/returned-key identity check +
+honest failure classification" milestone (`ASSIGNMENT.md` §2.1's ticket-mode acceptance
+line, §2.3's jira-skill requirement, and §2.4's connector table's Jira row for Discovery-
+phase ticket intake only -- create/edit/transition/comment, Obsidian, and the MCP-vs-REST
+comparison were all explicitly out of scope and remain untouched). A prior session in
+this same milestone had already written the great majority of the implementation before
+an API interruption; this session audited that work end-to-end, found it substantially
+correct, and closed the small number of real gaps it found rather than restarting.
+(1) `harness/orchestrator/jira_connector.py` (new, found already complete and correct on
+audit) -- a deterministic connector boundary mirroring `github.py`'s own shape: strict
+issue-key shape validation (`is_valid_issue_key`, a bounded
+`^[A-Z][A-Z0-9]{1,9}-[1-9][0-9]{0,9}$`), case-preserving `normalize_issue_key`
+(strip+uppercase only, never reformatted or guessed), credentials read fresh from
+`JIRA_BASE_URL`/`JIRA_EMAIL`/`JIRA_API_TOKEN` on every call
+(`JiraCredentials.from_env`, never cached, never accepted as a request field), a real
+Jira Cloud REST API v3 `GET .../rest/api/3/issue/{key}` call (standard fields only,
+`fields=summary,description,issuetype,status,project,created,updated` -- never a guessed
+`customfield_XXXXX` id) through one swappable `HttpTransport` seam (`DEFAULT_TRANSPORT`
+in production, a fake transport only ever used by tests -- the same pattern `github.py`'s
+`CommandRunner` already established), a deterministic Atlassian Document Format ->
+plain-text walker (`adf_to_text`), best-effort acceptance-criteria extraction that
+returns `None` (never a fabricated empty list) when no "Acceptance Criteria" heading
+exists, and the one identity check that matters: `parse_issue_payload` raises
+`JiraError(code="identity_mismatch")` unless the response body's own `key` exactly
+equals the requested key, and `JiraError(code="invalid_response")` if the response's own
+`fields.project.key` (when present) disagrees with the project-key component embedded in
+that same issue key -- a different ticket, or an internally inconsistent Jira response,
+is never silently accepted as the one requested. Every outcome is exactly one of seven
+classifications (`resolved` / `not_found` / `unauthorized` / `connector_unavailable` /
+`identity_mismatch` / `invalid_issue_key` / `invalid_response`); a failed lookup is never
+synthesized into an empty or placeholder issue. No create/edit/comment/transition
+capability exists anywhere in this module, per this milestone's explicit prohibition on
+speculative write support. (2) `.claude/skills/jira/SKILL.md` (new, found already
+complete and correct on audit) -- a procedural skill (no `allowed-tools`/
+`disallowed-tools`/`context: fork` of its own, mirroring `github`'s and
+`code-craftsmanship`'s shape) documenting the cardinal rule ("a ticket ID is not a
+resolved ticket"), issue-key validation, connector availability, real resolution,
+identity validation, acceptance-criteria extraction, unconditional evidence retention,
+all seven failure classifications, and an explicit "what this skill does not do"
+section naming the absent write capabilities. (3) `harness/orchestrator/evidence_io.py`
+gained `retain_jira_evidence` (found already complete and correct on audit) -- the same
+collision-guarded write `retain_git_evidence` already uses, redirected to a new
+`runs/<run_id>/jira/` subdirectory, kept structurally distinct from
+`CANONICAL_FILENAMES`'s four canonical phase artifacts, exactly as `runs/<run_id>/git/`
+already is. (4) `harness/orchestrator/live_cli.py` gained `op_resolve_jira_issue` (found
+already complete and correct on audit) -- normalizes the issue key, reads credentials
+fresh from the environment (no request field can smuggle a credential through this
+boundary, confirmed by
+`tests/test_orchestrator_live_cli.py::TestResolveJiraIssue::test_resolve_jira_issue_never_exposes_a_credentials_field`'s
+signature-introspection check), retains `runs/<run_id>/jira/issue-resolution.json` and a
+`jira_issue_resolution` policy event unconditionally, and returns exit code 0 only for
+`status: "resolved"` (`"resolved"` added to `OK_STATUSES`; its six sibling
+classifications deliberately absent, so a live `/work` run treats any of them exactly
+like any other blocked result). (5) `.claude/skills/work/SKILL.md` (found ~95% complete
+on audit -- see the three gaps this session actually closed, below) gained standing rule
+18 (any ticket-mode invocation is preceded by invoking the real `jira` Skill; ticket
+resolution happens before Phase 0 memory load and before any Discovery reasoning; only
+`status: "resolved"` may proceed; every other classification stops the run honestly
+before Discovery with no silent fallback to free-form mode), a rewritten "Parsing
+$ARGUMENTS" section (ticket mode is selected only when the *entire first whitespace
+token* matches a whole-token Jira-ticket shape -- a ticket-shaped substring appearing
+later in a free-form sentence never accidentally selects ticket mode; a ticket-shaped
+first token followed by any other argument is an explicit usage error, never a guess
+about which mode was intended), and a new "Ticket-mode Jira resolution" section (the
+full protocol: Skill invocation, the one real `resolve_jira_issue` call, honest
+per-classification handling including a `final_verdict: "blocked"` `run-summary.json`
+with no checkpoint for a pre-Discovery failure -- mirroring the existing
+`discovery_invalid`/dry-run representational precedent, confirmed against
+`run-summary.schema.json`'s own `artifact_refs.scope` field, which requires only a
+non-empty string pointer, not literally a promoted `scope.json` -- and, on success,
+composing Discovery's input text from the resolved issue's own fields as *input
+evidence only*, explicitly never exempting the run from the pre-dispatch checklist,
+Protected Path enforcement, or the orchestrator's refusal authority). **Gaps this
+session's own audit found and closed, not present in the prior session's work:** the
+`live_cli.py` operations table was missing its `resolve_jira_issue` row; "What to state,
+every time" had no bullet for ticket-mode resolution status even though the "Ticket-mode
+Jira resolution" section's own step 5 already pointed a reader at one; and the skill's
+own frontmatter `description` still read "...or, later, a Jira ticket," stale now that
+ticket mode is real, not deferred. All three are now fixed. (6) The stale test this
+interruption left behind,
+`tests/test_work_skill.py::TestWorkSkillBehavior::test_jira_shaped_input_explicitly_unsupported`
+(asserting `"not implemented in this milestone"` was still true, from before ticket mode
+existed), was replaced -- not merely deleted -- with a new 14-test
+`TestJiraTicketMode` class proving, against the document's own current text: ticket mode
+is documented as implemented, not deferred; only a whole first token selects ticket
+mode; extra arguments after a ticket-shaped first token are an explicit usage error;
+standing rule 18 requires the `jira` Skill before resolution; the `jira` Skill invocation
+precedes the `resolve_jira_issue` request in the resolution section's own step order;
+resolution happens before Phase 0 memory load and before Discovery; only `resolved` may
+proceed; all six other classifications are named as stopping the run before Discovery;
+there is no silent fallback to free-form mode; resolved content is input evidence, not
+trusted scope; free-form mode remains fully supported; the `resolve_jira_issue`
+operation is documented in the operations table; and no checkpoint is written for a
+pre-Discovery resolution failure. 3 further tests were added to
+`tests/test_orchestrator_evidence_io.py` (`retain_jira_evidence`'s subdirectory
+placement, on-demand directory creation, and collision guard), 6 to
+`tests/test_orchestrator_live_cli.py` (`TestResolveJiraIssue` -- missing-credentials,
+invalid-key-shape-never-attempts-network-call, a resolved round trip with an explicit
+no-leakage assertion on both the raw API token and the `Authorization` header, an
+identity-mismatch case using a real Jira-shaped response for a *different* issue than
+requested, a `not_found` case, and the credentials-field-exposure signature check --
+six methods, not the five an earlier draft of this note claimed), 9 to
+`tests/test_skill_definitions.py` (`TestJiraSkill`), and the new, standalone
+`tests/test_orchestrator_jira_connector.py`. This new file has 49 source-level
+`def test_...` functions, which pytest expands to 64 collected cases via four
+`@pytest.mark.parametrize` decorators (an earlier draft said "46 tests," a figure that
+matched neither the source-function count nor the collected-case count -- see "Jira
+milestone test-count accounting" immediately below for the full reconciliation). Its
+coverage: issue-key shape, credentials-from-env, the Basic-auth header's own
+no-plaintext-leakage check, ADF-to-text walking, acceptance-criteria extraction, payload
+parsing including both identity-mismatch cases, and every one of `resolve_issue`'s seven
+classifications, including a real, narrowly-scoped exercise of the actual
+`DEFAULT_TRANSPORT` code path against an unroutable loopback port -- a fast, deterministic
+connection-refused case, never a real Jira instance. Full harness suite **838 passing**;
+`demo-repo/` unaffected (106 tests, unchanged; `git status --short -- demo-repo` empty).
+`git diff --check` clean throughout.
+
+### Jira milestone test-count accounting (re-measured 2026-09-05, final bookkeeping audit)
+
+Earlier drafts of this milestone note used the word "tests" for several different
+quantities and got at least three of them wrong. This subsection states each quantity
+separately, re-measured directly (`python -m pytest --collect-only`, `git show HEAD:<path>`,
+per-`def test_` grep, per-`@pytest.mark.parametrize` expansion). No production or test code
+was changed by this audit; only this document.
+
+**A. Pre-Jira committed baseline (`HEAD` = `70c416a`): 743 collected pytest cases.**
+This is the figure the GitHub-skill milestone above already recorded and the last
+committed state.
+
+**B. Recovery-start working tree (independent count by the user, at the start of the
+API-recovery session): 825 collected -- 824 passing + 1 failing.** The single failure was
+the stale `tests/test_work_skill.py::TestWorkSkillBehavior::test_jira_shaped_input_explicitly_unsupported`.
+At that point `jira_connector.py` and its 64-case test file, plus the
+`test_orchestrator_evidence_io.py` (+3), `test_orchestrator_live_cli.py` (+6) and
+`test_skill_definitions.py` (+9) additions, were already present (743 + 64 + 3 + 6 + 9 =
+825); only `test_work_skill.py` had not yet been updated.
+
+**C. Final current working tree: 838 collected pytest cases, 838 passing** (`python -m
+pytest tests -q`, 2026-09-05). Demo suite: 106 collected, 106 passing.
+
+**D. Total Jira milestone collected-case delta vs the committed baseline: 838 - 743 =
++95.**
+
+**E. Recovery-session collected-case delta: 838 - 825 = +13** -- the net effect of
+removing the 1 stale `test_work_skill.py` test and adding the 14-test `TestJiraTicketMode`
+class (14 - 1 = 13). All other Jira test additions predate the recovery session (see B).
+D and E are different numbers and must not be used interchangeably.
+
+**F. Source-level `def test_...` functions, per Jira-touched file** (current tree vs
+`HEAD`; none of the four modified files contains any `@pytest.mark.parametrize`, so for
+them source-function count == collected-case count):
+
+| file | `HEAD` | current | net | of which Jira-specific |
+|---|---|---|---|---|
+| `tests/test_orchestrator_jira_connector.py` | 0 (new) | 49 | +49 | 49 |
+| `tests/test_orchestrator_evidence_io.py` | 13 | 16 | +3 | 3 (`retain_jira_evidence`) |
+| `tests/test_orchestrator_live_cli.py` | 64 | 70 | +6 | 6 (`TestResolveJiraIssue`) |
+| `tests/test_skill_definitions.py` | 27 | 36 | +9 | 9 (`TestJiraSkill`) |
+| `tests/test_work_skill.py` | 131 | 144 | +13 | 14 added, 1 stale removed |
+| **total** | | | **+80 net** (81 added, 1 removed) | |
+
+**G. Collected pytest cases, per Jira-touched file** (current tree):
+
+| file | `HEAD` collected | current collected | net |
+|---|---|---|---|
+| `tests/test_orchestrator_jira_connector.py` | 0 (new) | 64 | +64 |
+| `tests/test_orchestrator_evidence_io.py` | 13 | 16 | +3 |
+| `tests/test_orchestrator_live_cli.py` | 64 | 70 | +6 |
+| `tests/test_skill_definitions.py` | 27 | 36 | +9 |
+| `tests/test_work_skill.py` | 131 | 144 | +13 |
+| **total** | | | **+95** (= D) |
+
+**H. Parametrization expansion.** All of it is in `tests/test_orchestrator_jira_connector.py`:
+49 `def test_...` functions, 4 of them parametrized, expand to 64 collected cases (+15):
+
+| parametrized test | params | extra cases |
+|---|---|---|
+| `TestIssueKeyShape::test_valid_shapes_accepted` | 4 | +3 |
+| `TestIssueKeyShape::test_invalid_shapes_rejected` | 10 | +9 |
+| `TestCredentialsFromEnv::test_any_missing_variable_returns_none` | 3 | +2 |
+| `TestResolveIssue::test_401_403_classified_unauthorized` | 2 | +1 |
+| **total** | | **+15** |
+
+45 non-parametrized functions (1 case each) + 19 parametrized cases = 64. The prior
+"46 -> 64" framing was wrong on both ends: the source-function count is 49, not 46, and
+the parametrization expansion is +15, not +18.
+**No live Jira read was performed this session.** This environment has no
+`JIRA_BASE_URL`/`JIRA_EMAIL`/`JIRA_API_TOKEN` set (confirmed directly, both via `Bash`
+and independently via `PowerShell`, at the start of this session) and no Jira MCP server
+configured (no `.mcp.json` or equivalent exists in this repository) -- exactly the state
+`jira_connector.py`'s own module docstring already documented from the prior session, now
+independently reconfirmed rather than assumed. Per this milestone's own instruction, a
+real read-only resolution demonstration was not attempted without both a real credential
+set and a legitimate, pre-existing issue key, and none was invented. The deterministic
+`FakeTransport`/monkeypatched-`DEFAULT_TRANSPORT` test evidence above is real,
+first-class proof of the connector's own classification logic -- it is explicitly **not**
+live Jira proof, and is never described as one. **Jira writes** (create/edit/comment/
+transition) remain exactly what `ASSIGNMENT.md` and this milestone's own instructions
+require: not implemented, not speculatively stubbed, and open only if a future ticket
+genuinely requires them -- `.claude/skills/jira/SKILL.md` §8 states this explicitly as a
+scope boundary, not an oversight. **MCP-vs-REST fallback remains open**, unchanged by
+this milestone: no Jira MCP server exists in this environment to compare against, so this
+Jira connector is REST-only by necessity, not by an unexamined choice between the two --
+see `jira_connector.py`'s own module docstring for why this is explicitly *not* the
+"implement both routes for at least one connector" requirement `ASSIGNMENT.md` §2.4/Part
+8 separately names; that requirement remains entirely open, exactly as every session
+since the GitHub-skill milestone has already stated. Not built this session, per this
+milestone's own explicit exclusions: Obsidian, MCP-vs-REST fallback, a flaky-test
+demonstration, architecture diagrams, and the final write-up. No commit or push occurred;
+`git rev-list --left-right --count origin/main...main` reports `0 0`, and `HEAD` remains
+`70c416a4de059aa1832eec914b402a14da1ce490` throughout this session.
+
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
 followed. Implementation should track this spec; if the two diverge, update this file first.

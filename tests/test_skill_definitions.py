@@ -224,3 +224,71 @@ class TestGithubSkill:
     def test_live_cli_operations_named(self) -> None:
         for op in ("git_repo_identity", "retain_commit_evidence", "retain_push_attempt", "verify_push", "gh_repo_metadata"):
             assert op in self.text
+
+
+class TestJiraSkill:
+    def setup_method(self) -> None:
+        self.path = SKILLS_DIR / "jira" / "SKILL.md"
+        assert self.path.exists(), "jira/SKILL.md must exist"
+        self.text = self.path.read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+        self.fields = parse_frontmatter(self.path)
+
+    def test_name(self) -> None:
+        assert self.fields.get("name") == "jira"
+
+    def test_no_tools_frontmatter_field(self) -> None:
+        # Like github/code-craftsmanship, this skill has no independent tool allowlist
+        # of its own -- it is a procedure the orchestrator's own already-granted tools
+        # follow, not a forked, tool-restricted script wrapper like test-runner.
+        assert "tools" not in self.fields
+        assert "allowed-tools" not in self.fields
+        assert "disallowed-tools" not in self.fields
+        assert "context" not in self.fields
+
+    def test_cardinal_rule_present(self) -> None:
+        for phrase in [
+            "A ticket ID is not a resolved ticket",
+            "Never guess, invent, or auto-complete",
+            "never silently accepted",
+            "never treated as an empty or placeholder issue",
+        ]:
+            assert phrase in self.flat_text, f"expected cardinal-rule phrase {phrase!r} in SKILL.md"
+
+    def test_required_coverage_areas_present(self) -> None:
+        for heading in [
+            "# 1. Issue-key shape validation",
+            "# 2. Connector availability",
+            "# 3. Real issue resolution",
+            "# 4. Requested-key vs returned-key identity validation",
+            "# 5. Acceptance-criteria extraction",
+            "# 6. Retained evidence",
+            "# 7. Failure classification",
+            "# 8. What this skill does not do",
+        ]:
+            assert heading in self.text, f"expected section {heading!r} in SKILL.md"
+
+    def test_all_seven_classifications_documented(self) -> None:
+        for status in (
+            "resolved", "not_found", "unauthorized", "connector_unavailable",
+            "identity_mismatch", "invalid_issue_key", "invalid_response",
+        ):
+            assert status in self.text
+
+    def test_no_speculative_write_support_documented(self) -> None:
+        for phrase in [
+            "No create-ticket, edit-ticket, status-transition, or comment-posting",
+            "Never write, transition, comment on, or otherwise mutate a real Jira issue",
+        ]:
+            assert phrase in self.flat_text
+
+    def test_credential_handling_documented(self) -> None:
+        for phrase in ["JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN", "never retained in any evidence file"]:
+            assert phrase in self.flat_text
+
+    def test_boundaries_present(self) -> None:
+        for phrase in ["must not", "Fabricate, soften, or infer a resolution result", "Duplicate the test-runner"]:
+            assert phrase in self.flat_text
+
+    def test_live_cli_operation_named(self) -> None:
+        assert "resolve_jira_issue" in self.text

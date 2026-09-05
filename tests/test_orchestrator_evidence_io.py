@@ -97,6 +97,39 @@ def test_retain_git_evidence_collision_is_rejected(tmp_path):
     assert doc == {"status": "verified"}
 
 
+def test_retain_jira_evidence_writes_under_jira_subdirectory(tmp_path):
+    run_directory = evidence_io.run_dir(tmp_path, "run-1")
+    evidence_io.ensure_run_dirs(run_directory)
+
+    path = evidence_io.retain_jira_evidence(run_directory, "issue-resolution.json", {"status": "resolved"})
+
+    assert path == run_directory / "jira" / "issue-resolution.json"
+    assert json.loads(path.read_text(encoding="utf-8")) == {"status": "resolved"}
+
+
+def test_retain_jira_evidence_creates_jira_subdirectory_on_demand(tmp_path):
+    # No ensure_run_dirs call at all -- retain_jira_evidence must create its own
+    # parent directory, exactly as retain_git_evidence already does.
+    run_directory = evidence_io.run_dir(tmp_path, "run-1")
+
+    path = evidence_io.retain_jira_evidence(run_directory, "issue-resolution.json", {"status": "not_found"})
+
+    assert path.is_file()
+
+
+def test_retain_jira_evidence_collision_is_rejected(tmp_path):
+    run_directory = evidence_io.run_dir(tmp_path, "run-1")
+    evidence_io.ensure_run_dirs(run_directory)
+    evidence_io.retain_jira_evidence(run_directory, "issue-resolution.json", {"status": "resolved"})
+
+    with pytest.raises(evidence_io.EvidenceCollisionError):
+        evidence_io.retain_jira_evidence(run_directory, "issue-resolution.json", {"status": "not_found"})
+
+    # The original evidence must survive the rejected overwrite attempt unchanged.
+    doc = json.loads((run_directory / "jira" / "issue-resolution.json").read_text(encoding="utf-8"))
+    assert doc == {"status": "resolved"}
+
+
 def test_promote_canonical_writes_valid_json(tmp_path):
     run_directory = evidence_io.run_dir(tmp_path, "run-1")
     evidence_io.ensure_run_dirs(run_directory)

@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from harness.orchestrator import discovery, evidence_io, github, live_cli, paths
+from harness.orchestrator import discovery, evidence_io, github, jira_connector, live_cli, paths
 
 
 @pytest.fixture()
@@ -1295,3 +1295,122 @@ class TestGhRepoMetadata:
         exit_code, resp = _run_main(repo_root, {"operation": "gh_repo_metadata", "target_repo_path": "."}, capsys)
         assert exit_code == 0
         assert resp["metadata"]["nameWithOwner"] == "example-owner/example-repo"
+
+
+class TestResolveJiraIssue:
+    """op_resolve_jira_issue -- the live-CLI boundary /work's ticket-mode resolution
+    calls. Every scenario here goes through jira_connector.DEFAULT_TRANSPORT
+    (monkeypatched to a fake, network-free callable at the exact seam the module's own
+    docstring names) or through real env-var absence -- never a real Jira instance."""
+
+    def _issue_body(self, key: str = "PROJ-123") -> str:
+        return json.dumps(
+            {
+                "key": key,
+                "fields": {
+                    "summary": "Fix the flaky login test",
+                    "description": {"type": "doc", "content": [
+                        {"type": "paragraph", "content": [{"type": "text", "text": "Details here."}]}
+                    ]},
+                    "issuetype": {"name": "Bug"},
+                    "status": {"name": "To Do"},
+                    "project": {"key": "PROJ"},
+                },
+            }
+        )
+
+    def test_missing_credentials_classified_connector_unavailable(self, repo_root, monkeypatch, capsys) -> None:
+        monkeypatch.delenv("JIRA_BASE_URL", raising=False)
+        monkeypatch.delenv("JIRA_EMAIL", raising=False)
+        monkeypatch.delenv("JIRA_API_TOKEN", raising=False)
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "resolve_jira_issue", "run_id": "run-1", "task_id": "T-1", "issue_key": "PROJ-123"},
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "connector_unavailable"
+        doc = json.loads((repo_root / "runs" / "run-1" / "jira" / "issue-resolution.json").read_text(encoding="utf-8"))
+        assert doc["status"] == "connector_unavailable"
+        # The reason names the missing env vars by name; no actual secret value can leak
+        # here because none was ever set -- the real no-leakage guarantee is proven by
+        # test_resolved_issue_retained_and_reported below (Authorization header absent).
+
+    def test_invalid_issue_key_shape_classified_without_network_call(self, repo_root, monkeypatch, capsys) -> None:
+        monkeypatch.setenv("JIRA_BASE_URL", "https://example.atlassian.net")
+        monkeypatch.setenv("JIRA_EMAIL", "a@example.invalid")
+        monkeypatch.setenv("JIRA_API_TOKEN", "tok")
+
+        def fail_if_called(method, url, headers):
+            raise AssertionError("resolve_issue must not attempt a network call for an invalid key shape")
+
+        monkeypatch.setattr(jira_connector, "DEFAULT_TRANSPORT", fail_if_called)
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "resolve_jira_issue", "run_id": "run-1", "task_id": "T-1", "issue_key": "not-a-key"},
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "invalid_issue_key"
+
+    def test_resolved_issue_retained_and_reported(self, repo_root, monkeypatch, capsys) -> None:
+        monkeypatch.setenv("JIRA_BASE_URL", "https://example.atlassian.net")
+        monkeypatch.setenv("JIRA_EMAIL", "a@example.invalid")
+        monkeypatch.setenv("JIRA_API_TOKEN", "tok")
+        body = self._issue_body()
+        monkeypatch.setattr(
+            jira_connector, "DEFAULT_TRANSPORT",
+            lambda method, url, headers: jira_connector.HttpResult(status_code=200, body=body),
+        )
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "resolve_jira_issue", "run_id": "run-1", "task_id": "T-1", "issue_key": "proj-123"},
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "resolved"
+        assert resp["issue"]["issue_key"] == "PROJ-123"
+        doc = json.loads((repo_root / "runs" / "run-1" / "jira" / "issue-resolution.json").read_text(encoding="utf-8"))
+        assert doc["status"] == "resolved"
+        assert doc["issue"]["issue_key"] == "PROJ-123"
+        assert doc["requested_issue_key_raw"] == "proj-123"  # normalization never overwrites the raw caller input
+        assert "tok" not in json.dumps(doc)  # the real API token is never retained in evidence
+        assert "Authorization" not in json.dumps(doc)
+
+    def test_identity_mismatch_never_reported_as_resolved(self, repo_root, monkeypatch, capsys) -> None:
+        monkeypatch.setenv("JIRA_BASE_URL", "https://example.atlassian.net")
+        monkeypatch.setenv("JIRA_EMAIL", "a@example.invalid")
+        monkeypatch.setenv("JIRA_API_TOKEN", "tok")
+        body = self._issue_body(key="PROJ-999")  # a real Jira response for a different issue than requested
+        monkeypatch.setattr(
+            jira_connector, "DEFAULT_TRANSPORT",
+            lambda method, url, headers: jira_connector.HttpResult(status_code=200, body=body),
+        )
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "resolve_jira_issue", "run_id": "run-1", "task_id": "T-1", "issue_key": "PROJ-123"},
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "identity_mismatch"
+        assert resp["issue"] is None
+
+    def test_not_found_retained_honestly_not_as_empty_issue(self, repo_root, monkeypatch, capsys) -> None:
+        monkeypatch.setenv("JIRA_BASE_URL", "https://example.atlassian.net")
+        monkeypatch.setenv("JIRA_EMAIL", "a@example.invalid")
+        monkeypatch.setenv("JIRA_API_TOKEN", "tok")
+        monkeypatch.setattr(
+            jira_connector, "DEFAULT_TRANSPORT",
+            lambda method, url, headers: jira_connector.HttpResult(status_code=404, body="{}"),
+        )
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "resolve_jira_issue", "run_id": "run-1", "task_id": "T-1", "issue_key": "PROJ-404"},
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "not_found"
+        assert resp["issue"] is None
+
+    def test_resolve_jira_issue_never_exposes_a_credentials_field(self) -> None:
+        # There is no request field that lets a caller pass credentials through the live
+        # CLI boundary -- op_resolve_jira_issue always reads them fresh from the real
+        # environment via jira_connector.JiraCredentials.from_env().
+        sig = inspect.signature(live_cli.op_resolve_jira_issue)
+        params = list(sig.parameters)
+        assert params == ["req"]

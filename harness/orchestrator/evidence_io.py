@@ -116,3 +116,16 @@ def retain_git_evidence(run_directory: Path, filename: str, doc: dict) -> Path:
     path = run_directory / "git" / filename
     _write_new(path, (json.dumps(doc, indent=2) + "\n").encode("utf-8"))
     return path
+
+
+def retain_jira_evidence(run_directory: Path, filename: str, doc: dict) -> Path:
+    """Collision-guarded write for Jira evidence documents (issue-resolution.json -- see
+    harness/orchestrator/jira_connector.py), retained under runs/<run_id>/jira/ for the
+    same reason retain_git_evidence uses runs/<run_id>/git/: this is not one of the four
+    canonical phase artifacts CANONICAL_FILENAMES enumerates, and ticket-mode resolution
+    happens before Discovery even runs, so no run-phase directory is a natural home for
+    it. Shares promote_canonical's collision guard -- never silently overwrites an
+    already-retained Jira resolution."""
+    path = run_directory / "jira" / filename
+    _write_new(path, (json.dumps(doc, indent=2) + "\n").encode("utf-8"))
+    return path

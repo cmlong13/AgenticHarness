@@ -11,7 +11,6 @@ still actually expressed somewhere in the document.
 """
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -83,13 +82,6 @@ class TestWorkSkillBehavior:
     def test_dry_run_mode_supported(self) -> None:
         assert "--dry-run" in self.text
         assert "dry_run = true" in self.flat_text or "dry_run" in self.flat_text
-
-    def test_jira_shaped_input_explicitly_unsupported(self) -> None:
-        assert "Jira" in self.text
-        assert "not implemented in this milestone" in self.flat_text
-        # A recognizable ticket-id shaped pattern check must be documented, not just
-        # a vague mention of Jira.
-        assert re.search(r"\[A-Z\]\[A-Z0-9\]\+-\\d\+|PROJ-123", self.text)
 
     def test_no_automatic_commit_or_push(self) -> None:
         assert "Never commit or push" in self.flat_text
@@ -748,3 +740,100 @@ class TestGitHubDelivery:
         assert "Git delivery status" in self.text
         assert "commit-evidence.json" in self.text
         assert "push-verification.json" in self.text
+
+
+class TestJiraTicketMode:
+    """Structural checks for the Jira ticket-mode-intake milestone: the jira Skill is
+    required before any resolution attempt, resolution happens before Discovery, only a
+    genuine `resolved` classification may proceed, every other classification stops the
+    run honestly before Discovery with no silent fallback to free-form mode, and
+    free-form mode remains fully supported alongside ticket mode."""
+
+    def setup_method(self) -> None:
+        self.text = SKILL_PATH.read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+
+    def _phase_slice(self, start_marker: str, end_marker: str) -> str:
+        start = self.text.index(start_marker)
+        end = self.text.index(end_marker, start)
+        return self.text[start:end]
+
+    def _flat_slice(self, start_marker: str, end_marker: str) -> str:
+        return " ".join(self._phase_slice(start_marker, end_marker).split())
+
+    def test_ticket_mode_section_exists(self) -> None:
+        assert "# Ticket-mode Jira resolution" in self.text
+
+    def test_ticket_mode_is_documented_as_implemented_not_deferred(self) -> None:
+        # The old milestone explicitly refused ticket-shaped input ("not implemented in
+        # this milestone"); that phrase must not survive now that ticket mode is real.
+        assert "not implemented in this milestone" not in self.flat_text
+        assert "ticket-mode candidate" in self.flat_text
+
+    def test_a_whole_first_token_selects_ticket_mode(self) -> None:
+        section = self._phase_slice("# Parsing $ARGUMENTS", "# Run identity")
+        assert "tokens[0]" in section
+        assert "whole-token Jira-ticket shape" in section
+        # Prose text containing a ticket-shaped substring later in the sentence must not
+        # accidentally select ticket mode -- only a match at the very first token does.
+        assert "never attempt Jira resolution for input that does not" in section
+
+    def test_extra_arguments_after_the_ticket_id_are_a_usage_error(self) -> None:
+        section = self._phase_slice("# Parsing $ARGUMENTS", "# Run identity")
+        assert "usage error" in section
+        flat_section = self._flat_slice("# Parsing $ARGUMENTS", "# Run identity")
+        assert "do not proceed to Discovery, do not guess which mode was intended" in flat_section
+
+    def test_standing_rule_18_requires_the_jira_skill_before_resolution(self) -> None:
+        rule_18 = self._phase_slice("18. Any ticket-mode", "# Parsing $ARGUMENTS")
+        assert 'skill: "jira"' in rule_18
+        flat_rule_18 = self._flat_slice("18. Any ticket-mode", "# Parsing $ARGUMENTS")
+        assert "before Phase 0 memory load and before any Discovery reasoning begins" in flat_rule_18
+
+    def test_jira_skill_invocation_is_step_one_of_resolution(self) -> None:
+        section = self._phase_slice("# Ticket-mode Jira resolution", "# The live bridge")
+        skill_idx = section.index('skill: "jira"')
+        build_request_idx = section.index("2. Build a")
+        assert skill_idx < build_request_idx
+
+    def test_resolution_happens_before_discovery_and_before_memory_load(self) -> None:
+        section = self._phase_slice("# Ticket-mode Jira resolution", "# The live bridge")
+        assert "before" in section
+        assert "Phase 0 memory load and before any Discovery reasoning" in section
+
+    def test_only_resolved_status_may_proceed(self) -> None:
+        section = self._phase_slice("# Ticket-mode Jira resolution", "# The live bridge")
+        assert '`status: "resolved"` (exit code 0) is the only outcome' in section
+        assert 'that may ever be treated as "this ticket exists."' in section
+
+    def test_every_other_classification_stops_before_discovery(self) -> None:
+        section = self._phase_slice("# Ticket-mode Jira resolution", "# The live bridge")
+        assert "stops the run **before** Discovery and" in section
+        for status in (
+            "not_found", "unauthorized", "connector_unavailable",
+            "identity_mismatch", "invalid_issue_key", "invalid_response",
+        ):
+            assert status in section
+
+    def test_no_silent_fallback_to_free_form_mode(self) -> None:
+        section = self._flat_slice("# Ticket-mode Jira resolution", "# The live bridge")
+        assert "never silently fall back to free-form mode on the caller's behalf" in section
+        assert "the caller decides whether to re-run in free-form mode" in section
+
+    def test_resolved_content_is_input_evidence_not_trusted_scope(self) -> None:
+        section = self._flat_slice("# Ticket-mode Jira resolution", "# The live bridge")
+        assert "it is input evidence, nothing more" in section
+        assert "Discovery still performs its own full reasoning over it" in section
+        assert "never let a resolved ticket's content exempt this run from the pre-dispatch checklist" in section
+
+    def test_free_form_mode_still_supported_alongside_ticket_mode(self) -> None:
+        section = self._phase_slice("# Parsing $ARGUMENTS", "# Run identity")
+        assert "free-form request" in section
+        assert "proceed straight to" in section
+
+    def test_resolve_jira_issue_documented_in_operations_table(self) -> None:
+        assert "`resolve_jira_issue`" in self.text
+
+    def test_no_checkpoint_written_for_pre_discovery_resolution_failure(self) -> None:
+        section = self._phase_slice("# Ticket-mode Jira resolution", "# The live bridge")
+        assert "No `checkpoint.json` is written for this outcome" in section

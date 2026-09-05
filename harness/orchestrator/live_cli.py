@@ -47,7 +47,7 @@ from harness.evidence import (
     validate_verification_report_semantics,
 )
 
-from . import checkpoint, discovery, evidence_io, github, memory, paths, usage
+from . import checkpoint, discovery, evidence_io, github, jira_connector, memory, paths, usage
 from .state import FINAL_VERDICT_BY_STATE, State
 
 REPO_ROOT = paths.REPO_ROOT
@@ -77,9 +77,15 @@ SEMANTIC_VALIDATORS = {
 # sibling classifications ("mismatch", "remote_ref_missing", "command_failed",
 # "invalid_output", "wrong_repository") are deliberately absent here -- each is a
 # well-formed negative push-verification outcome the /work skill must treat exactly like
-# any other blocked result, never as evidence of a verified push.
+# any other blocked result, never as evidence of a verified push. "resolved" is
+# op_resolve_jira_issue's own affirmative classification (harness.orchestrator.
+# jira_connector); its six sibling classifications ("not_found", "unauthorized",
+# "connector_unavailable", "identity_mismatch", "invalid_issue_key", "invalid_response")
+# are deliberately absent here for the identical reason -- each is a well-formed negative
+# Jira-resolution outcome, never evidence that a real ticket was resolved.
 OK_STATUSES = {
     "valid", "match", "ok", "retained", "promoted", "written", "resumable", "appended", "captured", "verified",
+    "resolved",
 }
 
 # op_write_checkpoint's `kind` field selects which checkpoint.py record_* builder runs.
@@ -813,6 +819,46 @@ def op_gh_repo_metadata(req: dict) -> dict:
     return {"operation": "gh_repo_metadata", **result}
 
 
+def op_resolve_jira_issue(req: dict) -> dict:
+    """23. The one Jira ticket-resolution entry point (harness.orchestrator.
+    jira_connector) -- ticket-mode `/work`'s real connector boundary, always called
+    before Discovery for a ticket-mode run. `issue_key` is normalized
+    (jira_connector.normalize_issue_key) before resolution but never reformatted or
+    guessed beyond that. Credentials are read fresh from the environment on every call
+    (jira_connector.JiraCredentials.from_env) -- never cached, never accepted from the
+    request -- so a missing JIRA_BASE_URL/JIRA_EMAIL/JIRA_API_TOKEN classifies honestly
+    as `connector_unavailable` rather than raising. Every outcome (`resolved` /
+    `not_found` / `unauthorized` / `connector_unavailable` / `identity_mismatch` /
+    `invalid_issue_key` / `invalid_response`) is retained unconditionally to
+    runs/<run_id>/jira/issue-resolution.json (evidence_io.retain_jira_evidence,
+    collision-guarded) and a matching `jira_issue_resolution` policy event -- a failed
+    lookup is never treated as an empty issue, and the retained `raw` field never
+    contains the Authorization header (jira_connector.build_auth_header's header dict is
+    never part of HttpResult/JiraResolution)."""
+    run_id = _require_str(req, "run_id")
+    task_id = _require_str(req, "task_id")
+    requested_issue_key_raw = _require_str(req, "issue_key")
+    filename = req.get("filename", "issue-resolution.json")
+    normalized_key = jira_connector.normalize_issue_key(requested_issue_key_raw)
+    credentials = jira_connector.JiraCredentials.from_env()
+    result = jira_connector.resolve_issue(normalized_key, credentials)
+    doc = {
+        "task_id": task_id, "run_id": run_id, "requested_issue_key_raw": requested_issue_key_raw,
+        "resolved_at": _utc_now_iso(), **result.as_dict(),
+    }
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    evidence_io.ensure_run_dirs(run_directory)
+    try:
+        path = evidence_io.retain_jira_evidence(run_directory, filename, doc)
+    except evidence_io.EvidenceCollisionError as exc:
+        return {"operation": "resolve_jira_issue", "status": "blocked", "error": str(exc)}
+    evidence_io.retain_policy_event(
+        run_directory, "jira_issue_resolution",
+        {"status": result.status, "requested_issue_key": result.requested_issue_key, "reason": result.reason},
+    )
+    return {"operation": "resolve_jira_issue", "path": _rel(path), **result.as_dict()}
+
+
 OPERATIONS = {
     "validate_scope": op_validate_scope,
     "retain_attempt": op_retain_attempt,
@@ -836,6 +882,7 @@ OPERATIONS = {
     "retain_push_attempt": op_retain_push_attempt,
     "verify_push": op_verify_push,
     "gh_repo_metadata": op_gh_repo_metadata,
+    "resolve_jira_issue": op_resolve_jira_issue,
 }
 
 

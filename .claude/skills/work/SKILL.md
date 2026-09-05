@@ -1,6 +1,6 @@
 ---
 name: work
-description: Run the Agentic Harness pipeline for a free-form task or, later, a Jira ticket.
+description: Run the Agentic Harness pipeline for a free-form task or a Jira ticket.
 disable-model-invocation: true
 user-invocable: true
 ---
@@ -119,6 +119,23 @@ $ARGUMENTS
     `command_failed` / `invalid_output` / `wrong_repository`) is reported exactly as
     returned -- only `"verified"` may ever be described as a successful push. See
     "GitHub / Git delivery" below for the full protocol.
+18. Any ticket-mode `/work` invocation is always preceded by invoking the real `jira`
+    Skill (`Skill` tool, `skill: "jira"`) in this same turn sequence -- never a bare
+    assumption about what a ticket ID names, and never a raw Jira API call bypassing the
+    skill. Ticket resolution happens exactly once, via `live_cli.py`'s
+    `resolve_jira_issue` operation (`harness/orchestrator/jira_connector.py`), before
+    Phase 0 memory load and before any Discovery reasoning begins -- see "Ticket-mode
+    Jira resolution" below for the full protocol. A ticket ID is never treated as a
+    resolved ticket until `resolve_jira_issue` returns `status: "resolved"` with a
+    returned issue key that exactly matches the requested one; every other
+    classification (`not_found` / `unauthorized` / `connector_unavailable` /
+    `identity_mismatch` / `invalid_issue_key` / `invalid_response`) stops the run before
+    Discovery, reported exactly as returned -- never silently treated as an empty issue,
+    never silently retried with a guessed key, and never silently downgraded to
+    free-form mode on the caller's behalf. A resolved ticket's content is *input
+    evidence* for Discovery, exactly like a free-form prompt -- it never bypasses the
+    pre-dispatch checklist, the orchestrator's refusal authority, or the Protected Path
+    list (standing rule 11 governs identically in both modes).
 
 # Parsing $ARGUMENTS
 
@@ -130,15 +147,34 @@ $ARGUMENTS
    anything after the run_id, is a usage error: report it plainly and stop.
 2. If `$ARGUMENTS` starts with `--dry-run ` (or is exactly `--dry-run` with nothing
    after it, which is an error -- a dry run still needs a real request to scope), strip
-   that prefix: the remainder is the free-form request, and `dry_run = true`.
-3. Otherwise the entire `$ARGUMENTS` string is the free-form request and `dry_run = false`.
-4. If the request (after stripping `--dry-run` if present) looks Jira-ticket-shaped --
-   matches a pattern like `^[A-Z][A-Z0-9]+-\d+\b` at the start (e.g. `PROJ-123`) --
-   **do not guess a Jira integration**. Report plainly: "Ticket-mode input detected
-   (`<the matched id>`). Ticket mode is not implemented in this milestone -- see
-   `PROJECT_SPEC.md` §4 'Later integrations'. Re-run with a free-form description
-   instead." Stop here; do not proceed to Discovery.
-5. Otherwise proceed to Discovery in free-form mode with the parsed request text.
+   that prefix: the remainder is `R`, and `dry_run = true`. Otherwise `R` is the entire
+   `$ARGUMENTS` string and `dry_run = false`.
+3. Split `R` on whitespace into `tokens`. If `tokens` is non-empty and `tokens[0]`
+   (case-insensitively) matches a whole-token Jira-ticket shape --
+   `^[A-Za-z][A-Za-z0-9]+-\d+$` (e.g. `PROJ-123`, `proj-123`) -- this is a **ticket-mode
+   candidate**; go to step 4. Otherwise, this is a **free-form request**: the entire `R`
+   is the request text, `dry_run` as set in step 2, proceed straight to "Run identity"
+   below in free-form mode -- never attempt Jira resolution for input that does not
+   start with a ticket-shaped token, regardless of what the rest of the text contains.
+4. **Ticket mode requires exactly one token: the ticket ID, nothing else.** This harness
+   has exactly one target repository (`demo-repo` -- see Phase 3's `build_path_attestation`
+   call and the dry-run smoke check, both of which already hardcode it; free-form mode
+   never takes a repository argument either), so ticket mode does not take a second
+   positional `target_repo_path` argument the way `ASSIGNMENT.md`'s own illustrative
+   example (`/work TICKET-123 my-repo`) shows for a harness with repo selection --
+   `target_repo_path` is always `"demo-repo"` in both modes in this codebase today.
+   - If `len(tokens) == 1`: this is ticket mode. `issue_key_raw = tokens[0]`,
+     `target_repo_path = "demo-repo"`. Proceed to "Run identity" below, then "Ticket-mode
+     Jira resolution" -- **never** attempt Discovery directly from the raw ticket ID; the
+     issue key's *shape* is only loosely checked here (enough to choose ticket mode over
+     free-form) -- the authoritative strict-shape check and the real lookup both happen
+     in "Ticket-mode Jira resolution," never guessed or duplicated here.
+   - If `len(tokens) != 1` (a ticket-shaped first token followed by anything else): this
+     is a **usage error**, not a guess either way. Report plainly: "First token
+     `<tokens[0]>` looks Jira-ticket-shaped, but ticket mode in this harness takes no
+     other arguments -- re-run as `/work <TICKET-ID>` alone, or rephrase as a free-form
+     request that does not begin with a ticket-shaped token." Stop here; do not proceed
+     to Discovery, do not guess which mode was intended.
 
 # Run identity
 
@@ -150,7 +186,80 @@ enforces (`^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`, per
 `task_id`/`run_id` for every artifact and every agent payload in this run. Read
 `created_at` from a real timestamp source available to you (never invent one; every
 subagent's own instructions forbid generating this value themselves and expect it
-echoed verbatim from what you supply).
+echoed verbatim from what you supply). For a ticket-mode run, derive the slug from the
+issue key (e.g. `PROJ-123` -> `run-20260819-proj123-001` / `T-PROJ-123`) rather than from
+request text that does not exist yet at this point -- the ticket has not been resolved
+yet; see "Ticket-mode Jira resolution" immediately below.
+
+# Ticket-mode Jira resolution (ticket mode only -- skip entirely for a free-form run)
+
+Standing rule 18 governs. This runs exactly once, immediately after "Run identity" above
+and **before** Phase 0 memory load and before any Discovery reasoning -- a ticket is
+never treated as resolved, and its content never reaches Discovery, until this section
+completes with `status: "resolved"`.
+
+1. Invoke the real `jira` Skill (`Skill` tool, `skill: "jira"`) before calling
+   `resolve_jira_issue` -- it is not a forked skill (no tool restriction of its own; it
+   documents the procedure this section's own steps already implement, mirroring how the
+   `github` Skill is invoked before any Git/GitHub action), but it must still be
+   genuinely invoked, not merely known about, exactly as the test-runner Skill must be
+   genuinely invoked (standing rule 8) rather than its underlying operation called
+   directly. `retain_policy_event` (`kind: "skill_invocation"`, payload naming the skill
+   and that it was invoked via the `Skill` tool) immediately after.
+2. Build a `resolve_jira_issue` request (`run_id`, `task_id`, `issue_key: issue_key_raw`
+   -- the raw token exactly as typed, never pre-normalized by hand; `jira_connector.
+   normalize_issue_key`/`is_valid_issue_key` do the real normalization and shape check
+   inside the operation itself), write it to
+   `runs/<run_id>/requests/JIRA-1.json` (`Write`, mirroring every other `live_cli.py`
+   request), and invoke `python -m harness.orchestrator.live_cli --request-file
+   "runs/<run_id>/requests/JIRA-1.json"` via `Bash`. This is the one real (or, in a
+   deterministic test, connector-unavailable) Jira lookup this run performs -- never
+   inline a `curl`/`urllib` call yourself; the `jira` Skill's own cardinal rule (never
+   guess, never invent a field, never treat a failed lookup as an empty issue) is
+   enforced by `jira_connector.py` itself, not restated by hand here.
+3. Read the single JSON result. `status: "resolved"` (exit code 0) is the only outcome
+   that may ever be treated as "this ticket exists." Every other classification --
+   `not_found` / `unauthorized` / `connector_unavailable` / `identity_mismatch` /
+   `invalid_issue_key` / `invalid_response` -- stops the run **before** Discovery and
+   before Phase 0 memory load:
+   - `retain_policy_event` is already handled by the operation itself
+     (`jira_issue_resolution`, retained unconditionally by `resolve_jira_issue`) -- do
+     not additionally retain that event by hand.
+   - Write a `run-summary.json` directly (`write_run_summary`) with an explicit
+     `final_verdict: "blocked"` (there is no `State` value for "ticket resolution failed
+     before Discovery" -- mirrors the dry-run boundary's own documented representational
+     gap, not a claim that anything else failed) whose `objective_summary` states the
+     exact classification and `reason` from the retained
+     `runs/<run_id>/jira/issue-resolution.json`, and whose `artifact_refs.scope` points
+     at that same retained Jira-evidence path (the schema's `artifact_refs.scope` field
+     requires a non-empty string pointer; no `scope.json` or Discovery attempt exists yet
+     at this point, so the retained Jira evidence is the best -- and only -- real
+     evidence to point at, exactly as `discovery_invalid`'s run-summary already points at
+     a retained raw attempt rather than a promoted `scope.json`).
+   - No `checkpoint.json` is written for this outcome -- exactly like a Discovery
+     refusal, a pre-Discovery ticket-resolution failure is terminal, not forward progress
+     worth checkpointing.
+   - Report the failure plainly and stop: name the exact classification and reason, and
+     state explicitly that Discovery was never reached -- never soften this into "the
+     ticket might exist" and never silently fall back to free-form mode on the caller's
+     behalf (the caller decides whether to re-run in free-form mode).
+4. On `status: "resolved"`, compose the Discovery input text from the resolved issue's
+   own fields (`issue.summary`, `issue.description`, and, when present, `issue.
+   acceptance_criteria`) -- e.g. `"Jira ticket <issue_key> (<issue_type>, status:
+   <status>): <summary>\n\n<description>"`, plus an explicit "Acceptance Criteria (from
+   Jira)" section when `acceptance_criteria` is non-`None`. This composed text becomes
+   the `raw_prompt` Phase 0 memory load and Discovery step 1 both use in place of a
+   human-typed free-form request -- **it is input evidence, nothing more**: Discovery
+   still performs its own full reasoning over it (objective, in_scope, out_of_scope,
+   constraints, acceptance_criteria, task_graph, and the pre-dispatch checklist including
+   refusal authority) exactly as it would for any free-form prompt. Never copy the
+   ticket's own fields directly into `scope.json` unexamined, and never let a resolved
+   ticket's content exempt this run from the pre-dispatch checklist, standing rule 11's
+   Protected Path enforcement, or the orchestrator's own refusal authority -- standing
+   rule 18 and this section's own header state this explicitly as non-negotiable.
+5. State plainly, once resolution succeeds: the resolved `issue_key`, its `url`, and that
+   this run's Discovery input is Jira-sourced, not human-typed -- see "What to state,
+   every time" below for the exact terminal-report bullet this becomes.
 
 # The live bridge: `harness/orchestrator/live_cli.py`
 
@@ -194,6 +303,7 @@ function's own docstring for the authoritative field-level contract):
 | `retain_push_attempt` | Records only that a push was *attempted* -- proves nothing about delivery. Independently re-derives the remote URL and current HEAD SHA and retains `runs/<run_id>/git/push-attempt.json`. Refuses if a caller-supplied `expected_sha` no longer matches the real current HEAD (it moved since the caller last checked). |
 | `verify_push` | The one independent push-verification call (ASSIGNMENT.md's cardinal rule). Runs a real `git ls-remote <remote> refs/heads/<branch>` and classifies the result: `verified` / `mismatch` / `remote_ref_missing` / `command_failed` / `invalid_output` / `wrong_repository`. Always retains `runs/<run_id>/git/push-verification.json`, whatever the classification. Never accepts a simulated result -- the real subprocess runs every time this operation is called. |
 | `gh_repo_metadata` | Read-only GitHub-side metadata via `gh repo view` (nameWithOwner/url/defaultBranchRef) -- never a substitute for `verify_push`'s `git ls-remote` check. |
+| `resolve_jira_issue` | The one Jira ticket-resolution entry point for a ticket-mode run (`harness/orchestrator/jira_connector.py`). Normalizes `issue_key`, reads credentials fresh from the environment (never from the request), and returns one of seven classifications (`resolved` / `not_found` / `unauthorized` / `connector_unavailable` / `identity_mismatch` / `invalid_issue_key` / `invalid_response`) -- only `resolved` may ever be treated as "this ticket exists." Always retains `runs/<run_id>/jira/issue-resolution.json` and a `jira_issue_resolution` policy event, whatever the outcome. See "Ticket-mode Jira resolution" above for the full protocol. |
 | `build_usage_summary` | Call exactly once per run, immediately before `write_run_summary`, for **every** terminal outcome of this run -- not only a genuine `pass`. Aggregates every per-agent usage record this run's own `usage/` directory holds into `runs/<run_id>/usage-summary.json` and returns its `path`; never hand-author usage totals inside `run-summary.json` yourself. See "Terminal usage summary" below. |
 
 # Per-agent usage accounting (after every fresh `Agent` dispatch)
@@ -1272,6 +1382,13 @@ State plainly, every time:
   from.
 - Any evidence gap. If required evidence is missing, say the run cannot be called
   successful -- do not soften this into "mostly done."
+- For a ticket-mode run: the resolved `issue_key` and its `url` (citing
+  `runs/<run_id>/jira/issue-resolution.json`), and that this run's Discovery input was
+  Jira-sourced, not human-typed -- see "Ticket-mode Jira resolution" above. For a
+  ticket-mode run that stopped before Discovery, state the exact classification and
+  `reason` from that same retained evidence and that Discovery was never reached -- never
+  soften a failed resolution into "the ticket might exist." A free-form run states
+  plainly that no ticket resolution was attempted.
 - Git delivery status, whenever this run performed a commit/push (see "GitHub / Git
   delivery" above): whether a commit was created (citing `commit-evidence.json`),
   whether a push was attempted (citing `push-attempt.json`), and the exact

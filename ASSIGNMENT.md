@@ -3,7 +3,7 @@
 # Assignment: Build Your Own Agentic Harness
 
 **Audience:** Junior engineer / CS student comfortable with git, a terminal, and one programming language.
-**Time budget:** ~2–3 weeks part-time.
+
 **Deliverable:** A working agentic coding harness (built on Claude Code or an equivalent agent runtime) that executes a full **Discovery → Research → Implementation → Verification** pipeline on a real repository, plus a short demo write-up.
 
 This assignment is modeled on a production harness that runs daily. Everything asked of you below exists in that reference setup and has survived real-world failure modes — the criteria aren't academic.
