@@ -837,3 +837,77 @@ class TestJiraTicketMode:
     def test_no_checkpoint_written_for_pre_discovery_resolution_failure(self) -> None:
         section = self._phase_slice("# Ticket-mode Jira resolution", "# The live bridge")
         assert "No `checkpoint.json` is written for this outcome" in section
+
+
+class TestObsidianRunSummaryPublication:
+    """Structural checks for the Obsidian run-summary publication milestone: the
+    obsidian Skill is invoked before publishing, publication happens after
+    write_run_summary, and an Obsidian delivery failure is a separate claim that never
+    changes the run verdict."""
+
+    def setup_method(self) -> None:
+        self.text = SKILL_PATH.read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+
+    def _phase_slice(self, start_marker: str, end_marker: str) -> str:
+        start = self.text.index(start_marker)
+        end = self.text.index(end_marker, start)
+        return self.text[start:end]
+
+    def test_section_exists(self) -> None:
+        assert "# Obsidian run-summary publication" in self.text
+
+    def test_standing_rule_19_present(self) -> None:
+        assert "19. Every terminal run publishes its concise run summary" in self.text
+        assert 'skill: "obsidian"' in self.text
+
+    def test_publication_happens_after_write_run_summary(self) -> None:
+        section = self._phase_slice("# Obsidian run-summary publication", "# Reporting")
+        assert "immediately after `write_run_summary`" in section or "after** the terminal run-summary" in section
+        # explicit ordering: run summary written, THEN skill invoked, THEN publish
+        write_idx = section.index("`write_run_summary`")
+        skill_idx = section.index('skill: "obsidian"')
+        publish_idx = section.index("publish_run_summary` request")
+        assert write_idx < skill_idx < publish_idx
+
+    def test_operation_documented_in_table(self) -> None:
+        assert "`publish_run_summary`" in self.text
+
+    def test_all_six_classifications_documented(self) -> None:
+        for status in (
+            "published", "connector_unavailable", "invalid_destination",
+            "destination_unavailable", "collision", "write_failed",
+        ):
+            assert status in self.text
+
+    def test_only_published_counts_as_delivered(self) -> None:
+        assert 'only a `publish_run_summary` result of exactly `status: "published"`' in self.flat_text
+
+    def test_obsidian_failure_never_changes_verdict(self) -> None:
+        section = self._phase_slice("# Obsidian run-summary publication", "# Reporting")
+        assert "never** changes `final_verdict`" in self.flat_text
+        assert "still genuinely" in section and 'final_verdict: "pass"' in section
+
+    def test_separate_from_git_and_jira_and_pipeline(self) -> None:
+        assert "separate external-delivery claim" in self.flat_text
+
+    def test_kept_separate_from_memory_loop(self) -> None:
+        section = self._phase_slice("# Obsidian run-summary publication", "# Reporting")
+        assert "independent of the memory loop" in section
+        assert "Terminal memory append" in section
+        assert "neither is derived from it" in section
+
+    def test_evidence_path_documented(self) -> None:
+        assert "runs/<run_id>/obsidian/summary-publication.json" in self.text
+
+    def test_reporting_states_obsidian_delivery(self) -> None:
+        assert "Obsidian run-summary delivery" in self.text
+        assert "summary-publication.json" in self.text
+
+    def test_obsidian_skill_file_exists(self) -> None:
+        assert (REPO_ROOT / ".claude" / "skills" / "obsidian" / "SKILL.md").is_file()
+
+    def test_no_hardcoded_personal_vault_path(self) -> None:
+        assert "Obsidian Vault" not in self.text
+        assert r"C:\Users" not in self.text
+        assert "OBSIDIAN_VAULT_PATH" in self.text

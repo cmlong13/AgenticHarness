@@ -1,0 +1,21 @@
+{
+  "task_id": "OBSIDIAN-LIVE-001",
+  "run_id": "run-20260908-obsidianlive-001",
+  "connector": "filesystem_vault",
+  "attempted_at": "2026-09-08T21:50:00Z",
+  "note_name": "run-summary-run-20260908-obsidianlive-001.md",
+  "destination": {
+    "configured": true,
+    "vault_path": "C:\\Users\\caleb\\Documents\\Obsidian Vault",
+    "summary_dir": "Harness Run Summaries",
+    "note_relpath": "Harness Run Summaries/run-summary-run-20260908-obsidianlive-001.md",
+    "raw_env_value": "C:\\Users\\caleb\\Documents\\Obsidian Vault"
+  },
+  "content_bytes": 1552,
+  "status": "published",
+  "note_relpath": "Harness Run Summaries/run-summary-run-20260908-obsidianlive-001.md",
+  "reason": "note written to the configured Obsidian vault",
+  "absolute_path": "C:\\Users\\caleb\\Documents\\Obsidian Vault\\Harness Run Summaries\\run-summary-run-20260908-obsidianlive-001.md",
+  "content_sha256": "5e017d2de6e3aea81aad60001061d75739584e44fd1e9d7c4dfcf25e0c198679",
+  "bytes_written": 1552
+}

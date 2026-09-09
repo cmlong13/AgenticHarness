@@ -136,6 +136,23 @@ $ARGUMENTS
     evidence* for Discovery, exactly like a free-form prompt -- it never bypasses the
     pre-dispatch checklist, the orchestrator's refusal authority, or the Protected Path
     list (standing rule 11 governs identically in both modes).
+19. Every terminal run publishes its concise run summary to the configured Obsidian
+    vault, once, immediately after `write_run_summary`, via `live_cli.py`'s
+    `publish_run_summary` operation (`harness/orchestrator/obsidian.py`) -- always
+    preceded by invoking the real `obsidian` Skill (`Skill` tool, `skill: "obsidian"`)
+    in the same turn sequence, exactly as the `github`/`jira` Skills are invoked before
+    their operations. Obsidian publication is a **separate external-delivery claim**
+    from pipeline/product correctness, Git delivery status, and Jira intake status:
+    only a `publish_run_summary` result of exactly `status: "published"` may be
+    reported as a delivered note, and any other classification
+    (`connector_unavailable` / `invalid_destination` / `destination_unavailable` /
+    `collision` / `write_failed`) is reported as an Obsidian-delivery failure that
+    **never** changes `final_verdict`, `phases_completed`, or any artifact's validity.
+    A generated Markdown summary is not proof of publication -- see "Obsidian
+    run-summary publication" below and the `obsidian` Skill's cardinal rule. This is
+    distinct from the memory loop (standing rule 14): `memory/lessons-learned.md` and
+    an Obsidian run summary are different requirements and neither is derived from the
+    other.
 
 # Parsing $ARGUMENTS
 
@@ -304,6 +321,7 @@ function's own docstring for the authoritative field-level contract):
 | `verify_push` | The one independent push-verification call (ASSIGNMENT.md's cardinal rule). Runs a real `git ls-remote <remote> refs/heads/<branch>` and classifies the result: `verified` / `mismatch` / `remote_ref_missing` / `command_failed` / `invalid_output` / `wrong_repository`. Always retains `runs/<run_id>/git/push-verification.json`, whatever the classification. Never accepts a simulated result -- the real subprocess runs every time this operation is called. |
 | `gh_repo_metadata` | Read-only GitHub-side metadata via `gh repo view` (nameWithOwner/url/defaultBranchRef) -- never a substitute for `verify_push`'s `git ls-remote` check. |
 | `resolve_jira_issue` | The one Jira ticket-resolution entry point for a ticket-mode run (`harness/orchestrator/jira_connector.py`). Normalizes `issue_key`, reads credentials fresh from the environment (never from the request), and returns one of seven classifications (`resolved` / `not_found` / `unauthorized` / `connector_unavailable` / `identity_mismatch` / `invalid_issue_key` / `invalid_response`) -- only `resolved` may ever be treated as "this ticket exists." Always retains `runs/<run_id>/jira/issue-resolution.json` and a `jira_issue_resolution` policy event, whatever the outcome. See "Ticket-mode Jira resolution" above for the full protocol. |
+| `publish_run_summary` | Call exactly once per run, immediately **after** `write_run_summary`, for every terminal outcome (see "Obsidian run-summary publication" below). Renders this run's concise summary note strictly from retained evidence and publishes it to the configured Obsidian vault via the real filesystem `VaultWriter` (`harness/orchestrator/obsidian.py`) -- never a simulated write. Always retains `runs/<run_id>/obsidian/summary-publication.json` and an `obsidian_publication` policy event, whatever the outcome. Only `status: "published"` is a delivered note; `connector_unavailable` / `invalid_destination` / `destination_unavailable` / `collision` / `write_failed` are external-delivery failures that never affect the run verdict. |
 | `build_usage_summary` | Call exactly once per run, immediately before `write_run_summary`, for **every** terminal outcome of this run -- not only a genuine `pass`. Aggregates every per-agent usage record this run's own `usage/` directory holds into `runs/<run_id>/usage-summary.json` and returns its `path`; never hand-author usage totals inside `run-summary.json` yourself. See "Terminal usage summary" below. |
 
 # Per-agent usage accounting (after every fresh `Agent` dispatch)
@@ -1335,6 +1353,70 @@ accounting evidence, not only the ones that got far enough to checkpoint.
    artifact's validity. A run can genuinely be `final_verdict: "pass"` with incomplete
    usage accounting; the two are independent claims, always (standing rule 16).
 
+# Obsidian run-summary publication
+
+Standing rule 19 governs. `ASSIGNMENT.md` §2.4 ("the orchestrator writes summaries back
+to [the Obsidian vault]") and §4 ("Obsidian vault receives a run summary") require the
+orchestrator to publish a concise run summary to Obsidian. `ASSIGNMENT.md` does not
+specify pass-only vs. all-terminal-runs; this document publishes on **every terminal
+run**, immediately after `write_run_summary` -- the same scope as "Terminal memory
+append" and "Terminal usage summary" -- because the note itself carries the verdict
+honestly, a summary is useful whatever the outcome, and this avoids a verdict-gating
+branch. The one real exception is a resume that is *refused* before any run-summary is
+written (`evaluate_resume` returned `refused`): there is no run to summarize, so no
+publication is attempted.
+
+Fixed sequence, after this run's terminal `run-summary.json` is finalized:
+
+1. `build_usage_summary` -> `write_run_summary` (as already documented above) -- the
+   run summary must exist and be final before its Obsidian note is rendered from it.
+2. Invoke the real `obsidian` Skill (`Skill` tool, `skill: "obsidian"`) -- it is not a
+   forked skill (no tool restriction of its own; it documents the procedure this
+   section's own steps implement), but it must still be genuinely invoked, exactly as
+   the `github`/`jira` Skills must be. `retain_policy_event` (`kind: "skill_invocation"`,
+   payload naming the skill and that it was invoked via the `Skill` tool) immediately
+   after.
+3. Build a `publish_run_summary` request (`run_id`, `task_id`, and a real
+   `generated_at` timestamp from a genuine time source), write it to
+   `runs/<run_id>/requests/OBS-1.json` (`Write`), and invoke
+   `python -m harness.orchestrator.live_cli --request-file "runs/<run_id>/requests/OBS-1.json"`
+   via `Bash`. This is the one real Obsidian write this run performs -- never inline a
+   filesystem write yourself, and never write the note anywhere other than through this
+   operation. The operation renders the note strictly from this run's retained evidence
+   (`run-summary.json` plus the scope / verification-report / usage-summary / Jira / Git
+   evidence it references), publishes it through the production `VaultWriter`, and
+   retains `runs/<run_id>/obsidian/summary-publication.json` and an
+   `obsidian_publication` policy event unconditionally.
+4. Read the single JSON result and interpret it honestly, letting it affect **only**
+   the Obsidian-delivery claim, never the pipeline verdict:
+   - `status: "published"` (exit code 0) -- the note was genuinely written into the
+     configured vault. The retained evidence names the absolute path, the note's
+     SHA-256, and its byte count. Report it as a delivered note, citing
+     `summary-publication.json`.
+   - `status: "connector_unavailable"` -- no `OBSIDIAN_VAULT_PATH` is configured in
+     this environment. This is an honest "no Obsidian connector" outcome (mirrors
+     `jira`'s `connector_unavailable`), not a pipeline failure: report it as an
+     Obsidian-delivery gap and state plainly that deterministic integration is complete
+     but no live vault is configured.
+   - `status: "invalid_destination"` / `"destination_unavailable"` / `"collision"` /
+     `"write_failed"` -- a genuine Obsidian-delivery failure. Report the exact
+     classification and `reason` from `summary-publication.json`; never soften it into
+     "the note should be there."
+   - In **every** non-`published` case: the run's `final_verdict`, `phases_completed`,
+     and every artifact's validity are unchanged. A run is still genuinely
+     `final_verdict: "pass"` with `obsidian_publication: connector_unavailable`.
+5. This step never runs before `write_run_summary`, never rebuilds `run-summary.json`,
+   and never runs a second time for the same terminal outcome. A deliberate re-publish
+   (after a corrected run summary, which itself is out of scope for this milestone)
+   would pass `overwrite: true` and a distinct evidence `filename`
+   (`summary-publication.retry-1.json`), leaving the original publication evidence
+   untouched.
+
+This is independent of the memory loop: "Terminal memory append" still runs exactly as
+documented, `memory/lessons-learned.md` still gains at most 5 bullets per terminal run,
+and `memory/facts.jsonl` is still append-only -- the Obsidian note is not derived from
+either, and neither is derived from it.
+
 # Reporting
 
 ## Completion-guardrail marker (required before reporting any run as complete)
@@ -1389,6 +1471,14 @@ State plainly, every time:
   `reason` from that same retained evidence and that Discovery was never reached -- never
   soften a failed resolution into "the ticket might exist." A free-form run states
   plainly that no ticket resolution was attempted.
+- Obsidian run-summary delivery, every terminal run (see "Obsidian run-summary
+  publication" above): the exact `publish_run_summary` classification and `reason`
+  (citing `runs/<run_id>/obsidian/summary-publication.json`), and, on `published`, the
+  vault-relative note path and the note's SHA-256. State plainly that only `"published"`
+  counts as a delivered note, that this is an external-delivery claim independent of the
+  run's own pipeline/product/test verdict, and -- for `connector_unavailable` -- that
+  deterministic Obsidian integration is complete but no live vault is configured in this
+  environment. Never describe a non-`published` outcome as "the note is probably there."
 - Git delivery status, whenever this run performed a commit/push (see "GitHub / Git
   delivery" above): whether a commit was created (citing `commit-evidence.json`),
   whether a push was attempted (citing `push-attempt.json`), and the exact

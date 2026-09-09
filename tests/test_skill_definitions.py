@@ -292,3 +292,94 @@ class TestJiraSkill:
 
     def test_live_cli_operation_named(self) -> None:
         assert "resolve_jira_issue" in self.text
+
+
+class TestObsidianSkill:
+    def setup_method(self) -> None:
+        self.path = SKILLS_DIR / "obsidian" / "SKILL.md"
+        assert self.path.exists(), "obsidian/SKILL.md must exist"
+        self.text = self.path.read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+        self.fields = parse_frontmatter(self.path)
+
+    def test_name(self) -> None:
+        assert self.fields.get("name") == "obsidian"
+
+    def test_no_tools_frontmatter_field(self) -> None:
+        # Like github/jira/code-craftsmanship: a procedure the orchestrator's own
+        # already-granted tools follow, not a forked tool-restricted wrapper.
+        assert "tools" not in self.fields
+        assert "allowed-tools" not in self.fields
+        assert "disallowed-tools" not in self.fields
+        assert "context" not in self.fields
+
+    def test_cardinal_rule_present(self) -> None:
+        for phrase in [
+            "A generated Markdown summary is not proof that the note was published to Obsidian",
+            "not publication",
+            "separate external-delivery claim",
+            "never let an Obsidian delivery failure rewrite a valid pipeline/test result",
+        ]:
+            assert phrase in self.flat_text, f"expected cardinal-rule phrase {phrase!r} in SKILL.md"
+
+    def test_required_coverage_areas_present(self) -> None:
+        for heading in [
+            "# 1. Destination resolution",
+            "# 2. Path safety",
+            "# 3. Note naming",
+            "# 4. Summary structure",
+            "# 5. Collision / update policy",
+            "# 6. Connector boundary",
+            "# 7. Retained evidence",
+            "# 8. Failure classification",
+            "# 9. Terminal-`/work` placement",
+            "# 10. Relationship to the memory loop",
+        ]:
+            assert heading in self.text, f"expected section {heading!r} in SKILL.md"
+
+    def test_all_six_classifications_documented(self) -> None:
+        for status in (
+            "published", "connector_unavailable", "invalid_destination",
+            "destination_unavailable", "collision", "write_failed",
+        ):
+            assert status in self.text
+
+    def test_only_published_is_affirmative(self) -> None:
+        assert "Only `published` may ever be treated as publication success" in self.text
+
+    def test_destination_from_environment_not_hardcoded(self) -> None:
+        assert "OBSIDIAN_VAULT_PATH" in self.text
+        assert "OBSIDIAN_SUMMARY_DIR" in self.text
+        assert "read fresh from the real environment on every call" in self.flat_text
+        # no user-specific absolute path baked into the skill
+        assert "Obsidian Vault" not in self.text
+        assert r"C:\Users" not in self.text
+
+    def test_no_credentials_language(self) -> None:
+        assert "No credential or secret is ever involved or retained" in self.flat_text
+
+    def test_evidence_path_named(self) -> None:
+        assert "runs/<run_id>/obsidian/summary-publication.json" in self.text
+
+    def test_memory_loop_kept_separate(self) -> None:
+        for phrase in [
+            "different requirements",
+            "Existing memory behavior is unchanged",
+            "Neither is derived from the other",
+        ]:
+            assert phrase in self.flat_text
+
+    def test_mcp_vs_rest_left_as_separate_milestone(self) -> None:
+        assert "not** the MCP-vs-REST dual implementation" in self.flat_text
+        assert "that requirement remains its own future milestone" in self.flat_text
+
+    def test_live_cli_operation_named(self) -> None:
+        assert "publish_run_summary" in self.text
+
+    def test_boundaries_present(self) -> None:
+        for phrase in [
+            "Boundaries -- this skill must not",
+            "Decide the run's pipeline verdict",
+            "Fabricate, soften, or infer a publication result",
+        ]:
+            assert phrase in self.flat_text

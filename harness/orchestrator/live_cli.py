@@ -47,7 +47,7 @@ from harness.evidence import (
     validate_verification_report_semantics,
 )
 
-from . import checkpoint, discovery, evidence_io, github, jira_connector, memory, paths, usage
+from . import checkpoint, discovery, evidence_io, github, jira_connector, memory, obsidian, paths, usage
 from .state import FINAL_VERDICT_BY_STATE, State
 
 REPO_ROOT = paths.REPO_ROOT
@@ -82,10 +82,16 @@ SEMANTIC_VALIDATORS = {
 # jira_connector); its six sibling classifications ("not_found", "unauthorized",
 # "connector_unavailable", "identity_mismatch", "invalid_issue_key", "invalid_response")
 # are deliberately absent here for the identical reason -- each is a well-formed negative
-# Jira-resolution outcome, never evidence that a real ticket was resolved.
+# Jira-resolution outcome, never evidence that a real ticket was resolved. "published"
+# is op_publish_run_summary's own affirmative classification (harness.orchestrator.
+# obsidian); its five sibling classifications ("connector_unavailable",
+# "invalid_destination", "destination_unavailable", "collision", "write_failed") are
+# deliberately absent here for the identical reason -- each is a well-formed negative
+# Obsidian-publication outcome the /work skill must report as a delivery failure,
+# entirely separately from the run's own pipeline verdict, never as a published note.
 OK_STATUSES = {
     "valid", "match", "ok", "retained", "promoted", "written", "resumable", "appended", "captured", "verified",
-    "resolved",
+    "resolved", "published",
 }
 
 # op_write_checkpoint's `kind` field selects which checkpoint.py record_* builder runs.
@@ -859,6 +865,104 @@ def op_resolve_jira_issue(req: dict) -> dict:
     return {"operation": "resolve_jira_issue", "path": _rel(path), **result.as_dict()}
 
 
+def _opt_json_under_run(run_directory: Path, ref: object) -> dict | None:
+    """Best-effort load of an optional artifact a run-summary references. Returns None
+    (never raises, never fabricates) for a missing/blank ref or an unreadable file --
+    a missing optional artifact means an omitted note section, not a broken publish."""
+    if not isinstance(ref, str) or not ref:
+        return None
+    candidate = Path(ref)
+    path = candidate if candidate.is_absolute() else REPO_ROOT / candidate
+    if not path.is_file():
+        return None
+    try:
+        loaded = load_json(path)
+    except (OSError, json.JSONDecodeError):
+        return None
+    return loaded if isinstance(loaded, dict) else None
+
+
+def op_publish_run_summary(req: dict) -> dict:
+    """24. Publish this run's concise run summary to the configured Obsidian vault
+    (harness.orchestrator.obsidian) -- ASSIGNMENT.md §2.4/§4's "the orchestrator writes
+    summaries back to [Obsidian]" / "Obsidian vault receives a run summary." Runs only
+    after runs/<run_id>/run-summary.json is final (it is loaded here, never rebuilt).
+    The note is rendered strictly from retained evidence (run-summary.json plus the
+    scope/verification/usage/Jira/Git evidence it references, best-effort) -- no
+    credentials, transcripts, or raw logs. The real filesystem VaultWriter
+    (obsidian.DEFAULT_WRITER) is always used -- the simulated seam is never exposed
+    here, so a live /work run cannot fabricate a publication. Every outcome
+    (`published` / `connector_unavailable` / `invalid_destination` /
+    `destination_unavailable` / `collision` / `write_failed`) is retained
+    unconditionally to runs/<run_id>/obsidian/summary-publication.json
+    (evidence_io.retain_obsidian_evidence, collision-guarded) with a matching
+    `obsidian_publication` policy event. Only `published` is an affirmative result --
+    an Obsidian delivery failure is never allowed to change the run's own pipeline
+    verdict, and is reported as a wholly separate external-delivery claim."""
+    run_id = _require_str(req, "run_id")
+    task_id = _require_str(req, "task_id")
+    overwrite = bool(req.get("overwrite", False))
+    filename = req.get("filename", "summary-publication.json")
+    generated_at = req.get("generated_at") or _utc_now_iso()
+
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    run_summary_path = run_directory / "run-summary.json"
+    if not run_summary_path.is_file():
+        raise LiveCliUsageError(
+            f"runs/{run_id}/run-summary.json does not exist -- publish the Obsidian summary only after "
+            "the terminal run-summary is finalized"
+        )
+    run_summary = load_json(run_summary_path)
+    if not isinstance(run_summary, dict):
+        raise LiveCliUsageError(f"runs/{run_id}/run-summary.json is not a JSON object")
+
+    refs = run_summary.get("artifact_refs") or {}
+    scope = _opt_json_under_run(run_directory, refs.get("scope"))
+    verification_report = _opt_json_under_run(run_directory, refs.get("verification_report"))
+    usage_summary = _opt_json_under_run(run_directory, run_summary.get("usage_summary_ref"))
+    jira_resolution = _opt_json_under_run(run_directory, f"runs/{run_id}/jira/issue-resolution.json")
+    push_verification = _opt_json_under_run(run_directory, f"runs/{run_id}/git/push-verification.json")
+
+    note_name = obsidian.build_note_name(run_id)
+    note_body = obsidian.render_run_summary_note(
+        run_id=run_id, task_id=task_id, run_summary=run_summary, generated_at=generated_at,
+        scope=scope, verification_report=verification_report, jira_resolution=jira_resolution,
+        push_verification=push_verification, usage_summary=usage_summary,
+    )
+
+    destination = None
+    try:
+        destination = obsidian.resolve_destination()
+        result = obsidian.publish(
+            destination=destination, note_name=note_name, content=note_body, overwrite=overwrite,
+        )
+    except obsidian.ObsidianError as exc:
+        result = obsidian.PublicationResult(
+            status=exc.code, note_name=note_name,
+            note_relpath=note_name if destination is None else destination.note_relpath(note_name),
+            reason=exc.message,
+        )
+
+    identity = obsidian.describe_destination(note_name, destination=destination)
+    doc = {
+        "task_id": task_id, "run_id": run_id, "connector": "filesystem_vault",
+        "attempted_at": generated_at, "note_name": note_name,
+        "destination": identity.as_dict(), "content_bytes": len(note_body.encode("utf-8")),
+        **result.as_dict(),
+    }
+    evidence_io.ensure_run_dirs(run_directory)
+    try:
+        path = evidence_io.retain_obsidian_evidence(run_directory, filename, doc)
+    except evidence_io.EvidenceCollisionError as exc:
+        return {"operation": "publish_run_summary", "status": "blocked", "error": str(exc)}
+    evidence_io.retain_policy_event(
+        run_directory, "obsidian_publication",
+        {"status": result.status, "note_name": note_name, "note_relpath": result.note_relpath,
+         "reason": result.reason, "content_sha256": result.content_sha256},
+    )
+    return {"operation": "publish_run_summary", "status": result.status, "path": _rel(path), **result.as_dict()}
+
+
 OPERATIONS = {
     "validate_scope": op_validate_scope,
     "retain_attempt": op_retain_attempt,
@@ -883,6 +987,7 @@ OPERATIONS = {
     "verify_push": op_verify_push,
     "gh_repo_metadata": op_gh_repo_metadata,
     "resolve_jira_issue": op_resolve_jira_issue,
+    "publish_run_summary": op_publish_run_summary,
 }
 
 

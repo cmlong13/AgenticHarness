@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "task_id": "OBSIDIAN-LIVE-001",
+  "run_id": "run-20260908-obsidianlive-001",
+  "created_at": "2026-09-08T00:00:00Z",
+  "objective_summary": "Live proof of the Obsidian run-summary publication boundary: a dedicated harness fixture run (not a four-phase /work pipeline) exercising harness/orchestrator/obsidian.py through live_cli.py's publish_run_summary operation and the production filesystem VaultWriter, publishing one harmless note into a dedicated 'Harness Run Summaries' folder of the configured vault.",
+  "artifact_refs": { "scope": "runs/run-20260908-obsidianlive-001/run-summary.json" },
+  "final_verdict": "blocked",
+  "phases_completed": [],
+  "remaining_risks": [
+    "This is a dedicated CLI demonstration of the Obsidian connector, not a live four-phase /work pipeline run.",
+    "MCP-vs-REST dual implementation remains a separate future milestone; ASSIGNMENT.md does not name Obsidian as that connector."
+  ],
+  "follow_up_actions": [
+    "A live /work run that naturally reaches the Obsidian publication step remains open."
+  ]
+}

@@ -118,6 +118,22 @@ def retain_git_evidence(run_directory: Path, filename: str, doc: dict) -> Path:
     return path
 
 
+def retain_obsidian_evidence(run_directory: Path, filename: str, doc: dict) -> Path:
+    """Collision-guarded write for Obsidian publication evidence
+    (summary-publication.json -- see harness/orchestrator/obsidian.py), retained under
+    runs/<run_id>/obsidian/ for the same reason retain_git_evidence uses
+    runs/<run_id>/git/ and retain_jira_evidence uses runs/<run_id>/jira/: an Obsidian
+    run-summary publication is an external-delivery claim, kept structurally distinct
+    from the four canonical phase artifacts CANONICAL_FILENAMES enumerates and from
+    pipeline/Git/Jira status. Shares promote_canonical's collision guard -- never
+    silently overwrites an already-retained publication record; a legitimate re-publish
+    passes a distinctly named filename (e.g. summary-publication.retry-1.json), mirroring
+    the implementation-report.repair-1.json convention."""
+    path = run_directory / "obsidian" / filename
+    _write_new(path, (json.dumps(doc, indent=2) + "\n").encode("utf-8"))
+    return path
+
+
 def retain_jira_evidence(run_directory: Path, filename: str, doc: dict) -> Path:
     """Collision-guarded write for Jira evidence documents (issue-resolution.json -- see
     harness/orchestrator/jira_connector.py), retained under runs/<run_id>/jira/ for the

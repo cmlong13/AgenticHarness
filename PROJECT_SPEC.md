@@ -860,6 +860,161 @@ demonstration, architecture diagrams, and the final write-up. No commit or push 
 `git rev-list --left-right --count origin/main...main` reports `0 0`, and `HEAD` remains
 `70c416a4de059aa1832eec914b402a14da1ce490` throughout this session.
 
+**Milestone update (2026-09-08): Obsidian run-summary WRITE-BACK connector and retained
+evidence.** This session closes the **Obsidian run-summary write-back** milestone --
+`ASSIGNMENT.md` §2.4's connector-table Obsidian row *to the extent it says "the
+orchestrator writes summaries back to it"*, and §4's "Obsidian vault receives a run
+summary" acceptance line. It does **not** close the whole assignment-level "Obsidian
+connector" requirement: `ASSIGNMENT.md` §2.4 also has Obsidian *read* by the Architect
+during Discovery + Research ("The architect reads it"), and no production read/search/
+query path for the Architect was implemented or demonstrated this milestone. Explicitly
+out of scope and untouched: the Discovery/Research Obsidian **read** integration; the
+MCP-vs-REST dual implementation (§2.4 "for at least one connector"; `ASSIGNMENT.md` never
+names Obsidian as that connector, and the reference setup did it with Atlassian); any
+new Jira/GitHub functionality; Jira writes; a flaky-test demonstration; architecture
+diagrams; and the final write-up.
+
+*Exact `ASSIGNMENT.md` requirement.* Obsidian is explicitly required as a connector
+(§2.4), used in Discovery + Research: the Architect *reads* the vault (design notes,
+past decisions, calibration docs), and, separately, the orchestrator *writes* a run
+summary back to it. `ASSIGNMENT.md` does not require an Obsidian summary for every run
+vs. only successful runs, does not specify a vault/folder structure, and names
+`mcp-obsidian` only as an example (`e.g.`) -- not a mandate. §2.4's own caveat is that
+an MCP server is not automatically the right tool; this repository already made GitHub
+and Jira real REST/CLI connectors for that reason. Obsidian is *not* required to be the
+"MCP + REST fallback" connector -- that stays a separate future milestone.
+
+*Scope status of this milestone (read side vs. write side), explicit before commit:*
+
+1. **Obsidian run-summary write-back** -- **COMPLETE and LIVE-PROVEN.** The orchestrator
+   renders a concise run summary and publishes it back to the configured vault.
+2. **Obsidian publication connector / production filesystem `VaultWriter`
+   (`obsidian.DEFAULT_WRITER`)** -- **COMPLETE and LIVE-PROVEN for write-back.** The
+   real atomic filesystem write into the configured vault ran end-to-end; the simulated
+   seam is never exposed through `live_cli.py`.
+3. **Obsidian publication evidence** (`runs/<run_id>/obsidian/summary-publication.json`
+   + `obsidian_publication` policy event) -- **COMPLETE and LIVE-PROVEN.**
+4. **The `obsidian` Skill as implemented this milestone** -- **COMPLETE for the
+   publication / write-back procedure** (destination validation, path safety, note
+   naming, summary structure, collision/update policy, evidence retention, failure
+   classification, terminal-`/work` placement). It does not document a read/search
+   procedure.
+5. **Obsidian Discovery/Research READ integration** -- **STILL OPEN.** No production
+   read, search, or query path for the Architect to consult vault knowledge during
+   Discovery or Research has been implemented or demonstrated. `architect.md` still has
+   no Obsidian read step, and nothing in `harness/orchestrator/` reads the vault.
+6. **A full four-phase `/work` run naturally reaching the publication step** -- **STILL
+   OPEN.** The live proof was a dedicated `live_cli.py` publication demonstration (see
+   below), not a pipeline run.
+7. **MCP + REST dual-connector requirement (§2.4 "for at least one connector")** --
+   **STILL OPEN and separate.** No MCP server is configured for any connector; Obsidian
+   is a single filesystem connector, and `ASSIGNMENT.md` does not name Obsidian as the
+   one that must be built both ways.
+
+*Architecture.* (1) `harness/orchestrator/obsidian.py` (new) -- a deterministic
+publication boundary mirroring `github.py`/`jira_connector.py`: destination resolved
+fresh from `OBSIDIAN_VAULT_PATH` (absolute) + optional `OBSIDIAN_SUMMARY_DIR` (default
+`Harness Run Summaries`) on every call, never cached, never from a request; a swappable
+`VaultWriter` seam (`DEFAULT_WRITER` = a real atomic temp-file+`os.replace` write; a fake
+writer only in tests); path safety rejecting a missing destination
+(`connector_unavailable`), a non-absolute / `..`-bearing vault path or summary dir or a
+note target that escapes the vault (`invalid_destination`), a well-formed path that is
+not an existing directory (`destination_unavailable`), and an un-`overwrite`d note
+collision (`collision`); a writer failure or an over-ceiling note is `write_failed`.
+Only `published` is affirmative. `render_run_summary_note` builds the concise note
+strictly from a run's own retained evidence (run-summary.json plus the scope /
+verification-report / usage-summary / Jira / Git evidence it references), reading only
+whitelisted scalar fields -- never a `raw`/`headers`/transcript blob -- and is
+deterministic (the only timestamp is the caller-supplied `generated_at`) and
+Unicode-safe. No credential is read, stored, or retained. (2)
+`harness/orchestrator/evidence_io.py` gained `retain_obsidian_evidence` -- the same
+collision-guarded write `retain_git_evidence`/`retain_jira_evidence` use, redirected to
+`runs/<run_id>/obsidian/`. (3) `harness/orchestrator/live_cli.py` gained
+`op_publish_run_summary` (operation `publish_run_summary`) -- loads the finalized
+`run-summary.json`, best-effort loads the artifacts it references, renders the note,
+publishes it through `obsidian.DEFAULT_WRITER` (the simulated seam is never exposed
+here), and retains `runs/<run_id>/obsidian/summary-publication.json` and an
+`obsidian_publication` policy event unconditionally. `"published"` was added to
+`OK_STATUSES`; its five sibling classifications are deliberately absent. (4)
+`.claude/skills/obsidian/SKILL.md` (new) -- a procedural skill (no tool allowlist of its
+own, mirroring `github`/`jira`) whose cardinal rule is **a generated Markdown summary is
+not proof that the note was published to Obsidian**, covering destination validation,
+path safety, note naming, summary structure, collision/update policy, the connector
+boundary, unconditional evidence retention, all six classifications, terminal-`/work`
+placement, and its independence from the memory loop. (5) `.claude/skills/work/SKILL.md`
+gained standing rule 19, a `publish_run_summary` operations-table row, an "Obsidian
+run-summary publication" section (fixed sequence: pipeline terminal -> usage summary ->
+`write_run_summary` -> invoke the `obsidian` Skill -> `publish_run_summary` -> evidence
+retained -> report pipeline verdict and Obsidian delivery **separately**), and a "What
+to state, every time" bullet. Publication happens on **every terminal run** (the same
+scope as "Terminal memory append" / "Terminal usage summary"), immediately after
+`write_run_summary`; an Obsidian delivery failure never changes `final_verdict`,
+`phases_completed`, or any artifact's validity.
+
+*Summary content.* run ID; task ID; source mode (`prompt`/`jira`/`unknown`); short
+objective; final verdict; phases completed (and reused, for a resume); Discovery /
+Research / Implementation / Verification / checkpoint artifact refs; test commands, exit
+codes and verification verdict; whether memory influenced the run and how many lessons
+were appended; a per-agent usage/cost subtotal reference (never called full pipeline
+cost); a Jira source reference for ticket-mode runs; a Git push-verification status
+when a push occurred; evidence gaps; and the generation timestamp. No credentials,
+tokens, authorization headers, agent transcripts, raw logs, or full artifact bodies.
+
+*Evidence.* `runs/<run_id>/obsidian/summary-publication.json` -- run ID, task ID,
+destination identity (vault path, summary dir, vault-relative note path -- not a
+credential), note name, publication status, attempted timestamp, connector
+(`filesystem_vault`), reason/error on failure, and on `published` the absolute written
+path, the note's SHA-256, and its byte count (enough to independently identify and
+verify the note). Collision-guarded exactly like the Git/Jira evidence conventions; a
+deliberate re-publish passes `overwrite: true` and a distinct `filename`
+(`summary-publication.retry-1.json`).
+
+*Deterministic tests.* 81 new (838 -> 919, `pytest --collect-only` both): 49 in the new
+`tests/test_orchestrator_obsidian.py` (destination resolution, note-name / path safety
+incl. traversal and outside-vault, `publish` classification via the fake `VaultWriter`
+seam, the real `DEFAULT_WRITER` against throwaway temp dirs, note rendering from
+evidence only incl. Unicode / determinism / no-secret-leak / missing-optional-fields,
+and `describe_destination`), 6 in `tests/test_orchestrator_live_cli.py::TestPublishRunSummary`
+(connector-unavailable retained honestly, published into a temp vault with SHA-256
+cross-check, collision then overwrite, invalid-destination, missing run-summary is a
+usage error, no writer parameter exposed), 13 in
+`tests/test_skill_definitions.py::TestObsidianSkill`, and 13 in
+`tests/test_work_skill.py::TestObsidianRunSummaryPublication`. `demo-repo/` unaffected
+(106 tests, unchanged); `memory/` unchanged; all four hooks unchanged in
+`.claude/settings.json`.
+
+*Live proof (2026-09-08).* Performed, per explicit user authorization to publish into
+their real vault under a dedicated subfolder. `runs/run-20260908-obsidianlive-001/`
+(task `OBSIDIAN-LIVE-001`) -- a dedicated harness fixture run, **not** a live four-phase
+`/work` pipeline run (the same `live_cli.py` CLI-demonstration substitution the
+memory-loop and usage-accounting milestones used). `OBSIDIAN_VAULT_PATH` was set locally
+(never committed) to the real configured vault `C:\Users\caleb\Documents\Obsidian
+Vault`; `live_cli.py`'s `publish_run_summary` ran through the production `DEFAULT_WRITER`
+and returned `status: "published"`. Independently verified outside the harness: the note
+exists at `<vault>\Harness Run Summaries\run-summary-run-20260908-obsidianlive-001.md`
+(1552 bytes) and an independent `hashlib.sha256` of its content equals the
+`content_sha256` in the retained evidence
+(`5e017d2de6e3aea81aad60001061d75739584e44fd1e9d7c4dfcf25e0c198679`). The vault's
+existing personal content was untouched; the `Harness Run Summaries/` folder was newly
+created. See `runs/run-20260908-obsidianlive-001/OBSIDIAN-LIVE-PROOF.md`,
+`obsidian/summary-publication.json`, and `logs/policy-events.jsonl`. To be unambiguous:
+this proof is a dedicated `live_cli.py` publication demonstration through the same
+operation `/work`'s Obsidian step calls -- it is **not** a full `/work` pipeline run,
+and it does not exercise the Architect reading the vault. **Still open:** (a) the
+Obsidian Discovery/Research **read** integration (no production read/search path for the
+Architect exists yet); (b) a full four-phase `/work` run that naturally reaches the
+Obsidian publication step, exactly as the equivalent open item stands for the
+route-back/hooks and memory-loop milestones; (c) the MCP + REST dual-connector
+requirement.
+
+*Relationship to memory.* `memory/lessons-learned.md` and an Obsidian run summary are
+different `ASSIGNMENT.md` requirements (§2.6 vs. §2.4). Existing memory behavior is
+unchanged -- terminal memory append still runs, `lessons-learned.md` still caps at 5 new
+bullets per terminal run, `facts.jsonl` is still append-only -- and neither mechanism is
+derived from the other. No commit or push occurred;
+`git rev-list --left-right --count origin/main...main` reports `0 0` and `HEAD` remains
+`50b2e04` throughout this session.
+
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
 followed. Implementation should track this spec; if the two diverge, update this file first.
@@ -1010,7 +1165,22 @@ reused rather than reimplemented.
   this file map originally sketched for GitHub-API code/PR access remains **not
   started** and is separate, later work (§4 "Later integrations").
 - `jira/` (Atlassian) — `create-ticket`, `read-ticket`, `edit-ticket`, plus a field-reference doc
-  so agents don't guess custom field IDs. **Not started.**
+  so agents don't guess custom field IDs. **Read-only `read-ticket` equivalent complete**
+  (`.claude/skills/jira/SKILL.md` + `jira_connector.py`, ticket-mode intake milestone
+  2026-08-20); the write skills remain not started, per `ASSIGNMENT.md`'s and that
+  milestone's own exclusion of Jira writes.
+- `obsidian/` — **complete for the run-summary write-back / publication procedure
+  (2026-09-08); does not cover a Discovery/Research read procedure**:
+  `.claude/skills/obsidian/SKILL.md`, a procedural skill (no tool allowlist of its own)
+  covering destination validation, path safety, note naming, summary structure,
+  collision/update policy, the publication connector boundary, unconditional evidence
+  retention, all six publication classifications, and terminal-`/work` placement —
+  required by `work/SKILL.md` standing rule 19 before any `publish_run_summary` call.
+  Backed by `harness/orchestrator/obsidian.py` + `live_cli.py`'s `publish_run_summary`,
+  81 deterministic tests, and a live publication against the real configured vault
+  (`runs/run-20260908-obsidianlive-001/`). See the "Milestone update (2026-09-08)" note
+  above. The Architect-side vault **read** integration (`ASSIGNMENT.md` §2.4, "The
+  architect reads it") is **not** part of this skill or this milestone and remains open.
 - Test-runner skill — encodes this repo's actual test command, thresholds, and report location.
   **Complete** — implemented at `.claude/skills/test-runner/`, automatically tested
   (`tests/test_skill_definitions.py`, `tests/test_test_runner_validation.py`), script-level
@@ -1024,12 +1194,17 @@ reused rather than reimplemented.
 | Connector | Used in phase | Purpose |
 |---|---|---|
 | GitHub (MCP server or `gh` CLI) | Discovery, Research, Verification | Read issues/PRs, search code, verify pushes landed |
-| Obsidian (`mcp-obsidian`) | Discovery, Research | Personal knowledge vault: design notes, past decisions, calibration docs |
-| Atlassian/Jira | Discovery | Ticket intake, status transitions, completion comments |
+| Obsidian (filesystem vault via `OBSIDIAN_VAULT_PATH`) | Discovery, Research (Architect read — **not yet implemented**); orchestrator run-summary write-back — **COMPLETE and LIVE-PROVEN 2026-09-08** | Personal knowledge vault: design notes, past decisions, calibration docs (the read side); the orchestrator publishes a concise run summary back to it (the write-back side, done) |
+| Atlassian/Jira | Discovery | Ticket intake (read-only resolution, complete); status transitions / completion comments remain out of scope |
 
 For at least one connector, both the MCP route and a REST-skill fallback must be implemented,
 with a documented decision on which was kept and why (the reference setup dropped the Atlassian
-MCP server in favor of curl-based skills for reliability/debuggability).
+MCP server in favor of curl-based skills for reliability/debuggability). **Status: still
+open.** No MCP server is configured in this environment for any of the three connectors
+(`claude mcp list` reports none; no `.mcp.json` exists), so GitHub, Jira, and Obsidian
+are each currently a single real REST/CLI/filesystem connector, not a dual
+implementation. `ASSIGNMENT.md` does not name which connector must be built both ways;
+this remains its own future milestone and Obsidian is not required to be it.
 
 ### Hooks (≥3, plus cost tracking)
 - Skill-enforcement hook — **Implemented** (2026-08-05) at `.claude/hooks/skill_enforcement.py`
@@ -1146,10 +1321,12 @@ MCP server in favor of curl-based skills for reliability/debuggability).
   attempt append nothing new even if it were ever called twice.
 - Not part of this milestone, per the assignment's explicit exclusions: token/cost
   tracking, GitHub/Jira skills, Obsidian integration (so `memory/lessons-learned.md` is
-  not the same thing as the still-not-built Obsidian vault write-back — see the Obsidian
-  row above), connector authentication, REST fallback, a false-push demonstration, a
-  flaky-test demonstration, and a full live four-phase `/work` run exercising this memory
-  path (Run B below deliberately stops after Discovery; see its own stated limitations).
+  not the same thing as the Obsidian vault write-back — which was unbuilt at the time of
+  this memory-loop milestone and has since been built and live-proven for the write-back
+  side only, 2026-09-08; see the "Milestone update (2026-09-08)" note above),
+  connector authentication, REST fallback, a false-push demonstration, a flaky-test
+  demonstration, and a full live four-phase `/work` run exercising this memory path
+  (Run B below deliberately stops after Discovery; see its own stated limitations).
 
 ### Output contracts (per phase)
 - Discovery → task definition + task graph
@@ -1208,7 +1385,15 @@ MCP server in favor of curl-based skills for reliability/debuggability).
 
 ### Later integrations (after the loop closes once with real evidence)
 - Ticket mode + Jira/Atlassian connector (MCP and/or REST skill pack)
-- Obsidian MCP connector + run-summary write-back
+- Obsidian connector — **run-summary write-back side COMPLETE and LIVE-PROVEN
+  (2026-09-08)**: `harness/orchestrator/obsidian.py`, a real filesystem-vault publication
+  connector (destination from `OBSIDIAN_VAULT_PATH`), `live_cli.py`'s
+  `publish_run_summary`, the `obsidian` Skill, wired into `work/SKILL.md`; live-proven
+  against the real configured vault. Not an MCP server (none is configured;
+  `ASSIGNMENT.md` names `mcp-obsidian` only as an example). **Still open on the Obsidian
+  connector:** the Discovery/Research **read** path for the Architect (no production
+  read/search/query implemented or demonstrated), a full `/work` run reaching the
+  publication step, and the MCP-vs-REST dual implementation (its own item below).
 - Full `github/` skill pack breadth (`pr-review`, `commit-history`)
 - Full `jira/` skill pack + field-reference doc
 - ~~Skill-enforcement hook~~ **COMPLETE** (2026-08-05) — implemented ahead of this list's
@@ -1435,7 +1620,13 @@ Resolved:
 Still open — defaults will be applied unless redirected before the relevant build step:
 1. **Jira credentials** — ticket mode needs live Jira credentials; none exist yet. MVP avoids
    this by using prompt mode only.
-2. **Obsidian vault path** — the Obsidian connector needs a real vault path; none exists yet.
+2. ~~**Obsidian vault path** — the Obsidian connector needs a real vault path.~~
+   **Resolved for the write-back path (2026-09-08)**: the publication connector reads
+   `OBSIDIAN_VAULT_PATH` fresh from the environment (honest `connector_unavailable` when
+   unset, exactly like the Jira connector's missing-credentials case). No user-specific
+   path is hard-coded in production logic. Live-proven once against the real configured
+   vault under a dedicated `Harness Run Summaries/` subfolder. The Architect-side vault
+   **read** path is still unbuilt and would need its own configuration/decision.
 3. **Cost/token extraction mechanism** — depends on what usage data is actually readable (Claude
    Code transcript JSONL vs. API response usage fields); not yet confirmed.
 4. **Write-up location** — assumed `docs/WRITEUP.md`; not explicitly specified, unless the
@@ -1512,10 +1703,19 @@ Demonstrated live, on a repo with ≥50 files:
       above). The two remain distinct proofs, not to be conflated: the false-push
       rejection above is deterministic-fixture-proven; a genuine successful push and
       its independent verification are now **live-proven** (§10).
-- [ ] Obsidian vault receives a run summary (**not started** — separate, later work, per
-      the assignment's explicit exclusion of Obsidian integration from this milestone);
-      `lessons-learned.md` gains ≤5 bullets; a second run visibly uses a lesson from the
-      first. **The lessons-learned/second-run-uses-a-lesson half is demonstrated
+- [~] Obsidian vault receives a run summary; `lessons-learned.md` gains ≤5 bullets; a
+      second run visibly uses a lesson from the first. **Obsidian run-summary WRITE-BACK
+      half: COMPLETE and LIVE-PROVEN (2026-09-08)** — `harness/orchestrator/obsidian.py`
+      + `live_cli.py`'s `publish_run_summary` + `.claude/skills/obsidian/SKILL.md`, wired
+      into `work/SKILL.md`'s terminal sequence, 81 deterministic tests, and **live-proven**
+      against the real configured vault (`runs/run-20260908-obsidianlive-001/`,
+      `status: "published"`, production `DEFAULT_WRITER`, note present in the real vault,
+      independent SHA-256 match) — see the "Milestone update (2026-09-08)" note above.
+      This was a dedicated `live_cli.py` publication demonstration, **not** a full
+      four-phase `/work` run (still open). The Obsidian **read** side of this connector
+      (`ASSIGNMENT.md` §2.4, "The architect reads it" during Discovery/Research) is a
+      distinct requirement and is **NOT** covered by this milestone — no production
+      read/search/query path for the Architect has been implemented or demonstrated. **The lessons-learned/second-run-uses-a-lesson half is demonstrated
       (2026-08-06) via a real, two-run `live_cli.py` CLI demonstration**, not a live
       `/work` invocation (an explicitly allowed substitution for this specific
       requirement — see §10 "Memory-loop milestone (2026-08-06)"): Run A
@@ -1527,8 +1727,9 @@ Demonstrated live, on a repo with ≥50 files:
       genuine, promoted `scope.json`'s `constraints`/`AC-1`, and retained a real
       `memory_applied` event naming the lesson, the decision, and the evidence path —
       `run-summary.json`'s `memory_influenced_run: true` is derived from that retained
-      event, not asserted. Obsidian write-back itself remains undone; this is the
-      lessons-learned mechanism only.
+      event, not asserted. Obsidian write-back is now also done and live-proven
+      separately (2026-09-08, above) — it is an independent mechanism from this
+      lessons-learned demonstration, not derived from it.
 - [x] Killing the pipeline mid-Implementation and rerunning resumes from checkpoint instead of
       restarting. **Live-demonstrated across two genuine, separate Claude Code processes
       (2026-08-06)**: the first process interrupted `run-20260806-refid-001` deliberately during
@@ -2623,5 +2824,11 @@ documentation may require additional time after the working MVP closes.
    "Milestone update (2026-08-14)" note above.
 8. ~~First complete evidence-backed pipeline run.~~ **COMPLETE** — `run-20260804-riskband-003`,
    `final_verdict: "pass"`. See §10 "Live evidence (`run-20260804-riskband-003`) — completed."
-9. Deferred integrations and final assignment demonstrations (includes `github/`/`jira/` skill
-   packs, Jira/Obsidian connectors, cost tracking, and planted-defect demos). **Not started.**
+9. Deferred integrations and final assignment demonstrations. **Partially done** — the
+   `github/` skill + push verification (2026-08-18), the read-only `jira/` skill + ticket
+   intake (2026-08-20), per-agent cost/token accounting (2026-08-14), and the Obsidian
+   run-summary **write-back** connector (2026-09-08) are complete; **still open:** the
+   Obsidian Discovery/Research **read** integration, the MCP-vs-REST dual connector, a
+   full four-phase `/work` run exercising the newer integrations, and planted-defect
+   (flaky-test / false-push-in-a-live-run) demos. See the dated milestone notes above for
+   the authoritative per-item status.

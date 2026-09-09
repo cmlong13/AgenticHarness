@@ -1414,3 +1414,128 @@ class TestResolveJiraIssue:
         sig = inspect.signature(live_cli.op_resolve_jira_issue)
         params = list(sig.parameters)
         assert params == ["req"]
+
+
+class TestPublishRunSummary:
+    """op_publish_run_summary -- the live-CLI boundary /work's Obsidian publication
+    calls. Every scenario points OBSIDIAN_VAULT_PATH at a pytest tmp dir or unsets it;
+    no personal vault is ever touched. The production filesystem VaultWriter is always
+    used -- there is no request field that swaps it for a simulated one."""
+
+    def _seed_run_summary(self, repo_root, run_id="run-1", **over) -> None:
+        rundir = repo_root / "runs" / run_id
+        rundir.mkdir(parents=True, exist_ok=True)
+        doc = {
+            "schema_version": "1.0", "task_id": "T-1", "run_id": run_id,
+            "created_at": "2026-09-08T00:00:00Z", "objective_summary": "do the thing",
+            "artifact_refs": {"scope": f"runs/{run_id}/scope.json"},
+            "final_verdict": "pass", "phases_completed": ["discovery", "research", "implementation", "verification"],
+        }
+        doc.update(over)
+        (rundir / "run-summary.json").write_text(json.dumps(doc), encoding="utf-8")
+        (rundir / "scope.json").write_text(json.dumps({"source": {"type": "prompt"}}), encoding="utf-8")
+
+    def test_missing_run_summary_is_a_usage_error(self, repo_root, monkeypatch, capsys) -> None:
+        monkeypatch.delenv("OBSIDIAN_VAULT_PATH", raising=False)
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "publish_run_summary", "run_id": "run-1", "task_id": "T-1",
+             "generated_at": "2026-09-08T00:00:00Z"},
+            capsys,
+        )
+        assert exit_code == 2
+        assert resp["status"] == "error"
+        assert "run-summary.json" in resp["error"]
+
+    def test_connector_unavailable_retained_honestly(self, repo_root, monkeypatch, capsys) -> None:
+        monkeypatch.delenv("OBSIDIAN_VAULT_PATH", raising=False)
+        self._seed_run_summary(repo_root)
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "publish_run_summary", "run_id": "run-1", "task_id": "T-1",
+             "generated_at": "2026-09-08T00:00:00Z"},
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "connector_unavailable"
+        doc = json.loads((repo_root / "runs" / "run-1" / "obsidian" / "summary-publication.json").read_text())
+        assert doc["status"] == "connector_unavailable"
+        assert doc["destination"]["configured"] is False
+        assert doc["connector"] == "filesystem_vault"
+        events = (repo_root / "runs" / "run-1" / "logs" / "policy-events.jsonl").read_text()
+        assert '"obsidian_publication"' in events
+
+    def test_published_into_configured_temp_vault(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(vault))
+        monkeypatch.delenv("OBSIDIAN_SUMMARY_DIR", raising=False)
+        self._seed_run_summary(repo_root)
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "publish_run_summary", "run_id": "run-1", "task_id": "T-1",
+             "generated_at": "2026-09-08T00:00:00Z"},
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "published"
+        note = vault / "Harness Run Summaries" / "run-summary-run-1.md"
+        assert note.is_file()
+        assert "run_id: run-1" in note.read_text(encoding="utf-8")
+        import hashlib
+        assert resp["content_sha256"] == hashlib.sha256(note.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
+        doc = json.loads((repo_root / "runs" / "run-1" / "obsidian" / "summary-publication.json").read_text())
+        assert doc["status"] == "published"
+        assert doc["destination"]["vault_path"] == str(vault.resolve())
+        assert doc["absolute_path"] == str(note)
+
+    def test_collision_without_overwrite_then_overwrite(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(vault))
+        self._seed_run_summary(repo_root)
+        first = _run_main(
+            repo_root,
+            {"operation": "publish_run_summary", "run_id": "run-1", "task_id": "T-1",
+             "generated_at": "2026-09-08T00:00:00Z"},
+            capsys,
+        )
+        assert first[1]["status"] == "published"
+        second = _run_main(
+            repo_root,
+            {"operation": "publish_run_summary", "run_id": "run-1", "task_id": "T-1",
+             "generated_at": "2026-09-08T00:00:00Z", "filename": "summary-publication.retry-1.json"},
+            capsys,
+        )
+        assert second[0] == 1
+        assert second[1]["status"] == "collision"
+        third = _run_main(
+            repo_root,
+            {"operation": "publish_run_summary", "run_id": "run-1", "task_id": "T-1",
+             "generated_at": "2026-09-08T00:00:00Z", "overwrite": True,
+             "filename": "summary-publication.retry-2.json"},
+            capsys,
+        )
+        assert third[1]["status"] == "published"
+
+    def test_invalid_destination_when_vault_path_relative(self, repo_root, monkeypatch, capsys) -> None:
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", "some/relative/dir")
+        self._seed_run_summary(repo_root)
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "publish_run_summary", "run_id": "run-1", "task_id": "T-1",
+             "generated_at": "2026-09-08T00:00:00Z"},
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "invalid_destination"
+        doc = json.loads((repo_root / "runs" / "run-1" / "obsidian" / "summary-publication.json").read_text())
+        assert doc["destination"]["raw_env_value"] == "some/relative/dir"
+
+    def test_publish_run_summary_never_exposes_a_writer_parameter(self) -> None:
+        sig = inspect.signature(live_cli.op_publish_run_summary)
+        assert list(sig.parameters) == ["req"]
+        # op always calls obsidian.publish() without writer=, so DEFAULT_WRITER (the real
+        # filesystem write) is always used unless a test monkeypatches it directly.
+        src = inspect.getsource(live_cli.op_publish_run_summary)
+        assert "writer=" not in src
