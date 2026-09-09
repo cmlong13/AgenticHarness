@@ -1,0 +1,38 @@
+{
+  "task_id": "OBSIDIAN-READ-001",
+  "run_id": "run-20260908-obsidianread-001",
+  "operation": "search_obsidian",
+  "phase": "research",
+  "connector": "filesystem_vault",
+  "attempted_at": "2026-09-09T02:32:17Z",
+  "vault": {
+    "configured": true,
+    "vault_path": "C:\\Users\\caleb\\Documents\\Obsidian Vault",
+    "raw_env_value": "C:\\Users\\caleb\\Documents\\Obsidian Vault"
+  },
+  "status": "found",
+  "query": "run-20260908-obsidianlive-001 publication boundary",
+  "terms": [
+    "run-20260908-obsidianlive-001",
+    "publication",
+    "boundary"
+  ],
+  "reason": "1 eligible note(s) matched; returning the top 1",
+  "returned_count": 1,
+  "total_match_count": 1,
+  "files_scanned": 2,
+  "truncated": false,
+  "matches": [
+    {
+      "note_path": "Harness Run Summaries/run-summary-run-20260908-obsidianlive-001.md",
+      "score": 8,
+      "matched_terms": [
+        "run-20260908-obsidianlive-001",
+        "publication",
+        "boundary"
+      ],
+      "line": 2,
+      "snippet": "--- run_id: run-20260908-obsidianlive-001 task_id: OBSIDIAN-LIVE-001 final_verdict: blocked generated_at: 2026-09-08T21:50:00Z harness: agentic-harness --- # Harness run s..."
+    }
+  ]
+}

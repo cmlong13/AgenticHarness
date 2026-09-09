@@ -134,6 +134,22 @@ def retain_obsidian_evidence(run_directory: Path, filename: str, doc: dict) -> P
     return path
 
 
+def retain_obsidian_read_evidence(run_directory: Path, filename: str, doc: dict) -> Path:
+    """Collision-guarded write for Obsidian vault READ evidence (search-<n>.json,
+    read-<n>.json -- see harness/orchestrator/obsidian_reader.py), retained under
+    runs/<run_id>/obsidian/read/ -- a subdirectory deliberately distinct from
+    runs/<run_id>/obsidian/summary-publication.json (the WRITE-BACK / publication
+    evidence retain_obsidian_evidence produces). A read consultation during
+    Discovery/Research and a run-summary publication are two different claims about
+    the same connector and must never share an evidence file. Shares
+    promote_canonical's collision guard -- never silently overwrites an
+    already-retained read record; a caller needing a second record passes a
+    distinctly numbered filename (search-2.json, read-2.json, ...)."""
+    path = run_directory / "obsidian" / "read" / filename
+    _write_new(path, (json.dumps(doc, indent=2) + "\n").encode("utf-8"))
+    return path
+
+
 def retain_jira_evidence(run_directory: Path, filename: str, doc: dict) -> Path:
     """Collision-guarded write for Jira evidence documents (issue-resolution.json -- see
     harness/orchestrator/jira_connector.py), retained under runs/<run_id>/jira/ for the

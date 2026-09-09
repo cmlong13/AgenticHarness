@@ -47,7 +47,18 @@ from harness.evidence import (
     validate_verification_report_semantics,
 )
 
-from . import checkpoint, discovery, evidence_io, github, jira_connector, memory, obsidian, paths, usage
+from . import (
+    checkpoint,
+    discovery,
+    evidence_io,
+    github,
+    jira_connector,
+    memory,
+    obsidian,
+    obsidian_reader,
+    paths,
+    usage,
+)
 from .state import FINAL_VERDICT_BY_STATE, State
 
 REPO_ROOT = paths.REPO_ROOT
@@ -89,9 +100,17 @@ SEMANTIC_VALIDATORS = {
 # deliberately absent here for the identical reason -- each is a well-formed negative
 # Obsidian-publication outcome the /work skill must report as a delivery failure,
 # entirely separately from the run's own pipeline verdict, never as a published note.
+# "read" (op_read_obsidian_note) and "found" (op_search_obsidian) are the two
+# affirmative Obsidian-READ classifications (harness.orchestrator.obsidian_reader);
+# their non-affirmative siblings ("not_found", "no_matches", "connector_unavailable",
+# "invalid_destination", "destination_unavailable", "invalid_note_path",
+# "invalid_query", "read_failed", "search_failed") are deliberately absent -- each is
+# a well-formed negative read outcome that must be retained honestly and treated as
+# "no vault evidence retrieved," never as authority. `no_matches` in particular is a
+# real, honest "nothing there," not a connector failure.
 OK_STATUSES = {
     "valid", "match", "ok", "retained", "promoted", "written", "resumable", "appended", "captured", "verified",
-    "resolved", "published",
+    "resolved", "published", "read", "found",
 }
 
 # op_write_checkpoint's `kind` field selects which checkpoint.py record_* builder runs.
@@ -963,6 +982,107 @@ def op_publish_run_summary(req: dict) -> dict:
     return {"operation": "publish_run_summary", "status": result.status, "path": _rel(path), **result.as_dict()}
 
 
+_OBSIDIAN_READ_PHASES = {"discovery", "research"}
+
+
+def op_search_obsidian(req: dict) -> dict:
+    """25. Search the configured Obsidian vault for prior design context during
+    Discovery or Research (harness.orchestrator.obsidian_reader) -- ASSIGNMENT.md
+    §2.4's "the architect reads [the vault]" (design notes, past decisions,
+    calibration docs). Runs a deterministic, bounded text search across eligible
+    Markdown notes only; `.obsidian/` and every other hidden/system path is skipped,
+    the whole vault is never dumped, and at most obsidian_reader.MAX_SEARCH_RESULTS
+    notes come back, each with a bounded snippet and a vault-relative path the
+    Architect can cite. The real vault reader is always used -- there is no
+    simulated seam on this boundary, and no request field can smuggle a vault path:
+    OBSIDIAN_VAULT_PATH is read fresh from the environment inside the reader. Every
+    outcome (`found` / `no_matches` / `connector_unavailable` /
+    `invalid_destination` / `destination_unavailable` / `invalid_query` /
+    `search_failed`) is retained unconditionally to
+    runs/<run_id>/obsidian/read/<filename> (default `search-1.json`,
+    evidence_io.retain_obsidian_read_evidence, collision-guarded) with a matching
+    `obsidian_read` policy event. Only `found` is an affirmative retrieval; the
+    retrieved text is historical/contextual evidence, never repository truth."""
+    run_id = _require_str(req, "run_id")
+    task_id = _require_str(req, "task_id")
+    query = _require_str(req, "query")
+    phase = _require_str(req, "phase")
+    if phase not in _OBSIDIAN_READ_PHASES:
+        raise LiveCliUsageError(f"'phase' must be one of {sorted(_OBSIDIAN_READ_PHASES)}, got {phase!r}")
+    if "vault_path" in req or "env" in req or "OBSIDIAN_VAULT_PATH" in req:
+        raise LiveCliUsageError("the vault path is read from OBSIDIAN_VAULT_PATH in the environment, never from the request")
+    filename = req.get("filename", "search-1.json")
+    attempted_at = req.get("attempted_at") or _utc_now_iso()
+
+    result = obsidian_reader.search(query=query)
+    doc = {
+        "task_id": task_id, "run_id": run_id, "operation": "search_obsidian", "phase": phase,
+        "connector": "filesystem_vault", "attempted_at": attempted_at,
+        "vault": obsidian_reader.describe_vault(), **result.as_dict(),
+    }
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    evidence_io.ensure_run_dirs(run_directory)
+    try:
+        path = evidence_io.retain_obsidian_read_evidence(run_directory, filename, doc)
+    except evidence_io.EvidenceCollisionError as exc:
+        return {"operation": "search_obsidian", "status": "blocked", "error": str(exc)}
+    evidence_io.retain_policy_event(
+        run_directory, "obsidian_read",
+        {"operation": "search_obsidian", "phase": phase, "query": result.query, "status": result.status,
+         "returned_count": len(result.matches), "note_paths": [m.note_path for m in result.matches]},
+    )
+    return {"operation": "search_obsidian", "status": result.status, "path": _rel(path), **result.as_dict()}
+
+
+def op_read_obsidian_note(req: dict) -> dict:
+    """26. Read one vault-relative Markdown note during Discovery or Research
+    (harness.orchestrator.obsidian_reader) -- the follow-up to `search_obsidian`
+    when a specific prior-decision / calibration note is worth reading in full.
+    Path safety is total: an absolute / drive-prefixed / `..`-bearing path, a path
+    into a hidden/system directory (`.obsidian/`), a non-`.md` target, or a
+    fully-resolved target that escapes the vault is `invalid_note_path`; a
+    structurally safe path naming no file is `not_found` (never a silent read of a
+    different file). The reader always uses the real vault
+    (OBSIDIAN_VAULT_PATH from the environment); no request field can point it
+    elsewhere. Retains note identity (path + full-file SHA-256 + byte count) even
+    when the returned body is bounded. Every outcome (`read` / `not_found` /
+    `connector_unavailable` / `invalid_destination` / `destination_unavailable` /
+    `invalid_note_path` / `read_failed`) is retained unconditionally to
+    runs/<run_id>/obsidian/read/<filename> (default `read-1.json`,
+    collision-guarded) with a matching `obsidian_read` policy event. Only `read` is
+    affirmative; the note body is historical/contextual evidence, never repository
+    truth."""
+    run_id = _require_str(req, "run_id")
+    task_id = _require_str(req, "task_id")
+    note_path = _require_str(req, "note_path")
+    phase = _require_str(req, "phase")
+    if phase not in _OBSIDIAN_READ_PHASES:
+        raise LiveCliUsageError(f"'phase' must be one of {sorted(_OBSIDIAN_READ_PHASES)}, got {phase!r}")
+    if "vault_path" in req or "env" in req or "OBSIDIAN_VAULT_PATH" in req:
+        raise LiveCliUsageError("the vault path is read from OBSIDIAN_VAULT_PATH in the environment, never from the request")
+    filename = req.get("filename", "read-1.json")
+    attempted_at = req.get("attempted_at") or _utc_now_iso()
+
+    result = obsidian_reader.read_note(note_path=note_path)
+    doc = {
+        "task_id": task_id, "run_id": run_id, "operation": "read_obsidian_note", "phase": phase,
+        "connector": "filesystem_vault", "attempted_at": attempted_at, "requested_note_path": note_path,
+        "vault": obsidian_reader.describe_vault(), **result.as_dict(),
+    }
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    evidence_io.ensure_run_dirs(run_directory)
+    try:
+        path = evidence_io.retain_obsidian_read_evidence(run_directory, filename, doc)
+    except evidence_io.EvidenceCollisionError as exc:
+        return {"operation": "read_obsidian_note", "status": "blocked", "error": str(exc)}
+    evidence_io.retain_policy_event(
+        run_directory, "obsidian_read",
+        {"operation": "read_obsidian_note", "phase": phase, "requested_note_path": note_path,
+         "status": result.status, "note_path": result.note_path, "content_sha256": result.content_sha256},
+    )
+    return {"operation": "read_obsidian_note", "status": result.status, "path": _rel(path), **result.as_dict()}
+
+
 OPERATIONS = {
     "validate_scope": op_validate_scope,
     "retain_attempt": op_retain_attempt,
@@ -988,6 +1108,8 @@ OPERATIONS = {
     "gh_repo_metadata": op_gh_repo_metadata,
     "resolve_jira_issue": op_resolve_jira_issue,
     "publish_run_summary": op_publish_run_summary,
+    "search_obsidian": op_search_obsidian,
+    "read_obsidian_note": op_read_obsidian_note,
 }
 
 

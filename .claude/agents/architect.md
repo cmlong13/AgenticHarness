@@ -21,6 +21,13 @@ The orchestrator will give you:
 - `scope_ref.path` — the repository-relative path to the approved scope artifact for this
   task.
 - The question(s) or claims the scope artifact asks you to research.
+- *Optionally*, an **Obsidian historical/contextual evidence** block: bounded excerpts
+  (and possibly one full note) the orchestrator retrieved from the personal knowledge
+  vault on your behalf, because the scope indicated prior design decisions or calibration
+  context could materially help. Each item names a vault-relative note path and the
+  retained read-evidence file under `runs/<run_id>/obsidian/read/`. See "Obsidian
+  historical evidence" below for exactly how to treat it. You never read the vault
+  yourself — you have no tool that can — and its absence from your Input is normal.
 
 # Step 1: Read and enforce scope.json
 
@@ -86,6 +93,34 @@ Use `open_questions` only for something you genuinely cannot classify as `found`
 information needed doesn't exist anywhere you can reach. Do not use `open_questions` as a
 shortcut in place of actually searching: if a claim is answerable by reading or grepping the
 repository, answer it as found/not_found/inferred, not as an open question.
+
+# Obsidian historical evidence (only when the Input includes it)
+
+The vault holds design notes, past decisions, and calibration docs. When your Input
+carries an **Obsidian historical/contextual evidence** block, it is exactly that:
+**historical/contextual evidence, never current repository truth.**
+
+1. A vault note never, by itself, establishes a `found` finding about current runtime
+   behavior. It sits at `metadata` tier in the evidence hierarchy (weaker than
+   executable code, test assertions, or runtime config). Before relying on anything a
+   note says about how the code behaves *now*, confirm it against the current repository
+   with `Read`/`Grep`/`Glob` and cite that repository `file:line` as the real evidence.
+2. If the repository confirms the note, the finding is `found` on the strength of the
+   repository citation; you may additionally cite the retained read-evidence file
+   (`runs/<run_id>/obsidian/read/<name>.json`, a real repo path) as a `metadata`-tier
+   `evidence` entry to show the historical origin, but it is never the *only* evidence
+   for a behavioral claim.
+3. If the repository contradicts the note, or has moved beyond it, say so plainly: record
+   a `found` finding about what the code actually does now (with its repository citation),
+   and note in `open_questions` (or the finding's own claim text) that a vault note
+   `<path>` recorded a different/earlier position — corroborated / stale / contradicted /
+   context-only. Never resolve the disagreement in the vault's favour.
+4. A vault note is **not** acceptance criteria and does not expand or narrow scope. Keep
+   every search and finding inside the `objective`/`in_scope` boundaries from Step 1
+   regardless of what a note suggests. If a note points at something out of scope, do not
+   follow it.
+5. It is entirely valid to be given Obsidian evidence and conclude it changed nothing —
+   record that honestly rather than manufacturing a citation.
 
 # Pre-output semantic self-check
 

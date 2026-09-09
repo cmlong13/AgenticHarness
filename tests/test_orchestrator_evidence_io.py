@@ -130,6 +130,49 @@ def test_retain_jira_evidence_collision_is_rejected(tmp_path):
     assert doc == {"status": "resolved"}
 
 
+def test_retain_obsidian_read_evidence_writes_under_obsidian_read_subdirectory(tmp_path):
+    run_directory = evidence_io.run_dir(tmp_path, "run-1")
+    evidence_io.ensure_run_dirs(run_directory)
+
+    path = evidence_io.retain_obsidian_read_evidence(run_directory, "search-1.json", {"status": "found"})
+
+    assert path == run_directory / "obsidian" / "read" / "search-1.json"
+    assert json.loads(path.read_text(encoding="utf-8")) == {"status": "found"}
+
+
+def test_retain_obsidian_read_evidence_creates_subdirectory_on_demand(tmp_path):
+    # No ensure_run_dirs call -- retain_obsidian_read_evidence creates its own parents.
+    run_directory = evidence_io.run_dir(tmp_path, "run-1")
+
+    path = evidence_io.retain_obsidian_read_evidence(run_directory, "read-1.json", {"status": "read"})
+
+    assert path.is_file()
+
+
+def test_retain_obsidian_read_evidence_collision_is_rejected(tmp_path):
+    run_directory = evidence_io.run_dir(tmp_path, "run-1")
+    evidence_io.ensure_run_dirs(run_directory)
+    evidence_io.retain_obsidian_read_evidence(run_directory, "search-1.json", {"status": "found"})
+
+    with pytest.raises(evidence_io.EvidenceCollisionError):
+        evidence_io.retain_obsidian_read_evidence(run_directory, "search-1.json", {"status": "no_matches"})
+
+    doc = json.loads((run_directory / "obsidian" / "read" / "search-1.json").read_text(encoding="utf-8"))
+    assert doc == {"status": "found"}
+
+
+def test_obsidian_read_evidence_is_distinct_from_publication_evidence(tmp_path):
+    run_directory = evidence_io.run_dir(tmp_path, "run-1")
+    evidence_io.ensure_run_dirs(run_directory)
+
+    read_path = evidence_io.retain_obsidian_read_evidence(run_directory, "search-1.json", {"status": "found"})
+    pub_path = evidence_io.retain_obsidian_evidence(run_directory, "summary-publication.json", {"status": "published"})
+
+    assert read_path.parent == run_directory / "obsidian" / "read"
+    assert pub_path.parent == run_directory / "obsidian"
+    assert read_path != pub_path
+
+
 def test_promote_canonical_writes_valid_json(tmp_path):
     run_directory = evidence_io.run_dir(tmp_path, "run-1")
     evidence_io.ensure_run_dirs(run_directory)

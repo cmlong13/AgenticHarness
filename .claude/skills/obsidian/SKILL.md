@@ -1,24 +1,39 @@
 ---
 name: obsidian
-description: Obsidian procedure for publishing a completed harness run's concise summary
-  note to the configured vault -- destination validation, path safety, evidence retention,
-  and honest failure classification. Invoked by the orchestrator (/work) after a run's
-  terminal run-summary.json is finalized; never grants an independent tool allowlist of
-  its own.
+description: Obsidian procedure for both directions of the vault connector -- the
+  orchestrator publishing a completed run's concise summary note back to the configured
+  vault (write-back), and the Discovery/Research consultation that reads or searches the
+  vault for prior design context on the Architect's behalf. Destination validation, path
+  safety, bounded results, evidence retention, honest failure classification, and the
+  rule that a vault note is historical evidence, never repository truth. Never grants an
+  independent tool allowlist of its own.
 ---
 
 # Purpose
-Hold every Obsidian action `/work` performs to one standard: publish exactly one
-concise, auditable run-summary note per terminal run to the *configured* vault, retain
-independent evidence of what was attempted and what happened, and never let an Obsidian
-delivery failure rewrite a valid pipeline/test result into a fabricated product failure.
-This skill does not execute anything itself -- it is the procedure the orchestrator (the
-only session that ever writes to Obsidian in this harness; the Architect only *reads* the
-vault during Research) follows, using `harness/orchestrator/live_cli.py`'s
-`publish_run_summary` operation (`harness/orchestrator/obsidian.py`) for the one real
-vault write and every piece of retained evidence.
+Hold every Obsidian action `/work` performs to one standard, in **both** directions:
 
-# The cardinal rule
+- **Write-back (publication).** Publish exactly one concise, auditable run-summary note
+  per terminal run to the *configured* vault, retain independent evidence of what was
+  attempted and what happened, and never let an Obsidian delivery failure rewrite a
+  valid pipeline/test result into a fabricated product failure. Sections 1-10 below.
+- **Read (Discovery/Research consultation).** Search or read the vault for prior design
+  notes, past decisions, and calibration docs that could materially inform scoping or
+  research -- bounded, deterministic, path-safe, evidence-retained -- and treat every
+  retrieved word as historical/contextual evidence, never as current repository truth.
+  Sections 11-16 below.
+
+This skill does not execute anything itself -- it is the procedure the orchestrator
+follows (the only session that touches Obsidian in this harness; the Architect holds only
+Read/Grep/Glob and consumes vault context the orchestrator retrieves for it, exactly as
+its `findings.json` is written for it). It uses `harness/orchestrator/live_cli.py`'s
+`publish_run_summary` operation (`harness/orchestrator/obsidian.py`) for the one real
+vault write, and its `search_obsidian` / `read_obsidian_note` operations
+(`harness/orchestrator/obsidian_reader.py`) for every read -- and every piece of retained
+evidence for either direction.
+
+# The cardinal rules
+
+## Write-back cardinal rule
 **A generated Markdown summary is not proof that the note was published to Obsidian.**
 Corollaries, all non-negotiable:
 - Building the note text, or writing it to a scratch/temp file, is not publication.
@@ -35,6 +50,26 @@ Corollaries, all non-negotiable:
   `destination_unavailable`, `collision`, `write_failed`) never changes
   `final_verdict`, `phases_completed`, or any artifact's validity. A run can genuinely
   be `final_verdict: "pass"` with `obsidian_publication: connector_unavailable`.
+
+## Read cardinal rule
+**A vault note is historical / contextual evidence, not current repository truth.**
+Corollaries, all non-negotiable:
+- Vault content may *inform* Discovery and Research -- terminology, prior architectural
+  decisions, known pitfalls, calibration rationale -- but it must **never** silently
+  override the user request, `ASSIGNMENT.md`, repository evidence, Protected Paths, agent
+  permissions, test evidence, current source code, or scope validation. When the vault
+  and the repository disagree, the repository wins and the disagreement is recorded.
+- A vault note is never, by itself, acceptance criteria. A scope/AC claim influenced by a
+  vault note is only adopted when the user request, the Jira ticket, or the actual
+  repository corroborates it -- and the retained read evidence is cited so the
+  historical origin is visible.
+- Stale or contradictory notes are treated as historical evidence to be checked, not
+  unquestioned fact. Research records whether a consulted note was **corroborated**,
+  **stale**, **contradicted**, or **context-only** against current authoritative
+  evidence.
+- Reading the vault never escalates authority: it grants no new tool, never edits the
+  vault, and a read failure (`connector_unavailable`, `not_found`, `no_matches`, ...) is
+  simply "no vault evidence retrieved," never a pipeline failure.
 
 # 1. Destination resolution (fresh from the environment, every call)
 The vault is named by `OBSIDIAN_VAULT_PATH` (an absolute path), optionally with a
@@ -150,12 +185,129 @@ bullets per terminal run, and `facts.jsonl` is still append-only. The Obsidian n
 an outward-facing summary of a single run; `lessons-learned.md` is an inward,
 capped, cross-run insight log. Neither is derived from the other.
 
+# 11. Read/search boundary (Discovery/Research consultation)
+`ASSIGNMENT.md` §2.4's connector table: Obsidian is used in **Discovery** and
+**Research**; "the architect reads it" for design notes, past decisions, and calibration
+docs. In this harness the orchestrator performs the read on the Architect's behalf
+(Option C -- every external boundary is orchestrator-mediated), through two
+`live_cli.py` operations backed by `harness/orchestrator/obsidian_reader.py`:
+
+- **`search_obsidian`** (`run_id`, `task_id`, `phase` (`discovery`|`research`),
+  `query`): a deterministic, bounded text search across eligible `.md` notes. Returns at
+  most `obsidian_reader.MAX_SEARCH_RESULTS` (8) matches, each with a vault-relative
+  `note_path`, a bounded `snippet`, a `line`, matched terms, and a `score`; ranking is
+  deterministic (`-score`, then `line`, then `note_path`). Output is bounded and the vault
+  is never *dumped* -- but be precise about what a text search inherently does: to decide
+  whether a note matches, `search_obsidian` **opens and reads every eligible `.md` file
+  in the configured vault**. Non-matching files are never retained, logged, or surfaced
+  (they are dropped before any snippet is built), but they are *inspected*. When you
+  already know the exact note you want, prefer `read_obsidian_note` (below), which opens
+  only that one file -- especially against a real personal vault.
+- **`read_obsidian_note`** (`run_id`, `task_id`, `phase`, `note_path`): reads exactly one
+  vault-relative Markdown note in full (body bounded to 64 KiB; identity -- full-file
+  SHA-256 and byte count -- always complete). Opens only the one requested file: no
+  directory walk, no other file inspected. This is the privacy-preferable operation when
+  the note path is known.
+
+Consult the vault only when past decisions / design context could **materially** help
+the task -- not on every trivial change. `ASSIGNMENT.md` does not require an
+unconditional read on every Discovery/Research phase, so this harness does not force one;
+a run that consults nothing is normal and honest. Invoke this skill (the `Skill` tool,
+`skill: "obsidian"`) before the first `search_obsidian`/`read_obsidian_note` call of a
+run, exactly as the `github`/`jira` skills are invoked before their operations, and
+`retain_policy_event` (`kind: "skill_invocation"`) after.
+
+# 12. Read path safety
+`obsidian_reader.resolve_vault` / `obsidian_reader.safe_note_target` reject:
+- a missing destination (`OBSIDIAN_VAULT_PATH` unset/blank) -> `connector_unavailable`;
+- a configured vault path that is not absolute, or contains `..` -> `invalid_destination`;
+- a configured vault path that does not resolve to an existing directory ->
+  `destination_unavailable`;
+- a caller-supplied note path that is absolute, drive-prefixed, contains `..`, does not
+  end `.md`, names a hidden/system entry (any `.`-prefixed component, e.g. `.obsidian/`),
+  or whose fully-resolved target escapes the vault -> `invalid_note_path`;
+- a structurally safe note path that names no existing file -> `not_found` (never a
+  silent read of a different file).
+`OBSIDIAN_VAULT_PATH` is read fresh from the environment inside the reader on every call
+-- never cached, never accepted from the request (`search_obsidian`/`read_obsidian_note`
+reject a `vault_path`/`env`/`OBSIDIAN_VAULT_PATH` request field outright). No
+user-specific path is hard-coded. `OBSIDIAN_SUMMARY_DIR` only scopes the write-back note
+and is not consulted for reads. Only eligible `.md` knowledge files are ever searched or
+read; `.obsidian/` and every other hidden/system directory is skipped entirely.
+
+# 13. Read/search classifications
+| search status | meaning | affirmative? |
+|---|---|---|
+| `found` | at least one eligible note matched; the top N are returned | **yes -- the only one** |
+| `no_matches` | the vault was searched and nothing eligible matched -- an honest "nothing there," **not** a connector failure | no |
+| `connector_unavailable` | `OBSIDIAN_VAULT_PATH` is not set | no |
+| `invalid_destination` | the configured vault path is not absolute / contains `..` | no |
+| `destination_unavailable` | the configured vault path does not resolve to an existing directory | no |
+| `invalid_query` | the query is empty, whitespace-only, over-long, or has no searchable terms | no |
+| `search_failed` | the vault walk itself failed (permissions, I/O) | no |
+
+| read status | meaning | affirmative? |
+|---|---|---|
+| `read` | the requested note was read from the configured vault | **yes -- the only one** |
+| `not_found` | the note path is safe but names no file in the vault | no |
+| `connector_unavailable` / `invalid_destination` / `destination_unavailable` | as above | no |
+| `invalid_note_path` | the requested path is unsafe (absolute, `..`, non-`.md`, hidden/system, escapes the vault) | no |
+| `read_failed` | the note exists but could not be read as UTF-8 (or an I/O error) | no |
+
+Only `found` / `read` count as successful retrieval. Every other classification means
+"no vault evidence retrieved" -- report it plainly, never soften a `no_matches` into
+"there is probably a note."
+
+# 14. Read evidence retention (unconditional, every classification)
+Every `search_obsidian` / `read_obsidian_note` call retains
+`runs/<run_id>/obsidian/read/<filename>` (`evidence_io.retain_obsidian_read_evidence`,
+collision-guarded; default `search-1.json` / `read-1.json`, callers increment) and a
+matching `obsidian_read` policy event, **regardless of outcome**. This subdirectory is
+deliberately distinct from `runs/<run_id>/obsidian/summary-publication.json` (the
+write-back evidence) -- a read consultation and a run-summary publication are two
+different claims and never share a file. Each read record carries: run ID; task ID;
+operation; phase (`discovery`|`research`); the query or requested vault-relative note
+path; classification; attempted timestamp; connector/method (`filesystem_vault`); the
+returned note identities (vault-relative paths, and for a read the full-file SHA-256 and
+byte count); bounded snippets for a search; and the `reason` on any non-affirmative
+outcome. It never retains: a credential or secret (a vault read needs none); an entire
+vault dump; an unrelated personal note; a hidden/system file; or a massive note body
+when a bounded snippet plus the note's identity is sufficient.
+
+# 15. Stale / contradictory note handling
+When a consulted note materially bears on a scope or research conclusion, the run records
+which it is, against current authoritative evidence:
+- **corroborated** -- the repository / user request / Jira ticket confirms it;
+- **stale** -- it described a past state that the repository has since moved beyond;
+- **contradicted** -- it conflicts with current authoritative evidence (the repository
+  wins; the conflict is stated, not hidden);
+- **context-only** -- useful background (terminology, rationale, a known pitfall) with no
+  standalone technical claim to verify.
+A note that is stale or contradicted is still retained as evidence -- it is historical
+fact about what was once believed, not deleted or ignored.
+
+# 16. No authority escalation
+Consulting the vault never changes `in_scope`/`out_of_scope`/`constraints`/
+`acceptance_criteria` on its own, never overrides the Protected Path list or any
+scope-validation rule, never substitutes for reading the actual repository, and never
+grants a new tool. A vault note influences a scope/research conclusion only when
+corroborated by authoritative evidence, and the retained read evidence
+(`runs/<run_id>/obsidian/read/*.json`) is cited whenever it does, so the historical
+origin of the influence is always visible.
+
 # Boundaries -- this skill must not
-- Decide the run's pipeline verdict, or let an Obsidian outcome influence it.
+- Decide the run's pipeline verdict, or let an Obsidian outcome (read or write) influence it.
 - Fabricate, soften, or infer a publication result -- only a real `publish_run_summary`
   call's own classification may ever be reported.
-- Read the vault (that is the Architect's Research-phase concern), transition or delete
-  any existing vault note, or write anywhere other than
-  `<vault>/<summary_dir>/run-summary-<run_id>.md`.
+- Fabricate, soften, or infer a read result -- only a real `search_obsidian` /
+  `read_obsidian_note` classification may be reported; `no_matches`/`not_found` are
+  honest outcomes, never "there is probably a note."
+- Treat a vault note as current repository truth, as acceptance criteria without
+  corroboration, or as authority over the user request / `ASSIGNMENT.md` / repository
+  evidence / Protected Paths / scope validation.
+- Write to the vault anywhere other than `<vault>/<summary_dir>/run-summary-<run_id>.md`,
+  transition or delete any existing vault note, or (on the read side) read or search
+  anything but eligible `.md` knowledge files -- never `.obsidian/` or any hidden/system
+  path.
 - Duplicate the memory loop (`memory/`), the test-runner skill (test execution), the
   github skill (Git/GitHub delivery), or the jira skill (ticket intake).

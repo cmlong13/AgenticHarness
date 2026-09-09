@@ -911,3 +911,99 @@ class TestObsidianRunSummaryPublication:
         assert "Obsidian Vault" not in self.text
         assert r"C:\Users" not in self.text
         assert "OBSIDIAN_VAULT_PATH" in self.text
+
+
+class TestObsidianDiscoveryResearchRead:
+    """Structural checks for the Obsidian Discovery/Research READ milestone (2026-09-08):
+    the orchestrator may consult the vault during Discovery/Research, mediated through
+    live_cli.py, treating every retrieved word as historical/contextual evidence -- never
+    repository truth -- with the obsidian Skill invoked first and evidence retained
+    separately from the publication path."""
+
+    def setup_method(self) -> None:
+        self.text = SKILL_PATH.read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+
+    def _phase_slice(self, start_marker: str, end_marker: str) -> str:
+        start = self.text.index(start_marker)
+        end = self.text.index(end_marker, start)
+        return self.text[start:end]
+
+    def _flat_slice(self, start_marker: str, end_marker: str) -> str:
+        return " ".join(self._phase_slice(start_marker, end_marker).split())
+
+    def test_dedicated_section_exists(self) -> None:
+        assert "# Obsidian Discovery/Research consultation" in self.text
+
+    def test_standing_rule_20_present(self) -> None:
+        assert "20. The Obsidian vault may be **read** during Discovery and Research" in self.text
+        rule_20 = self._flat_slice("20. The Obsidian vault may be", "# Parsing $ARGUMENTS")
+        assert 'skill: "obsidian"' in rule_20
+        assert "A vault note is historical/contextual evidence, never current repository truth" in rule_20
+        assert "never becomes acceptance criteria unless" in rule_20
+
+    def test_operations_documented_in_table(self) -> None:
+        assert "`search_obsidian`" in self.text
+        assert "`read_obsidian_note`" in self.text
+
+    def test_consultation_is_conditional_not_forced(self) -> None:
+        section = self._flat_slice("# Obsidian Discovery/Research consultation", "# Phase 1: Discovery")
+        assert "not every run" in section
+        assert "materially" in section
+        assert "no unconditional per-phase read" in section
+
+    def test_obsidian_skill_invoked_before_first_read(self) -> None:
+        section = self._phase_slice("# Obsidian Discovery/Research consultation", "# Phase 1: Discovery")
+        skill_idx = section.index('skill: "obsidian"')
+        search_req_idx = section.index("Build a `search_obsidian` request")
+        assert skill_idx < search_req_idx
+
+    def test_read_evidence_retained_and_separate_from_publication(self) -> None:
+        section = self._flat_slice("# Obsidian Discovery/Research consultation", "# Phase 1: Discovery")
+        assert "runs/<run_id>/obsidian/read/" in section
+        assert "obsidian_read" in section
+        assert "distinct direction of the same connector" in section
+
+    def test_vault_note_never_overrides_authoritative_evidence(self) -> None:
+        section = self._flat_slice("# Obsidian Discovery/Research consultation", "# Phase 1: Discovery")
+        for authority in ("user request", "ASSIGNMENT.md", "Protected Paths", "scope validation"):
+            assert authority in section
+        assert "historical/contextual evidence, never repository truth" in section
+
+    def test_discovery_and_research_subsections_present(self) -> None:
+        section = self.text[self.text.index("# Obsidian Discovery/Research consultation"):]
+        assert "## In Discovery" in section
+        assert "## In Research" in section
+
+    def test_research_injects_evidence_into_architect_prompt(self) -> None:
+        section = self._flat_slice("# Obsidian Discovery/Research consultation", "# Phase 1: Discovery")
+        assert "before dispatching the Architect" in section
+        assert "Obsidian historical/contextual evidence" in section
+        assert "corroborated / stale / contradicted / context-only" in section
+        assert "Architect never reads the vault itself" in section
+
+    def test_phase_1_points_at_consultation(self) -> None:
+        phase1 = self._phase_slice("# Phase 1: Discovery", "# Phase 2: Research")
+        assert "Obsidian Discovery/Research consultation" in phase1
+        assert 'phase: "discovery"' in phase1
+
+    def test_phase_2_step_0_consultation_before_dispatch(self) -> None:
+        phase2 = self._phase_slice("# Phase 2: Research", "# Dry-run boundary")
+        step0_idx = phase2.index("Optional Obsidian consultation, before dispatch")
+        dispatch_idx = phase2.index("Dispatch with the `Agent` tool")
+        assert step0_idx < dispatch_idx
+        assert 'phase: "research"' in phase2
+
+    def test_reporting_states_obsidian_read_consultation(self) -> None:
+        assert "Obsidian vault **read** consultation" in self.text
+        reporting = self.text[self.text.index("## What to state, every time"):]
+        assert "search_obsidian" in reporting
+        assert "historical/contextual evidence, not" in reporting
+
+    def test_read_failure_is_not_a_pipeline_failure(self) -> None:
+        assert "never a pipeline failure" in self.flat_text or "never a pipeline\n    failure" in self.text
+
+    def test_kept_distinct_from_write_back(self) -> None:
+        section = self._flat_slice("# Obsidian Discovery/Research consultation", "# Phase 1: Discovery")
+        assert "separate direction" in section or "distinct direction" in section
+        assert "never affects the run verdict" in section

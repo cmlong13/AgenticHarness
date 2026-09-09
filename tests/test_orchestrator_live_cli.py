@@ -1539,3 +1539,188 @@ class TestPublishRunSummary:
         # filesystem write) is always used unless a test monkeypatches it directly.
         src = inspect.getsource(live_cli.op_publish_run_summary)
         assert "writer=" not in src
+
+
+class TestSearchObsidian:
+    """op_search_obsidian -- the live-CLI boundary /work's Discovery/Research Obsidian
+    consultation calls. Every scenario points OBSIDIAN_VAULT_PATH at a pytest tmp dir or
+    unsets it; no personal vault is ever touched, and there is no request field that can
+    point the reader elsewhere."""
+
+    def _vault(self, tmp_path):
+        v = tmp_path / "vault"
+        (v / "Design").mkdir(parents=True)
+        (v / ".obsidian").mkdir()
+        (v / "Design" / "Risk band calibration.md").write_text(
+            "# Risk band calibration\nPast decision: thresholds 620/680/740.\n", encoding="utf-8"
+        )
+        (v / ".obsidian" / "workspace.json").write_text('{"x": "risk band calibration secret"}', encoding="utf-8")
+        return v
+
+    def test_found_retained_and_affirmative_exit(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(self._vault(tmp_path)))
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "search_obsidian", "run_id": "run-1", "task_id": "T-1",
+             "phase": "research", "query": "risk band calibration"},
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "found"
+        assert any(m["note_path"] == "Design/Risk band calibration.md" for m in resp["matches"])
+        doc = json.loads((repo_root / "runs" / "run-1" / "obsidian" / "read" / "search-1.json").read_text())
+        assert doc["operation"] == "search_obsidian"
+        assert doc["phase"] == "research"
+        assert doc["query"] == "risk band calibration"
+        assert doc["connector"] == "filesystem_vault"
+        events = (repo_root / "runs" / "run-1" / "logs" / "policy-events.jsonl").read_text()
+        assert '"obsidian_read"' in events
+
+    def test_no_matches_is_negative_exit_but_retained(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(self._vault(tmp_path)))
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "search_obsidian", "run_id": "run-1", "task_id": "T-1",
+             "phase": "discovery", "query": "quantumfluxcapacitor"},
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "no_matches"
+        assert (repo_root / "runs" / "run-1" / "obsidian" / "read" / "search-1.json").is_file()
+
+    def test_connector_unavailable_retained_honestly(self, repo_root, monkeypatch, capsys) -> None:
+        monkeypatch.delenv("OBSIDIAN_VAULT_PATH", raising=False)
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "search_obsidian", "run_id": "run-1", "task_id": "T-1",
+             "phase": "research", "query": "risk band"},
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "connector_unavailable"
+        doc = json.loads((repo_root / "runs" / "run-1" / "obsidian" / "read" / "search-1.json").read_text())
+        assert doc["vault"]["configured"] is False
+
+    def test_bad_phase_is_usage_error(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(self._vault(tmp_path)))
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "search_obsidian", "run_id": "run-1", "task_id": "T-1",
+             "phase": "implementation", "query": "x"},
+            capsys,
+        )
+        assert exit_code == 2
+        assert resp["status"] == "error"
+
+    def test_request_cannot_smuggle_a_vault_path(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(self._vault(tmp_path)))
+        for field in ("vault_path", "env", "OBSIDIAN_VAULT_PATH"):
+            exit_code, resp = _run_main(
+                repo_root,
+                {"operation": "search_obsidian", "run_id": "run-1", "task_id": "T-1",
+                 "phase": "research", "query": "risk band", field: "/etc"},
+                capsys,
+            )
+            assert exit_code == 2
+            assert "environment" in resp["error"]
+
+    def test_never_exposes_a_reader_parameter(self) -> None:
+        sig = inspect.signature(live_cli.op_search_obsidian)
+        assert list(sig.parameters) == ["req"]
+        src = inspect.getsource(live_cli.op_search_obsidian)
+        assert "reader=" not in src and "env=" not in src
+
+    def test_collision_guard_on_repeat(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(self._vault(tmp_path)))
+        body = {"operation": "search_obsidian", "run_id": "run-1", "task_id": "T-1",
+                "phase": "research", "query": "risk band"}
+        assert _run_main(repo_root, body, capsys)[1]["status"] == "found"
+        exit_code, resp = _run_main(repo_root, body, capsys)
+        assert exit_code == 1
+        assert resp["status"] == "blocked"
+        # a distinct filename is accepted
+        body2 = dict(body, filename="search-2.json")
+        assert _run_main(repo_root, body2, capsys)[1]["status"] == "found"
+
+
+class TestReadObsidianNote:
+    def _vault(self, tmp_path):
+        v = tmp_path / "vault"
+        (v / "Design").mkdir(parents=True)
+        (v / ".obsidian").mkdir()
+        (v / "Design" / "ADR-001.md").write_text("# ADR-001\nAppend risk band after DTI.\n", encoding="utf-8")
+        (v / ".obsidian" / "app.json").write_text("{}", encoding="utf-8")
+        return v
+
+    def test_read_retained_and_affirmative(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(self._vault(tmp_path)))
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "read_obsidian_note", "run_id": "run-1", "task_id": "T-1",
+             "phase": "research", "note_path": "Design/ADR-001.md"},
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "read"
+        assert "Append risk band after DTI" in resp["content"]
+        assert resp["content_sha256"]
+        doc = json.loads((repo_root / "runs" / "run-1" / "obsidian" / "read" / "read-1.json").read_text())
+        assert doc["requested_note_path"] == "Design/ADR-001.md"
+        assert doc["phase"] == "research"
+
+    def test_traversal_is_invalid_note_path_negative_exit(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(self._vault(tmp_path)))
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "read_obsidian_note", "run_id": "run-1", "task_id": "T-1",
+             "phase": "discovery", "note_path": "../../../etc/passwd"},
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "invalid_note_path"
+        assert (repo_root / "runs" / "run-1" / "obsidian" / "read" / "read-1.json").is_file()
+
+    def test_dot_obsidian_is_rejected(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(self._vault(tmp_path)))
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "read_obsidian_note", "run_id": "run-1", "task_id": "T-1",
+             "phase": "research", "note_path": ".obsidian/app.json"},
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "invalid_note_path"
+
+    def test_missing_note_is_not_found(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(self._vault(tmp_path)))
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "read_obsidian_note", "run_id": "run-1", "task_id": "T-1",
+             "phase": "research", "note_path": "Design/nope.md"},
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "not_found"
+
+    def test_read_evidence_is_separate_from_publication_evidence(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(self._vault(tmp_path)))
+        _run_main(
+            repo_root,
+            {"operation": "read_obsidian_note", "run_id": "run-1", "task_id": "T-1",
+             "phase": "research", "note_path": "Design/ADR-001.md"},
+            capsys,
+        )
+        read_dir = repo_root / "runs" / "run-1" / "obsidian" / "read"
+        assert (read_dir / "read-1.json").is_file()
+        assert not (repo_root / "runs" / "run-1" / "obsidian" / "summary-publication.json").exists()
+
+    def test_request_cannot_smuggle_a_vault_path(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(self._vault(tmp_path)))
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "read_obsidian_note", "run_id": "run-1", "task_id": "T-1",
+             "phase": "research", "note_path": "Design/ADR-001.md", "vault_path": "/etc"},
+            capsys,
+        )
+        assert exit_code == 2
+        assert "environment" in resp["error"]

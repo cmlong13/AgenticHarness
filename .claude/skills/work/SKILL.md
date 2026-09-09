@@ -153,6 +153,23 @@ $ARGUMENTS
     distinct from the memory loop (standing rule 14): `memory/lessons-learned.md` and
     an Obsidian run summary are different requirements and neither is derived from the
     other.
+20. The Obsidian vault may be **read** during Discovery and Research for prior design
+    notes, past decisions, and calibration context, via `live_cli.py`'s
+    `search_obsidian` / `read_obsidian_note` operations
+    (`harness/orchestrator/obsidian_reader.py`) -- always preceded, once per run, by
+    invoking the real `obsidian` Skill (`Skill` tool, `skill: "obsidian"`). This is a
+    **separate direction** of the same connector from standing rule 19's write-back and
+    shares nothing with it but the vault path. **A vault note is historical/contextual
+    evidence, never current repository truth**: reading the vault never changes
+    `in_scope`/`out_of_scope`/`constraints`/`acceptance_criteria`, never overrides the
+    Protected Path list or any scope-validation rule, never substitutes for reading the
+    actual repository, and never becomes acceptance criteria unless the user request,
+    the Jira ticket, or the repository itself corroborates it. Consult the vault only
+    when past decisions/design context could **materially** help the task -- not on
+    every trivial change; `ASSIGNMENT.md` requires no unconditional per-phase read, so
+    this harness forces none. A read failure (`connector_unavailable` / `no_matches` /
+    `not_found` / ...) is simply "no vault evidence retrieved," never a pipeline
+    failure. See "# Obsidian Discovery/Research consultation" below.
 
 # Parsing $ARGUMENTS
 
@@ -322,6 +339,8 @@ function's own docstring for the authoritative field-level contract):
 | `gh_repo_metadata` | Read-only GitHub-side metadata via `gh repo view` (nameWithOwner/url/defaultBranchRef) -- never a substitute for `verify_push`'s `git ls-remote` check. |
 | `resolve_jira_issue` | The one Jira ticket-resolution entry point for a ticket-mode run (`harness/orchestrator/jira_connector.py`). Normalizes `issue_key`, reads credentials fresh from the environment (never from the request), and returns one of seven classifications (`resolved` / `not_found` / `unauthorized` / `connector_unavailable` / `identity_mismatch` / `invalid_issue_key` / `invalid_response`) -- only `resolved` may ever be treated as "this ticket exists." Always retains `runs/<run_id>/jira/issue-resolution.json` and a `jira_issue_resolution` policy event, whatever the outcome. See "Ticket-mode Jira resolution" above for the full protocol. |
 | `publish_run_summary` | Call exactly once per run, immediately **after** `write_run_summary`, for every terminal outcome (see "Obsidian run-summary publication" below). Renders this run's concise summary note strictly from retained evidence and publishes it to the configured Obsidian vault via the real filesystem `VaultWriter` (`harness/orchestrator/obsidian.py`) -- never a simulated write. Always retains `runs/<run_id>/obsidian/summary-publication.json` and an `obsidian_publication` policy event, whatever the outcome. Only `status: "published"` is a delivered note; `connector_unavailable` / `invalid_destination` / `destination_unavailable` / `collision` / `write_failed` are external-delivery failures that never affect the run verdict. |
+| `search_obsidian` | Discovery/Research only. Deterministic, bounded text search across eligible `.md` vault notes for prior design context (`harness/orchestrator/obsidian_reader.py`; the real vault, `OBSIDIAN_VAULT_PATH` from the environment -- no request field can point it elsewhere). Fields: `run_id`, `task_id`, `phase` (`discovery`|`research`), `query`, optional `filename` (default `search-1.json`, increment for a second call). Returns at most 8 matches, each with a vault-relative `note_path`, bounded `snippet`, `line`, `score`. Always retains `runs/<run_id>/obsidian/read/<filename>` and an `obsidian_read` policy event. `found` is the only affirmative status; `no_matches` is an honest "nothing there," not a failure. |
+| `read_obsidian_note` | Discovery/Research only. Reads one vault-relative Markdown note in full (body bounded to 64 KiB; full-file SHA-256 + byte count always complete), for a specific prior-decision/calibration note `search_obsidian` surfaced. Fields: `run_id`, `task_id`, `phase`, `note_path`, optional `filename` (default `read-1.json`). Path safety is total -- an absolute / `..` / non-`.md` / hidden-system / vault-escaping path is `invalid_note_path`; a safe path naming no file is `not_found` (never a silent read of a different file). Always retains `runs/<run_id>/obsidian/read/<filename>` and an `obsidian_read` policy event. `read` is the only affirmative status. |
 | `build_usage_summary` | Call exactly once per run, immediately before `write_run_summary`, for **every** terminal outcome of this run -- not only a genuine `pass`. Aggregates every per-agent usage record this run's own `usage/` directory holds into `runs/<run_id>/usage-summary.json` and returns its `path`; never hand-author usage totals inside `run-summary.json` yourself. See "Terminal usage summary" below. |
 
 # Per-agent usage accounting (after every fresh `Agent` dispatch)
@@ -505,6 +524,91 @@ influence. It is entirely normal, and not a defect, for a run to load relevant m
 and retain zero `memory_applied` events because nothing in the run actually turned on
 it -- report that honestly rather than manufacturing a citation.
 
+# Obsidian Discovery/Research consultation
+
+Standing rule 20 governs. `ASSIGNMENT.md` §2.4's connector table: Obsidian is used in
+**Discovery** and **Research** -- "the architect reads it" for design notes, past
+decisions, and calibration docs. In this harness the orchestrator performs that read on
+the Architect's behalf (Option C -- every external boundary is orchestrator-mediated,
+exactly as `findings.json` is written for the Architect and test execution is mediated
+for the Engineer), through `live_cli.py`'s `search_obsidian` / `read_obsidian_note`
+operations. This is a distinct direction of the same connector from "# Obsidian
+run-summary publication" and never affects the run verdict.
+
+**When to consult** (not every run): only when prior design decisions, calibration
+rationale, established terminology, or known pitfalls recorded in the vault could
+**materially** help scope or research this specific task -- e.g. a change to a formula,
+threshold, or data path the vault likely discusses. A trivial typo/rename does not
+warrant it. Consulting nothing is a normal, honest outcome; `ASSIGNMENT.md` requires no
+unconditional per-phase read.
+
+**Fixed sequence, the first time a run consults the vault (Discovery or Research):**
+
+1. Invoke the real `obsidian` Skill (`Skill` tool, `skill: "obsidian"`) once for the run
+   -- it is not a forked skill (no tool restriction of its own; it documents the
+   procedure these steps implement), but it must be genuinely invoked, exactly as the
+   `github`/`jira` Skills are. `retain_policy_event` (`kind: "skill_invocation"`, naming
+   the skill and that it was invoked via the `Skill` tool) immediately after. If the run
+   already invoked the `obsidian` Skill for its write-back step earlier, that does not
+   substitute -- but a single skill invocation before the first read in the run is
+   sufficient for all of that run's reads; do not re-invoke per operation.
+2. Build a `search_obsidian` request (`run_id`, `task_id`, `phase`
+   (`"discovery"` or `"research"` -- whichever phase you are in), `query` -- a short
+   phrase of the salient terms, e.g. the formula/threshold/module name), write it to
+   `runs/<run_id>/requests/OBSR-<n>.json` (`Write`), and invoke
+   `python -m harness.orchestrator.live_cli --request-file "runs/<run_id>/requests/OBSR-<n>.json"`
+   via `Bash`. Never inline a filesystem walk or `grep` of the vault yourself.
+3. Read the single JSON result:
+   - `status: "found"` -- inspect the returned `matches` (bounded snippets + vault
+     paths). If one note is clearly worth reading whole, build a `read_obsidian_note`
+     request (`note_path` exactly as returned) and invoke it the same way.
+   - `status: "no_matches"` / `"connector_unavailable"` / `"destination_unavailable"` /
+     `"invalid_destination"` / `"invalid_query"` / `"search_failed"` -- "no vault
+     evidence retrieved." Retained honestly by the operation itself; continue Discovery
+     or Research exactly as if nothing was consulted. Never soften `no_matches` into
+     "there is probably a note," and for `connector_unavailable` state plainly that
+     deterministic Obsidian read integration is complete but no live vault is configured.
+4. Every `search_obsidian`/`read_obsidian_note` call retains
+   `runs/<run_id>/obsidian/read/<filename>` and an `obsidian_read` policy event
+   automatically -- do not additionally retain those by hand.
+5. **Treat every retrieved word as historical/contextual evidence, never repository
+   truth** (standing rule 20; the `obsidian` Skill's read cardinal rule). It informs
+   your reasoning; it never overrides the user request, `ASSIGNMENT.md`, the repository,
+   Protected Paths, agent permissions, test evidence, current source, or scope
+   validation. See the per-phase notes in Phase 1 step 1 and Phase 2 step 1 below for
+   exactly how each phase uses it.
+
+## In Discovery
+
+A consulted note may inform `objective` wording, `constraints`, `out_of_scope` framing,
+terminology, or a `task_graph` decision (e.g. "the vault records a prior calibration
+pass, so Research is warranted"). It must never: bypass `validate_scope`; override a
+Protected Path; or become an `acceptance_criteria` / `in_scope` entry unless the user
+request or (ticket mode) the resolved Jira issue independently says so. When a vault note
+does shape a scope field, say so in your Discovery reasoning and cite the retained read
+evidence (`runs/<run_id>/obsidian/read/<name>.json`) so the historical origin is visible;
+if that rises to a concrete "I chose X because of note `<...>`" decision, and the
+decision is visible in the promoted `scope.json`, you may also `record_memory_applied`
+only if the influence is a genuine `memory/` entry -- a vault note is not a memory entry,
+so usually this is just a cited scope note, not a `memory_applied` event.
+
+## In Research
+
+The orchestrator consults the vault (per the fixed sequence above) **before dispatching
+the Architect**, when `scope.json` indicates prior design/decision context could
+materially help. It then injects the bounded results into the Architect's dispatch
+`prompt` as a clearly-labeled **"Obsidian historical/contextual evidence"** block: for
+each item, the vault-relative `note_path`, the retained read-evidence path
+(`runs/<run_id>/obsidian/read/<name>.json`), and the snippet or (for a full read) the
+bounded note body. `architect.md`'s own "Obsidian historical evidence" section governs
+how the Architect must treat it: never as current code truth without confirming against
+the repository, citing the repository `file:line` as the real evidence, and recording
+whether each consulted note was **corroborated / stale / contradicted / context-only**.
+The Architect never reads the vault itself (it holds only Read/Grep/Glob). If the
+Architect's findings materially rest on a vault note, its `findings.json` cites the
+retained read-evidence file as a `metadata`-tier entry (never the sole evidence for a
+behavioral claim) or notes it in `open_questions`.
+
 # Phase 1: Discovery (main session, no subagent)
 
 1. Investigate the target area of the repository yourself (`Read`/`Grep`/`Glob`) enough
@@ -514,7 +618,11 @@ it -- report that honestly rather than manufacturing a citation.
    graph rather than defaulting to all four phases unexamined. Any relevant fact or
    lesson Phase 0 surfaced may inform this reasoning, but never substitutes for reading
    the actual repository yourself -- ground every scope field in real, current repository
-   evidence, per standing rule 14.
+   evidence, per standing rule 14. If prior design decisions or calibration context in
+   the Obsidian vault could materially help scope this task, consult it now per
+   "# Obsidian Discovery/Research consultation" above (`phase: "discovery"`) -- a vault
+   note is historical/contextual evidence only, never authority over a scope field
+   (standing rule 20).
 2. Author the scope candidate as a `scope.schema.json`-shaped object with
    `status: "approved"` (or `"refused"` with a `refusal_reason`, if the pre-dispatch
    checklist in `ASSIGNMENT.md` §2.1 fails -- e.g. the request targets a Protected Path
@@ -537,10 +645,22 @@ it -- report that honestly rather than manufacturing a citation.
 
 # Phase 2: Research (real Architect dispatch)
 
+0. **Optional Obsidian consultation, before dispatch.** If `scope.json` indicates prior
+   design/decision/calibration context could materially help this research, consult the
+   vault now per "# Obsidian Discovery/Research consultation" above
+   (`phase: "research"`). Fold any `found` result into the Architect's `prompt` in step 1
+   as a clearly-labeled "Obsidian historical/contextual evidence" block (each item: the
+   vault-relative `note_path`, the retained `runs/<run_id>/obsidian/read/<name>.json`
+   path, and the snippet or bounded note body). Skip this step entirely when the vault
+   is unlikely to help -- it is not mandatory.
 1. Dispatch with the `Agent` tool: `subagent_type: "architect"`, `run_in_background:
    false` (you need the result before continuing), `prompt` containing exactly the
    Input fields `architect.md` documents (`task_id`, `run_id`, `created_at`,
-   `scope_ref.path`).
+   `scope_ref.path`), plus -- only when step 0 retrieved something -- the "Obsidian
+   historical/contextual evidence" block. `architect.md`'s "Obsidian historical
+   evidence" section governs how the Architect must treat it (historical evidence only;
+   confirm every current-behavior claim against the repository; record corroborated /
+   stale / contradicted / context-only).
 2. Capture the agent identifier the tool call returns. `retain_policy_event` with
    `kind: "agent_dispatch"` and a payload of `{"phase": "research", "subagent_type":
    "architect", "agent_id": "<the returned id>", "dispatch_sequence": 1}` -- this is the
@@ -1479,6 +1599,17 @@ State plainly, every time:
   run's own pipeline/product/test verdict, and -- for `connector_unavailable` -- that
   deterministic Obsidian integration is complete but no live vault is configured in this
   environment. Never describe a non-`published` outcome as "the note is probably there."
+- Obsidian vault **read** consultation, whenever this run consulted the vault during
+  Discovery or Research (see "# Obsidian Discovery/Research consultation" above): each
+  `search_obsidian`/`read_obsidian_note` operation, its `phase`, its exact classification
+  and `reason` (citing `runs/<run_id>/obsidian/read/<name>.json`), which notes (if any)
+  were retrieved, and -- for any note that materially influenced a scope or research
+  conclusion -- whether it was corroborated / stale / contradicted / context-only against
+  the repository. State plainly that a vault note is historical/contextual evidence, not
+  repository truth, and that it never changed a scope field, a Protected Path decision,
+  or the run verdict. A run that did not consult the vault says that plainly instead; a
+  `connector_unavailable` result states that deterministic Obsidian read integration is
+  complete but no live vault is configured in this environment.
 - Git delivery status, whenever this run performed a commit/push (see "GitHub / Git
   delivery" above): whether a commit was created (citing `commit-evidence.json`),
   whether a push was attempted (citing `push-attempt.json`), and the exact

@@ -383,3 +383,51 @@ class TestObsidianSkill:
             "Fabricate, soften, or infer a publication result",
         ]:
             assert phrase in self.flat_text
+
+    # --- Discovery/Research READ side (2026-09-08) ---
+
+    def test_read_cardinal_rule_present(self) -> None:
+        assert "A vault note is historical / contextual evidence, not current repository truth" in self.flat_text
+        assert "historical evidence, never repository truth" in self.flat_text  # frontmatter description
+        # the load-bearing corollary: repository wins on a conflict
+        assert "the repository wins and the disagreement is recorded" in self.flat_text
+
+    def test_read_coverage_sections_present(self) -> None:
+        for heading in [
+            "# 11. Read/search boundary (Discovery/Research consultation)",
+            "# 12. Read path safety",
+            "# 13. Read/search classifications",
+            "# 14. Read evidence retention (unconditional, every classification)",
+            "# 15. Stale / contradictory note handling",
+            "# 16. No authority escalation",
+        ]:
+            assert heading in self.text, f"expected read section {heading!r}"
+
+    def test_read_classifications_documented(self) -> None:
+        for status in (
+            "found", "no_matches", "read", "not_found", "invalid_note_path",
+            "invalid_query", "search_failed", "read_failed",
+        ):
+            assert status in self.text
+
+    def test_read_operations_named(self) -> None:
+        assert "search_obsidian" in self.text
+        assert "read_obsidian_note" in self.text
+        assert "obsidian_reader.py" in self.text
+
+    def test_read_evidence_path_named_and_distinct(self) -> None:
+        assert "runs/<run_id>/obsidian/read/" in self.text
+        assert "deliberately distinct from" in self.flat_text
+        assert "summary-publication.json` (the write-back evidence)" in self.flat_text
+
+    def test_read_side_skips_hidden_system_dirs(self) -> None:
+        assert ".obsidian/" in self.text
+        assert "never `.obsidian/` or any hidden/system" in self.flat_text
+
+    def test_read_side_not_forced_on_every_phase(self) -> None:
+        assert "could **materially** help" in self.flat_text
+        assert "does not require an unconditional read on every Discovery/Research phase" in self.flat_text
+
+    def test_read_side_stale_contradicted_vocabulary(self) -> None:
+        for label in ("corroborated", "stale", "contradicted", "context-only"):
+            assert label in self.text

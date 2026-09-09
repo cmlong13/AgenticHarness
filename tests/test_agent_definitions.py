@@ -140,6 +140,35 @@ class TestArchitectFrontmatter:
         assert resolved_tools(self.fields).isdisjoint(forbidden)
 
 
+class TestArchitectObsidianHistoricalEvidence:
+    """The Architect's Obsidian handling (2026-09-08): vault context the orchestrator
+    injects is historical/contextual evidence, never current repository truth, and the
+    Architect never reads the vault itself (it has no tool that could)."""
+
+    def setup_method(self) -> None:
+        self.text = (AGENTS_DIR / "architect.md").read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+
+    def test_section_present(self) -> None:
+        assert "# Obsidian historical evidence" in self.text
+
+    def test_vault_note_is_never_current_truth_alone(self) -> None:
+        assert "historical/contextual evidence, never current repository truth" in self.flat_text
+        assert "confirm it against the current repository" in self.flat_text
+        assert "metadata` tier" in self.flat_text
+
+    def test_architect_does_not_read_the_vault_itself(self) -> None:
+        assert "You never read the vault yourself" in self.flat_text
+
+    def test_vault_note_never_expands_scope_or_becomes_acceptance_criteria(self) -> None:
+        assert "not** acceptance criteria" in self.flat_text
+        assert "does not expand or narrow scope" in self.flat_text
+
+    def test_records_disagreement_in_repositorys_favour(self) -> None:
+        assert "Never resolve the disagreement in the vault's favour" in self.flat_text
+        assert "corroborated / stale / contradicted / context-only" in self.flat_text
+
+
 class TestSavedBoundaryTestReports:
     """The reports the Engineer actually produced during its live boundary
     verification (runs/engineer-boundary-test/) must validate for real."""

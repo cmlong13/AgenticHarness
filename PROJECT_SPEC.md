@@ -899,10 +899,14 @@ and Jira real REST/CLI connectors for that reason. Obsidian is *not* required to
    naming, summary structure, collision/update policy, evidence retention, failure
    classification, terminal-`/work` placement). It does not document a read/search
    procedure.
-5. **Obsidian Discovery/Research READ integration** -- **STILL OPEN.** No production
-   read, search, or query path for the Architect to consult vault knowledge during
-   Discovery or Research has been implemented or demonstrated. `architect.md` still has
-   no Obsidian read step, and nothing in `harness/orchestrator/` reads the vault.
+5. **Obsidian Discovery/Research READ integration** -- (status *as of this write-back
+   milestone*) **STILL OPEN.** No production read/search/query path yet.
+   **[Superseded 2026-09-08, later:** the read/search *boundary* and the Architect's
+   *consumption* of the evidence are now built and the targeted direct read is
+   live-proven -- see the "Milestone update (2026-09-08, later): Obsidian
+   Discovery/Research READ integration" note and its status list. The Architect's own
+   literal §2.2 direct docs-connector *tool permission* remains OPEN there, to be resolved
+   with MCP + REST.**]**
 6. **A full four-phase `/work` run naturally reaching the publication step** -- **STILL
    OPEN.** The live proof was a dedicated `live_cli.py` publication demonstration (see
    below), not a pipeline run.
@@ -1015,6 +1019,397 @@ derived from the other. No commit or push occurred;
 `git rev-list --left-right --count origin/main...main` reports `0 0` and `HEAD` remains
 `50b2e04` throughout this session.
 
+**Milestone update (2026-09-08, later): Obsidian Discovery/Research READ integration for
+the Architect.** This session closes the one item the write-back milestone above left
+explicitly open under "Scope status ... 5": the Discovery/Research **read** path. A
+follow-up audit (same day) then corrected an over-broad privacy claim in the first live
+proof and replaced it with a search-free one; the account below is post-audit.
+
+*Status, explicit before commit:*
+1. **Obsidian run-summary WRITE-BACK** -- **COMPLETE and LIVE-PROVEN** (unchanged from the
+   write-back milestone; `runs/run-20260908-obsidianlive-001/`).
+2. **Obsidian Discovery/Research READ / SEARCH boundary** (`obsidian_reader.py` +
+   `search_obsidian`/`read_obsidian_note` + `obsidian` Skill §§11-16 +
+   `work/SKILL.md` rule 20) -- **COMPLETE**: implemented, 95 focused deterministic tests,
+   full suite green. This is the *mechanism*, not the Architect's own tool grant (item 5).
+3. **Privacy-safe production DIRECT-READ live proof** -- **LIVE-PROVEN**:
+   `runs/run-20260908-obsidianread-002/`, a targeted `read_obsidian_note` of the
+   harness-owned note with **no vault-wide search**, independent SHA-256 + byte-count
+   match, no write.
+4. **Vault-wide SEARCH mechanism** -- **deterministically tested only; NOT claimed
+   live-proven.** `search_obsidian` opens every eligible `.md` file in the configured
+   vault by construction, so it is proven only against throwaway pytest vaults; a live
+   search over the user's personal vault is not used as an acceptance proof.
+   `runs/run-20260908-obsidianread-001/` ran one exploratory live search and is retained
+   as a diagnostic (see the privacy accounting below).
+5. **Architect *consumption/use* of Obsidian evidence** (`architect.md`'s "Obsidian
+   historical evidence" section; the orchestrator injects a labelled block into the
+   Architect's dispatch prompt; corroborated / stale / contradicted / context-only
+   handling; no authority escalation) -- **IMPLEMENTED through orchestrator mediation.**
+6. **Architect *direct docs-connector tool permission* required by the literal §2.2
+   wording ("Read/grep/glob + your docs connectors")** -- **STILL OPEN.** The Architect
+   frontmatter remains, intentionally, exactly `tools: Read, Grep, Glob`; no docs
+   connector tool is exposed to its own permission model. This is a deliberate
+   least-privilege choice, not an oversight -- but it means the literal §2.2 tool-list
+   wording is **not yet** satisfied. The narrow docs-connector capability (a real
+   read-only Obsidian tool in the Architect's own allowlist, without broadening
+   permissions unsafely -- and specifically **not** by giving the Architect `Bash`) is to
+   be determined and implemented as part of the upcoming **MCP + REST dual-connector
+   milestone** (item 8), which is the appropriate place to design it. Until then this
+   line stays OPEN. See the compliance analysis below.
+7. **Full four-phase `/work` run whose Architect consults the vault in-pipeline** --
+   **STILL OPEN.**
+8. **MCP + REST dual-connector requirement** -- **STILL OPEN and separate.**
+
+*Exact `ASSIGNMENT.md` read-side requirement (extracted before any edit).* §2.4's
+connector table is the whole of it: **"Obsidian ... Used in Discovery, Research ... Your
+personal knowledge vault: design notes, past decisions, calibration docs. The architect
+reads it; the orchestrator writes summaries back to it."** §2.2 also lists "your docs
+connectors" among the Architect's tools. Findings, item by item:
+- **Phases:** Discovery **and** Research (both named in the §2.4 "Used in phase" column).
+- **Agent:** the Architect ("The architect reads it"); in the §1 phase table the
+  Architect owns Research and the orchestrator owns Discovery, so the orchestrator is the
+  Discovery-side reader and the Architect the Research-side consumer.
+- **Knowledge type:** design notes, past decisions, calibration docs -- historical
+  context, not current source.
+- **read/search/query behaviour:** `ASSIGNMENT.md` says only "reads it." It does **not**
+  mandate a search interface, a query language, or semantic/vector retrieval. A
+  trustworthy deterministic text search plus a safe single-note read is sufficient.
+- **Specific MCP implementation:** none required. §2.4 names `mcp-obsidian` only as an
+  example (`e.g.`), and its own caveat is that an MCP server is not automatically the
+  right tool -- this repository already made GitHub and Jira real REST/CLI connectors for
+  that reason.
+- **Live demonstration:** the §4 acceptance checklist's Obsidian line is the *write* side
+  ("Obsidian vault receives a run summary"); there is **no** acceptance checkbox that
+  requires the read side to be independently live-demonstrated. The read side is a §2.4
+  component requirement. The overall §4 "demonstrate, live, on a repo with ≥50 files"
+  framing still argues for a real read proof, which was performed (below), read-only.
+- **Discovery, Research, or both:** both -- but neither is required to be *unconditional*.
+  `ASSIGNMENT.md` has no "every phase must consult the vault" language, so this harness
+  makes the consultation conditional (only when prior design/decision/calibration context
+  could materially help), and documents that choice.
+
+The previously-understood requirement (Obsidian used in Discovery + Research; the
+Architect reads design notes / past decisions / calibration docs; the orchestrator alone
+writes run summaries back) is confirmed correct against the actual assignment.
+
+*Assignment-compliance analysis: Architect / "docs connectors" (literal, 2026-09-08
+audit).* Exact wording. **§2.2:** "Define at least three subagents as markdown files with
+YAML frontmatter (`name`, `description`, `tools`, `model`). The `tools` list is your
+permission model -- **restricting tools is the whole point**: ... **`architect.md`
+(Research phase).** Read/grep/glob + your docs connectors. No file edits to source." So
+§2.2 does list "your docs connectors" alongside Read/grep/glob in the Architect's tool
+description. **§2.4** (connector table row, verbatim): "**Obsidian** (e.g. `mcp-obsidian`
+against your vault) | Discovery, Research | Your personal knowledge vault: design notes,
+past decisions, calibration docs. The architect reads it; the orchestrator writes
+summaries back to it," followed by the caveat: "MCP connectors are not automatically the
+right tool. The reference setup *abandoned* the Atlassian MCP server in favor of
+curl-based skills ... for at least one connector, implement **both** the MCP route and a
+REST-skill fallback."
+
+The two framed questions:
+1. *Does the assignment merely require the Architect to consume/read information
+   originating from Obsidian?* -- The substantive §2.4 requirement ("The architect reads
+   it," for design notes / past decisions / calibration docs, during Discovery/Research)
+   is about the Architect **having and using** Obsidian knowledge in Research. That is
+   met: the Architect receives vault content as labelled research input, reasons over it,
+   classifies it corroborated / stale / contradicted / context-only against the
+   repository, and cites the retained read evidence when it materially influences a
+   finding (`architect.md` "Obsidian historical evidence").
+2. *Does §2.2 require the Architect itself to possess a docs-connector tool in its
+   `tools:` frontmatter?* -- §2.2 lists "docs connectors," but three things bear on it:
+   (a) that list is a *permission-model sketch* immediately subordinated to "**restricting
+   tools is the whole point**" and §3.5's least-privilege principle -- the graded
+   principle is minimal privilege, not one literal frontmatter entry per listed
+   capability; (b) this repository already established, as a documented and tested
+   architecture decision (Option C, §2 / §10), that **no subagent invokes an external
+   boundary directly** -- the Architect does not even write its own `findings.json` (§3:
+   "the Architect is technically restricted to read/search tools, so it returns
+   structured findings ... rather than writing `findings.json` directly"); Obsidian read
+   is mediated for the identical reason, with the identical run/task/evidence-identity
+   guarantees; (c) §2.4's own caveat explicitly blesses **not** using MCP, and the
+   dual-connector requirement itself contemplates a connector being an orchestrator-
+   invoked "REST-skill fallback" rather than an agent-held MCP tool -- so an
+   orchestrator-mediated Obsidian read is squarely inside the assignment's design space.
+
+**Conclusion (with the literal/substantive split kept explicit).**
+- The **substantive §2.4 requirement -- "The architect reads it"** (the Architect having
+  and using Obsidian design-note / past-decision / calibration context during
+  Discovery/Research) -- **is satisfied** through orchestrator mediation: the read/search
+  boundary is complete, the orchestrator consults the vault on the Discovery and Research
+  sides, injects a labelled "Obsidian historical/contextual evidence" block into the
+  Architect's dispatch prompt, and the Architect reasons over it under the
+  corroborated / stale / contradicted / context-only and no-authority-escalation rules.
+- The **literal §2.2 tool-list wording -- "Read/grep/glob + your docs connectors"** in
+  the Architect's own `tools:` permission model -- is **NOT yet satisfied and stays
+  OPEN.** The Architect frontmatter is, deliberately, exactly `tools: Read, Grep, Glob`;
+  no docs-connector tool is exposed to its own allowlist. This milestone does **not**
+  claim that half closed, and this document must not be read as claiming "the Obsidian
+  connector both directions completely satisfies the assignment" -- it satisfies the
+  read/write *mechanism* and the Architect's *use* of the evidence; it does not yet
+  satisfy the Architect's literal tool-permission wording.
+- **No architecture change is made this milestone**, and the Architect is deliberately
+  **not** given `Bash` (or a `Skill`/`Agent` grant) merely to satisfy the wording -- that
+  would violate §2.2's own "restricting tools is the whole point" and let the Architect
+  bypass the orchestrator's run/task/evidence identities. The narrow, safe docs-connector
+  capability (a real read-only Obsidian tool in the Architect's own allowlist, no write,
+  no arbitrary filesystem access, path safety + evidence retention + stale-evidence rules
+  + Protected Paths all preserved) is to be **determined and implemented as part of the
+  upcoming MCP + REST dual-connector milestone**, which is the right place to design it
+  without broadening permissions unsafely. Until then, "Architect direct docs-connector
+  permission" is an OPEN line (status item 6 above).
+
+*Architect final tool / permission boundary (unchanged).* `.claude/agents/architect.md`
+frontmatter: `tools: Read, Grep, Glob` -- no `Bash`, `Edit`, `Write`, `NotebookEdit`,
+`Skill`, `Agent`, `WebFetch`, `WebSearch`, no MCP tool. It has no filesystem-write, no
+Git/Jira/GitHub capability of any kind, and no way to read the Obsidian vault itself. It
+consumes only the "Obsidian historical/contextual evidence" block the orchestrator
+injects into its dispatch prompt, under the orchestrator's own `run_id`/`task_id` and
+with the read already retained as `runs/<run_id>/obsidian/read/*.json` evidence. Protected
+Paths, repository-verification-over-vault-note, and the "historical evidence, not
+repository truth" rules all still bind it. `tests/test_agent_definitions.py::TestArchitectFrontmatter`
+(exact allowlist `{Read, Grep, Glob}`, forbidden tools disjoint) and
+`::TestArchitectObsidianHistoricalEvidence` guard this.
+
+*Architecture chosen: B -- a focused sibling module.* `harness/orchestrator/obsidian_reader.py`
+(new), separate from the proven `obsidian.py` publication path (not touched beyond
+nothing -- zero edits to it). Rationale: the read and write claims are genuinely
+distinct, their classifications do not overlap, and their cardinal rules point in
+opposite directions (write: "a generated summary is not proof it was published"; read: "a
+vault note is historical/contextual evidence, never current repository truth"). A small
+`_is_absolute` helper is duplicated rather than shared, so the live-proven write path is
+literally unmodified. Consistent with the harness's Option C architecture, the Architect
+(Read/Grep/Glob only, no Skill/Bash tool) does **not** call this module directly -- the
+orchestrator performs the read on its behalf and injects a labelled "Obsidian
+historical/contextual evidence" block into the Architect's dispatch prompt, exactly as
+`findings.json` is written for the Architect and test execution is mediated for the
+Engineer.
+
+*Files created / modified this milestone.* Created: `harness/orchestrator/obsidian_reader.py`;
+`tests/test_orchestrator_obsidian_reader.py`; `runs/run-20260908-obsidianread-002/` (the
+privacy-safe live read proof -- targeted read, no search); `runs/run-20260908-obsidianread-001/`
+(earlier search/read diagnostic, retained as historical evidence). Modified:
+`harness/orchestrator/evidence_io.py`
+(`retain_obsidian_read_evidence` -> `runs/<run_id>/obsidian/read/`, distinct from the
+publication `runs/<run_id>/obsidian/summary-publication.json`);
+`harness/orchestrator/live_cli.py` (two new operations + `OK_STATUSES` +
+`OPERATIONS`); `.claude/skills/obsidian/SKILL.md` (read cardinal rule + sections 11-16;
+publication sections 1-10 unchanged); `.claude/agents/architect.md` (an "Obsidian
+historical evidence" section + one Input bullet); `.claude/skills/work/SKILL.md` (standing
+rule 20, two ops-table rows, a "# Obsidian Discovery/Research consultation" section with
+"## In Discovery" / "## In Research" subsections, Phase 1 step 1 + Phase 2 step 0
+pointers, a "What to state" bullet); and additions to
+`tests/test_orchestrator_live_cli.py`, `tests/test_orchestrator_evidence_io.py`,
+`tests/test_skill_definitions.py`, `tests/test_work_skill.py`,
+`tests/test_agent_definitions.py`. No schema changed (findings/scope/run-summary
+untouched -- a vault-influenced finding fits the existing `metadata`-tier evidence entry
+or `open_questions`). `demo-repo/` untouched. All four hooks and `.claude/settings.json`
+untouched. Memory, checkpoint/resume, usage-accounting, Jira, GitHub behaviour untouched.
+
+*Read/search operations.* `live_cli.py` `search_obsidian` (`run_id`, `task_id`,
+`phase` (`discovery`|`research`), `query`, optional `filename`) -- deterministic bounded
+text search over eligible `.md` notes; `read_obsidian_note` (same + `note_path`,
+optional `filename`) -- one vault-relative Markdown note, body bounded to 64 KiB, full-file
+SHA-256 + byte count always complete. Both always use the real
+`obsidian_reader` (no simulated seam), read `OBSIDIAN_VAULT_PATH` fresh from the
+environment inside the reader, and reject a `vault_path`/`env`/`OBSIDIAN_VAULT_PATH`
+request field outright. `phase` must be `discovery` or `research`.
+
+*Path-safety rules.* Destination: unset `OBSIDIAN_VAULT_PATH` -> `connector_unavailable`;
+non-absolute or `..`-bearing -> `invalid_destination`; well-formed but not an existing
+directory -> `destination_unavailable`. Note path: absolute / drive-prefixed / `..` /
+non-`.md` / any `.`-prefixed component (`.obsidian/`, `.trash/`, hidden note) / resolved
+target escaping the vault -> `invalid_note_path`; structurally safe but no such file ->
+`not_found` (never a silent read of a different file). Search skips every hidden/system
+directory and every non-`.md` file entirely; **and, as of the 2026-09-08 audit, the
+search walk (`_eligible_md_files`) applies the same `resolve()` + `is_relative_to`
+containment check to every candidate file that `safe_note_target` applies to a
+single-note read -- a symlink/junction planted in the vault is never opened by a
+search.** Results are capped at `MAX_SEARCH_RESULTS = 8` with each snippet bounded to
+±160 chars; the vault is never dumped. `OBSIDIAN_SUMMARY_DIR` is not consulted for reads.
+No credential is read or retained. Two symlink-escape tests (one for `safe_note_target`,
+one for the search walk) `skip` in this environment -- Windows without the
+create-symlink privilege -- and are honestly recorded as skips; the lexical-traversal
+escape tests (`..`, drive-prefix, `Design/../../escape.md`) provide the real,
+always-running path-escape coverage. `read_note`'s own containment uses `Path.resolve()`,
+which *does* follow a real symlink to its target before the containment check, so the
+production code is correct; only the automated exercise of that specific branch is
+blocked here.
+
+*Result classifications.* Read: `read` (affirmative) / `not_found` /
+`connector_unavailable` / `invalid_destination` / `destination_unavailable` /
+`invalid_note_path` / `read_failed`. Search: `found` (affirmative) / `no_matches` (an
+honest "nothing there," **not** a connector failure) / `connector_unavailable` /
+`invalid_destination` / `destination_unavailable` / `invalid_query` / `search_failed`.
+Only `read` / `found` are affirmative retrieval (exit code 0 through `live_cli.py`);
+every negative classification is retained honestly with a non-zero exit.
+
+*Evidence format / path.* `runs/<run_id>/obsidian/read/search-<n>.json` /
+`read-<n>.json` (`evidence_io.retain_obsidian_read_evidence`, collision-guarded,
+callers increment) plus one `obsidian_read` policy event per call -- **structurally
+distinct** from `runs/<run_id>/obsidian/summary-publication.json` (the write-back
+evidence). Each record carries run ID, task ID, operation, phase, the query or requested
+note path, classification, attempted timestamp, connector (`filesystem_vault`), the
+vault identity (path -- not a credential), the returned note identities (vault-relative
+path; for a read, full-file SHA-256 + byte count), bounded snippets for a search, and
+the `reason` on any non-affirmative outcome. Never retained: credentials, entire vault
+dumps, unrelated personal notes, hidden/system files, or a massive note body when a
+bounded excerpt plus identity is sufficient.
+
+*Architect integration.* `architect.md` gained an "Obsidian historical evidence" section:
+a vault note is `metadata`-tier historical/contextual evidence, never sufficient on its
+own for a `found` finding about current runtime behaviour; the Architect confirms any
+current-behaviour claim against the repository and cites the repository `file:line` as
+the real evidence; it may additionally cite the retained
+`runs/<run_id>/obsidian/read/*.json` file as a `metadata`-tier `evidence` entry or note
+it in `open_questions`; a disagreement is always resolved in the repository's favour and
+recorded as corroborated / stale / contradicted / context-only; a vault note never
+expands or narrows scope. The Architect never reads the vault itself (it has no tool that
+could).
+
+*Discovery behaviour.* `work/SKILL.md`'s "## In Discovery": a consulted note may inform
+`objective` wording, `constraints`, `out_of_scope` framing, terminology, or a
+`task_graph` decision, but never bypasses `validate_scope`, never overrides a Protected
+Path, and never becomes an `acceptance_criteria`/`in_scope` entry unless the user request
+or (ticket mode) the resolved Jira issue independently corroborates it. When a vault note
+shapes a scope field, the Discovery reasoning says so and cites the retained read
+evidence.
+
+*Research behaviour.* `work/SKILL.md`'s "## In Research" + Phase 2 step 0: the
+orchestrator consults the vault *before* dispatching the Architect (only when
+`scope.json` indicates prior design context could materially help), and folds any `found`
+result into the Architect's `prompt` as a labelled "Obsidian historical/contextual
+evidence" block (note path + retained-evidence path + snippet or bounded body).
+`architect.md` governs how the Architect uses it -- verify current claims against the
+repo, record corroborated / stale / contradicted / context-only, never let a historical
+note replace actual research.
+
+*Obsidian Skill changes.* `.claude/skills/obsidian/SKILL.md`: publication sections 1-10
+and the publication cardinal rule are **unchanged**. Added: a "## Read cardinal rule" (**a
+vault note is historical/contextual evidence, not current repository truth**; the
+repository wins on a conflict; a note is never acceptance criteria without corroboration;
+stale/contradictory notes are historical evidence to be checked; reading never escalates
+authority), sections 11-16 (read/search boundary; read path safety; read/search
+classifications; read evidence retention -> the distinct `obsidian/read/` subdirectory;
+stale/contradictory note handling; no authority escalation), and read-side entries in the
+Boundaries list. Frontmatter `description` now covers both directions.
+
+*Deterministic tests.* Focused new tests this milestone: **95** (harness suite baseline
+919 collected -> 1014 collected; 1012 passed + 2 skipped -- both skips are the Windows
+create-symlink-privilege case, one for `safe_note_target` and one, added by the audit,
+for the search-walk containment guard). Re-measured directly (`git stash` the working
+tree, `pytest --collect-only` on the clean `HEAD` = 919; `pytest --collect-only` on the
+working tree = 1014; per-file `HEAD` counts via the same method). Breakdown:
+`tests/test_orchestrator_obsidian_reader.py` (new) -- **51** collected (38 `def test_`
+functions, 2 parametrized -> 12 + 3 cases), covering destination resolution,
+`safe_note_target` path-escape prevention, `read_note` (existing note / missing / Unicode
+/ empty / invalid extension / traversal / `.obsidian` / hidden note /
+bounded-body-with-full-identity / connector-unavailable), `search` (exact term /
+case-insensitive / multiple matches / deterministic ordering / bounded count /
+`no_matches` distinct from connector failure / Unicode query / blank + overlong query /
+ignores non-Markdown / ignores `.obsidian` & `.trash` & hidden / no full-vault dump /
+snippet identity), and `TestEligibleFileWalkContainment` (the audit's search-walk
+containment guard); `tests/test_orchestrator_live_cli.py` -- **+13** (76 -> 89:
+`TestSearchObsidian` 7, `TestReadObsidianNote` 6 -- affirmative-only exit code, negative
+classifications retained honestly, production boundary exposes no reader/env parameter,
+no vault path via request JSON, collision guard, read evidence separate from publication
+evidence); `tests/test_orchestrator_evidence_io.py` -- **+4** (16 -> 20);
+`tests/test_skill_definitions.py` -- **+8** (49 -> 57, `TestObsidianSkill` read-side
+coverage); `tests/test_work_skill.py` -- **+14** (157 -> 171,
+`TestObsidianDiscoveryResearchRead`); `tests/test_agent_definitions.py` -- **+5** (51 ->
+56, `TestArchitectObsidianHistoricalEvidence`). 51 + 13 + 4 + 8 + 14 + 5 = **95**;
+919 + 95 = 1014, exactly the observed collection total.
+
+*Full harness test count.* **1012 passed, 2 skipped** (`python -m pytest tests -q`),
+up from the committed baseline of 919 passed / 0 skipped. **Demo test count: 106 passed**
+(`python -m pytest demo-repo/tests -q`), unchanged; `git status --short -- demo-repo`
+empty.
+
+*Privacy-safe live read proof (2026-09-08, read-only) -- the acceptance proof:
+`runs/run-20260908-obsidianread-002/` (task `OBSIDIAN-READ-002`).* A dedicated
+`live_cli.py` CLI demonstration of the production `read_obsidian_note` boundary,
+**deliberately with no `search_obsidian` call and no vault-wide traversal**, so no
+unrelated personal note in the user's real vault is opened. `OBSIDIAN_VAULT_PATH` was set
+locally (never committed) to the real configured vault
+`C:\Users\caleb\Documents\Obsidian Vault`. One `read_obsidian_note` request
+(`phase: "research"`, `note_path` = exactly
+`Harness Run Summaries/run-summary-run-20260908-obsidianlive-001.md`, the harness-owned
+note created by the write-back milestone) returned `status: "read"`, exit code 0,
+`content_sha256: 5e017d2de6e3aea81aad60001061d75739584e44fd1e9d7c4dfcf25e0c198679`,
+`byte_count: 1552`, `line_count: 39` -- **identical** to an independent `hashlib.sha256`
+and byte count computed outside the harness by reading that exact file, and to the
+write-back milestone's own recorded SHA-256. `read_obsidian_note` opens exactly the one
+requested file (`safe_note_target` path validation, then a single `read_bytes()` on the
+resolved path); it walks no `.md` index and inspects no other vault file. Retained
+evidence: `runs/run-20260908-obsidianread-002/obsidian/read/read-1.json`,
+`.../logs/policy-events.jsonl` (one `obsidian_read` event), `.../requests/OBSR-1.json`,
+`OBSIDIAN-READ-PROOF.md`. Verified after the run: the vault's `Harness Run Summaries/`
+folder still holds exactly the one harness note, size and SHA-256 unchanged -- **no
+write, no new file, no `.tmp` artifact**. This live proof intentionally exercises only
+the targeted read boundary; the *vault-wide search mechanism* is proven separately by
+deterministic tests (below), never against a personal vault.
+
+*Earlier search/read diagnostic (2026-09-08): `runs/run-20260908-obsidianread-001/` (task
+`OBSIDIAN-READ-001`) -- superseded as the acceptance proof, retained as historical
+evidence.* This run ran a real `search_obsidian` over the user's real vault first
+(`phase: "research"`, query `"run-20260908-obsidianlive-001 publication boundary"`,
+`status: "found"`, `files_scanned: 2`, one match), then `read_obsidian_note` on the
+harness note (`status: "read"`, same SHA-256 as above). **Precise privacy accounting**,
+distinguishing three things the run's first-draft prose blurred: (1) *files the search
+inspected (opened)* -- **2**: the configured vault held exactly two eligible `.md` files,
+the harness-owned note **and one unrelated personal note**
+(`Computer Science/CSC340/00 - CSC 340 Dashboard.md.md`, a **0-byte / empty file**), and
+`obsidian_reader.search` opens every eligible file to score it, so the unrelated file
+*was* opened (an empty read -- zero personal-content bytes existed); (2) *files returned
+as matches* -- **1** (the harness note; the empty file scored 0 and was dropped before any
+snippet was built); (3) *files whose content was retained in evidence* -- **1** (only the
+harness note's path + bounded snippet, in `search-1.json` and the `obsidian_read` policy
+event). **No unrelated note content was retained, logged, or surfaced anywhere** -- this
+is not a data-retention leak. It *is* an inspection of an unrelated personal file that
+the user's live-proof instruction asked us to avoid, which is why run-002 (targeted read,
+no search) is the acceptance proof and run-001's own `OBSIDIAN-READ-PROOF.md` prose was
+corrected (the retained evidence JSON was not modified). `run-001` must not be cited as
+proof that "only one file was inspected."
+
+*Vault-wide `search_obsidian` mechanism: deterministically tested; NOT claimed
+live-proven.* By construction `obsidian_reader.search` opens and reads every eligible
+`.md` file in the configured vault to compute a match score. That is fully exercised by
+deterministic tests (`tests/test_orchestrator_obsidian_reader.py::TestSearch`,
+`::TestEligibleFileWalkContainment`, `tests/test_orchestrator_live_cli.py::TestSearchObsidian`)
+against throwaway pytest vaults only. Given the user's explicit privacy constraint on the
+real vault, a live search over that vault is not used as an acceptance proof -- run-001
+above was the one exploratory exercise and is documented as a diagnostic, not an
+acceptance proof.
+
+*Full `/work` Architect-in-pipeline read proof status: OPEN.* Direct `live_cli.py` proof
+above establishes the read *mechanism* only. A full four-phase `/work` run in which the
+orchestrator consults the vault during Discovery/Research and injects the result into a
+live Architect dispatch has **not** been performed and is **not** marked complete --
+exactly the same open-item status the write-back, route-back/hooks, and memory-loop
+milestones carry for their own full-pipeline demonstrations.
+
+*MCP + REST dual-connector requirement (§2.4 "for at least one connector"): still OPEN and
+separate.* No MCP server is configured for any connector; Obsidian is a single filesystem
+connector (read and write), and `ASSIGNMENT.md` never names Obsidian as the connector
+that must be built both ways. Unchanged by this milestone.
+
+*Remaining limitations.* (a) the full `/work` Architect-in-pipeline read demonstration
+(above); (b) the MCP + REST dual connector (above); (c) two symlink-escape path-safety
+tests (`safe_note_target` and the search-walk containment guard) `skip` under Windows
+without the create-symlink privilege -- lexical-traversal escape is fully covered by
+always-running tests, and both production containment checks use `Path.resolve()` +
+`is_relative_to` (which follows a real symlink to its target before checking), so the
+code is correct; only the automated exercise of that specific branch is blocked here, and
+the skips are recorded honestly; (d) search is deterministic substring/term-frequency
+ranking, not semantic retrieval -- sufficient per the requirement extraction above;
+(e) `search_obsidian` is a vault-wide operation that by construction opens every eligible
+`.md` file in the configured vault to score it -- proven only against throwaway pytest
+vaults, deliberately not live-proven against the user's personal vault (see the search
+mechanism status note above and `runs/run-20260908-obsidianread-001/` for the one
+exploratory exercise, documented as a diagnostic). No commit or push occurred;
+`git rev-list --left-right --count origin/main...main` reports `0 0` and `HEAD` remains
+`b4b37e4` throughout this session.
+
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
 followed. Implementation should track this spec; if the two diverge, update this file first.
@@ -1117,8 +1512,13 @@ reused rather than reimplemented.
   skill), not yet implemented.
 
 ### Subagents (≥3)
-- `architect.md` — Research. Read/grep/glob + docs connectors only, no source edits. Evidence
-  hierarchy: executable code > test assertions > runtime config > comments > metadata. Every
+- `architect.md` — Research. **Actual frontmatter `tools: Read, Grep, Glob`** — no source
+  edits. `ASSIGNMENT.md` §2.2's tool line is "Read/grep/glob + your docs connectors"; the
+  Read/Grep/Glob half is implemented, the **direct docs-connector tool half is still
+  OPEN** (deliberate least-privilege; the Architect *consumes* Obsidian evidence the
+  orchestrator injects, but holds no connector tool of its own — see the "Milestone update
+  (2026-09-08, later)" note's status list, item 6, and the MCP + REST milestone).
+  Evidence hierarchy: executable code > test assertions > runtime config > comments > metadata. Every
   claim has `file:line`. Labels findings as Found / Not Found / Inferred. Reads method bodies,
   not just signatures. Searches the whole repo; distinguishes current code from legacy.
   Output boundary: the Architect is technically restricted to read/search tools, so it returns
@@ -1169,18 +1569,34 @@ reused rather than reimplemented.
   (`.claude/skills/jira/SKILL.md` + `jira_connector.py`, ticket-mode intake milestone
   2026-08-20); the write skills remain not started, per `ASSIGNMENT.md`'s and that
   milestone's own exclusion of Jira writes.
-- `obsidian/` — **complete for the run-summary write-back / publication procedure
-  (2026-09-08); does not cover a Discovery/Research read procedure**:
-  `.claude/skills/obsidian/SKILL.md`, a procedural skill (no tool allowlist of its own)
-  covering destination validation, path safety, note naming, summary structure,
-  collision/update policy, the publication connector boundary, unconditional evidence
-  retention, all six publication classifications, and terminal-`/work` placement —
-  required by `work/SKILL.md` standing rule 19 before any `publish_run_summary` call.
-  Backed by `harness/orchestrator/obsidian.py` + `live_cli.py`'s `publish_run_summary`,
-  81 deterministic tests, and a live publication against the real configured vault
-  (`runs/run-20260908-obsidianlive-001/`). See the "Milestone update (2026-09-08)" note
-  above. The Architect-side vault **read** integration (`ASSIGNMENT.md` §2.4, "The
-  architect reads it") is **not** part of this skill or this milestone and remains open.
+- `obsidian/` — **the SKILL procedure covers both directions of the connector
+  (2026-09-08)** (this is the *skill/mechanism* status, not a claim that every literal
+  `ASSIGNMENT.md` Obsidian requirement is closed — the Architect's own literal §2.2
+  docs-connector *tool permission* is still OPEN, see the "Milestone update (2026-09-08,
+  later)" status list):
+  `.claude/skills/obsidian/SKILL.md`, a procedural skill (no tool allowlist of its own).
+  *Write-back / publication* (sections 1-10): destination validation, path safety, note
+  naming, summary structure, collision/update policy, the publication connector boundary,
+  unconditional evidence retention, all six publication classifications, terminal-`/work`
+  placement — required by `work/SKILL.md` standing rule 19 before any
+  `publish_run_summary` call; backed by `harness/orchestrator/obsidian.py` +
+  `live_cli.py`'s `publish_run_summary`, and a live publication against the real
+  configured vault (`runs/run-20260908-obsidianlive-001/`). *Discovery/Research read*
+  (read cardinal rule + sections 11-16): read/search boundary, read path safety,
+  read/search classifications, the distinct `runs/<run_id>/obsidian/read/` evidence
+  subdirectory, stale/contradictory note handling, no authority escalation — required by
+  `work/SKILL.md` standing rule 20 before any `search_obsidian`/`read_obsidian_note`
+  call; backed by `harness/orchestrator/obsidian_reader.py` + `live_cli.py`'s
+  `search_obsidian`/`read_obsidian_note`, and a privacy-safe read-only live proof against
+  the real configured vault -- a targeted `read_obsidian_note` with no vault-wide search
+  (`runs/run-20260908-obsidianread-002/`; an earlier search/read diagnostic,
+  `runs/run-20260908-obsidianread-001/`, is retained as historical evidence, not the
+  acceptance proof). See both "Milestone update (2026-09-08)" notes above. Still open: the
+  Architect's own literal §2.2 direct docs-connector *tool permission* (frontmatter stays
+  `Read, Grep, Glob`; to be resolved with the MCP + REST work), a full `/work`
+  Architect-in-pipeline read demonstration, a live proof of the *vault-wide search*
+  against a real personal vault (deliberately not attempted -- deterministic tests only),
+  and the separate MCP + REST dual-connector requirement.
 - Test-runner skill — encodes this repo's actual test command, thresholds, and report location.
   **Complete** — implemented at `.claude/skills/test-runner/`, automatically tested
   (`tests/test_skill_definitions.py`, `tests/test_test_runner_validation.py`), script-level
@@ -1194,7 +1610,7 @@ reused rather than reimplemented.
 | Connector | Used in phase | Purpose |
 |---|---|---|
 | GitHub (MCP server or `gh` CLI) | Discovery, Research, Verification | Read issues/PRs, search code, verify pushes landed |
-| Obsidian (filesystem vault via `OBSIDIAN_VAULT_PATH`) | Discovery, Research (Architect read — **not yet implemented**); orchestrator run-summary write-back — **COMPLETE and LIVE-PROVEN 2026-09-08** | Personal knowledge vault: design notes, past decisions, calibration docs (the read side); the orchestrator publishes a concise run summary back to it (the write-back side, done) |
+| Obsidian (filesystem vault via `OBSIDIAN_VAULT_PATH`) | Discovery, Research: read/search *boundary* — **COMPLETE 2026-09-08** (`obsidian_reader.py`; targeted direct read live-proven, `runs/run-20260908-obsidianread-002/`); Architect *consumes* the evidence via orchestrator mediation (**IMPLEMENTED**); Architect's own literal §2.2 docs-connector *tool permission* — **OPEN** (frontmatter stays `Read, Grep, Glob`, resolve with MCP+REST); full `/work` Architect-in-pipeline read — **OPEN**. Orchestrator run-summary write-back — **COMPLETE and LIVE-PROVEN 2026-09-08** | Personal knowledge vault: design notes, past decisions, calibration docs (the read side — historical/contextual evidence only, never repository truth); the orchestrator publishes a concise run summary back to it (the write-back side) |
 | Atlassian/Jira | Discovery | Ticket intake (read-only resolution, complete); status transitions / completion comments remain out of scope |
 
 For at least one connector, both the MCP route and a REST-skill fallback must be implemented,
@@ -1385,15 +1801,32 @@ this remains its own future milestone and Obsidian is not required to be it.
 
 ### Later integrations (after the loop closes once with real evidence)
 - Ticket mode + Jira/Atlassian connector (MCP and/or REST skill pack)
-- Obsidian connector — **run-summary write-back side COMPLETE and LIVE-PROVEN
-  (2026-09-08)**: `harness/orchestrator/obsidian.py`, a real filesystem-vault publication
-  connector (destination from `OBSIDIAN_VAULT_PATH`), `live_cli.py`'s
-  `publish_run_summary`, the `obsidian` Skill, wired into `work/SKILL.md`; live-proven
-  against the real configured vault. Not an MCP server (none is configured;
-  `ASSIGNMENT.md` names `mcp-obsidian` only as an example). **Still open on the Obsidian
-  connector:** the Discovery/Research **read** path for the Architect (no production
-  read/search/query implemented or demonstrated), a full `/work` run reaching the
-  publication step, and the MCP-vs-REST dual implementation (its own item below).
+- Obsidian connector — status model (do **not** collapse this into "both directions
+  completely satisfy the assignment"):
+  - *Write-back / publication:* **COMPLETE + LIVE-PROVEN (2026-09-08)** --
+    `harness/orchestrator/obsidian.py`, a real filesystem-vault publication connector
+    (destination from `OBSIDIAN_VAULT_PATH`), `live_cli.py`'s `publish_run_summary`, the
+    `obsidian` Skill, wired into `work/SKILL.md`; live-proven against the real configured
+    vault (`runs/run-20260908-obsidianlive-001/`).
+  - *Discovery/Research read/search boundary:* **COMPLETE (2026-09-08)** --
+    `harness/orchestrator/obsidian_reader.py`, a deterministic bounded read/search
+    boundary (same `OBSIDIAN_VAULT_PATH`), `live_cli.py`'s
+    `search_obsidian`/`read_obsidian_note`, `obsidian` Skill sections 11-16,
+    `work/SKILL.md` standing rule 20 + "# Obsidian Discovery/Research consultation".
+  - *Privacy-safe production direct read:* **LIVE-PROVEN** -- targeted
+    `read_obsidian_note`, no vault-wide search (`runs/run-20260908-obsidianread-002/`;
+    `runs/run-20260908-obsidianread-001/` is an earlier search/read diagnostic).
+  - *Architect-mediated Obsidian evidence consumption:* **IMPLEMENTED** --
+    `architect.md`'s "Obsidian historical evidence" section; the orchestrator injects a
+    labelled block into the Architect's dispatch prompt.
+  - *Architect direct docs-connector tool permission (literal §2.2 wording):* **OPEN** --
+    frontmatter stays `Read, Grep, Glob`; the Architect holds no connector tool of its
+    own; to be resolved with the MCP + REST work, never by giving the Architect `Bash`.
+  - *Full `/work` live integration (publication step reached in a real run; Architect
+    consulting the vault in-pipeline):* **OPEN.**
+  - *MCP + REST dual connector:* **OPEN** (its own item below, entirely open).
+  Not an MCP server (none is configured; `ASSIGNMENT.md` names `mcp-obsidian` only as an
+  example).
 - Full `github/` skill pack breadth (`pr-review`, `commit-history`)
 - Full `jira/` skill pack + field-reference doc
 - ~~Skill-enforcement hook~~ **COMPLETE** (2026-08-05) — implemented ahead of this list's
@@ -1714,8 +2147,24 @@ Demonstrated live, on a repo with ≥50 files:
       This was a dedicated `live_cli.py` publication demonstration, **not** a full
       four-phase `/work` run (still open). The Obsidian **read** side of this connector
       (`ASSIGNMENT.md` §2.4, "The architect reads it" during Discovery/Research) is a
-      distinct requirement and is **NOT** covered by this milestone — no production
-      read/search/query path for the Architect has been implemented or demonstrated. **The lessons-learned/second-run-uses-a-lesson half is demonstrated
+      distinct requirement; its *mechanism and the Architect's use of the evidence* are
+      addressed by the later **"Milestone update (2026-09-08, later): Obsidian
+      Discovery/Research READ integration"** note above:
+      `harness/orchestrator/obsidian_reader.py` + `live_cli.py`'s
+      `search_obsidian`/`read_obsidian_note` + `obsidian` Skill sections 11-16 +
+      `architect.md` + `work/SKILL.md` standing rule 20, 95 focused tests, and a
+      privacy-safe read-only live proof against the real vault -- a targeted
+      `read_obsidian_note` with no vault-wide search
+      (`runs/run-20260908-obsidianread-002/`, `read_obsidian_note` -> `read`, independent
+      SHA-256 + byte-count match, no write; an earlier search/read diagnostic,
+      `runs/run-20260908-obsidianread-001/`, is retained as historical evidence). **Still
+      open on the read side:** the Architect's own literal §2.2 direct docs-connector
+      *tool permission* (frontmatter stays `Read, Grep, Glob`; to be resolved with MCP +
+      REST), and a live vault-wide search over a real personal vault (deterministic tests
+      only, deliberately). The full
+      `/work` Architect-in-pipeline read demonstration, and a live proof of the vault-wide
+      *search* against a real personal vault, both remain open (the latter deliberately --
+      deterministic tests only, per the user's privacy constraint). **The lessons-learned/second-run-uses-a-lesson half is demonstrated
       (2026-08-06) via a real, two-run `live_cli.py` CLI demonstration**, not a live
       `/work` invocation (an explicitly allowed substitution for this specific
       requirement — see §10 "Memory-loop milestone (2026-08-06)"): Run A
@@ -2826,9 +3275,15 @@ documentation may require additional time after the working MVP closes.
    `final_verdict: "pass"`. See §10 "Live evidence (`run-20260804-riskband-003`) — completed."
 9. Deferred integrations and final assignment demonstrations. **Partially done** — the
    `github/` skill + push verification (2026-08-18), the read-only `jira/` skill + ticket
-   intake (2026-08-20), per-agent cost/token accounting (2026-08-14), and the Obsidian
-   run-summary **write-back** connector (2026-09-08) are complete; **still open:** the
-   Obsidian Discovery/Research **read** integration, the MCP-vs-REST dual connector, a
-   full four-phase `/work` run exercising the newer integrations, and planted-defect
-   (flaky-test / false-push-in-a-live-run) demos. See the dated milestone notes above for
-   the authoritative per-item status.
+   intake (2026-08-20), per-agent cost/token accounting (2026-08-14), the Obsidian
+   run-summary **write-back** connector (2026-09-08), and the Obsidian
+   **Discovery/Research read/search *boundary* + Architect *evidence consumption***
+   (`obsidian_reader.py` + `search_obsidian`/`read_obsidian_note` + `obsidian` Skill
+   sections 11-16 + `architect.md` + standing rule 20; targeted direct read live-proven,
+   2026-09-08) are complete; **still open:** the Architect's own literal §2.2 direct
+   docs-connector *tool permission* (frontmatter stays `Read, Grep, Glob`; to be resolved
+   with the MCP + REST work, not by giving the Architect `Bash`), the MCP-vs-REST dual
+   connector, a full four-phase `/work` run exercising the newer integrations (including
+   the Architect consulting the vault in-pipeline), and planted-defect (flaky-test /
+   false-push-in-a-live-run) demos. See the dated milestone
+   notes above for the authoritative per-item status.
