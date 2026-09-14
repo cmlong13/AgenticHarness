@@ -124,8 +124,16 @@ class TestEngineerCommandGrammar:
         assert "never widening, correcting, retrying with rewritten syntax" in self.flat_text
 
 
+# The Architect's docs-connector tools (ASSIGNMENT.md §2.2, MCP + REST milestone) --
+# the narrow, read-only Obsidian vault reader, and nothing else.
+ARCHITECT_DOCS_CONNECTOR_TOOLS = {"mcp__obsidian__search_notes", "mcp__obsidian__read_note"}
+
+
 class TestArchitectFrontmatter:
-    """Regression guard -- the Architect's boundary must not drift either."""
+    """Regression guard -- the Architect's boundary must not drift. After the MCP + REST
+    milestone the allowlist is Read/Grep/Glob PLUS exactly the two read-only Obsidian
+    docs-connector tools -- ASSIGNMENT.md §2.2's "Read/grep/glob + your docs connectors"
+    -- and nothing else."""
 
     def setup_method(self) -> None:
         self.path = AGENTS_DIR / "architect.md"
@@ -133,17 +141,30 @@ class TestArchitectFrontmatter:
         self.fields = parse_frontmatter(self.path)
 
     def test_exact_tool_allowlist(self) -> None:
-        assert resolved_tools(self.fields) == {"Read", "Grep", "Glob"}
+        assert resolved_tools(self.fields) == {"Read", "Grep", "Glob"} | ARCHITECT_DOCS_CONNECTOR_TOOLS
 
     def test_forbidden_tools_absent(self) -> None:
-        forbidden = FORBIDDEN_TOOLS | {"Edit", "Write"}
+        forbidden = FORBIDDEN_TOOLS | {"Edit", "Write", "Skill"}
         assert resolved_tools(self.fields).isdisjoint(forbidden)
+
+    def test_only_the_obsidian_docs_connector_mcp_tools_are_granted(self) -> None:
+        mcp_tools = {t for t in resolved_tools(self.fields) if t.startswith("mcp__")}
+        assert mcp_tools == ARCHITECT_DOCS_CONNECTOR_TOOLS
+        # No wildcard grant, no jira MCP tool, no unrelated server.
+        assert "mcp__jira__get_issue" not in resolved_tools(self.fields)
+        assert not any(t == "mcp" or t.endswith("__*") or t == "mcp__*" for t in resolved_tools(self.fields))
+
+    def test_docs_connector_tools_are_read_only_by_name(self) -> None:
+        for tool in ARCHITECT_DOCS_CONNECTOR_TOOLS:
+            assert any(verb in tool for verb in ("search", "read"))
+            assert not any(verb in tool for verb in ("write", "create", "update", "delete", "publish", "edit"))
 
 
 class TestArchitectObsidianHistoricalEvidence:
-    """The Architect's Obsidian handling (2026-09-08): vault context the orchestrator
-    injects is historical/contextual evidence, never current repository truth, and the
-    Architect never reads the vault itself (it has no tool that could)."""
+    """The Architect's Obsidian handling: whether the vault context was injected by the
+    orchestrator or fetched by the Architect's own read-only docs connector, it is
+    historical/contextual evidence, never current repository truth, and it grants no
+    authority."""
 
     def setup_method(self) -> None:
         self.text = (AGENTS_DIR / "architect.md").read_text(encoding="utf-8")
@@ -152,13 +173,24 @@ class TestArchitectObsidianHistoricalEvidence:
     def test_section_present(self) -> None:
         assert "# Obsidian historical evidence" in self.text
 
+    def test_docs_connector_section_present(self) -> None:
+        assert "# Obsidian docs connector" in self.text
+
     def test_vault_note_is_never_current_truth_alone(self) -> None:
         assert "historical/contextual evidence, never current repository truth" in self.flat_text
         assert "confirm it against the current repository" in self.flat_text
         assert "metadata` tier" in self.flat_text
 
-    def test_architect_does_not_read_the_vault_itself(self) -> None:
-        assert "You never read the vault yourself" in self.flat_text
+    def test_docs_connector_is_read_only_and_bounded(self) -> None:
+        assert "two vault tools, both read-only" in self.flat_text
+        assert "mcp__obsidian__search_notes" in self.flat_text
+        assert "mcp__obsidian__read_note" in self.flat_text
+        assert "cannot create, update, delete, rename, or move a vault note" in self.flat_text
+
+    def test_connector_adds_no_authority_and_identity_stays_orchestrators(self) -> None:
+        assert "The connector adds no authority" in self.flat_text
+        assert "Run identity stays the orchestrator's" in self.flat_text
+        assert "Echo what you used" in self.flat_text
 
     def test_vault_note_never_expands_scope_or_becomes_acceptance_criteria(self) -> None:
         assert "not** acceptance criteria" in self.flat_text

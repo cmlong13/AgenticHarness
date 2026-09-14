@@ -1047,19 +1047,22 @@ proof and replaced it with a search-free one; the account below is post-audit.
    Architect's dispatch prompt; corroborated / stale / contradicted / context-only
    handling; no authority escalation) -- **IMPLEMENTED through orchestrator mediation.**
 6. **Architect *direct docs-connector tool permission* required by the literal §2.2
-   wording ("Read/grep/glob + your docs connectors")** -- **STILL OPEN.** The Architect
-   frontmatter remains, intentionally, exactly `tools: Read, Grep, Glob`; no docs
-   connector tool is exposed to its own permission model. This is a deliberate
-   least-privilege choice, not an oversight -- but it means the literal §2.2 tool-list
-   wording is **not yet** satisfied. The narrow docs-connector capability (a real
-   read-only Obsidian tool in the Architect's own allowlist, without broadening
-   permissions unsafely -- and specifically **not** by giving the Architect `Bash`) is to
-   be determined and implemented as part of the upcoming **MCP + REST dual-connector
-   milestone** (item 8), which is the appropriate place to design it. Until then this
-   line stays OPEN. See the compliance analysis below.
+   wording ("Read/grep/glob + your docs connectors")** -- **[CLOSED 2026-09-09 -- see
+   the "Milestone update (2026-09-09)" note above.]** The Architect frontmatter is now
+   exactly `tools: Read, Grep, Glob, mcp__obsidian__search_notes, mcp__obsidian__read_note`
+   -- a real, narrow, read-only Obsidian docs-connector tool (backed by
+   `harness/mcp/obsidian_server.py`), granted without `Bash`/`Edit`/`Write`/`Skill`/
+   `Agent`/arbitrary filesystem access and without the `jira` MCP tool. The Obsidian MCP
+   server's `read_note` was live-proven (`runs/run-20260909-connectorroute-001/`). The
+   text below this list predates that closure.
 7. **Full four-phase `/work` run whose Architect consults the vault in-pipeline** --
    **STILL OPEN.**
-8. **MCP + REST dual-connector requirement** -- **STILL OPEN and separate.**
+8. **MCP + REST dual-connector requirement** -- **[CLOSED 2026-09-09 for **Jira** -- see
+   the "Milestone update (2026-09-09)" note above.]** `harness/mcp/jira_server.py` (MCP
+   route) + `jira_connector.py` (REST fallback, the kept route) +
+   `connector_router.py` + `live_cli.py`'s `resolve_jira_issue_routed`; both transports
+   live-exercised. A `resolved` issue through either route stays deterministic-test-only
+   (no Jira credentials in this environment).
 
 *Exact `ASSIGNMENT.md` read-side requirement (extracted before any edit).* §2.4's
 connector table is the whole of it: **"Obsidian ... Used in Discovery, Research ... Your
@@ -1410,6 +1413,362 @@ exploratory exercise, documented as a diagnostic). No commit or push occurred;
 `git rev-list --left-right --count origin/main...main` reports `0 0` and `HEAD` remains
 `b4b37e4` throughout this session.
 
+**Milestone update (2026-09-09): MCP + REST dual-route connector (Jira) and the
+Architect's direct docs-connector tool.** This session closes the two `ASSIGNMENT.md`
+requirements that every session since the GitHub-skill milestone recorded as OPEN:
+§2.4's "for at least one connector, implement **both** the MCP route and a REST-skill
+fallback, and document ... which one you kept and why," and §2.2's literal Architect
+tool wording "Read/grep/glob + **your docs connectors**." Nothing else on the open list
+(flaky-test demo, architecture diagram, final write-up, a full four-phase `/work` run
+exercising the newer integrations) was touched.
+
+*Exact assignment wording extracted (verbatim, before any edit).*
+- **§2.2 (Architect):** "**`architect.md` (Research phase).** Read/grep/glob + your docs
+  connectors. No file edits to source." The `tools` list is called "your permission
+  model -- **restricting tools is the whole point**."
+- **§2.4 (MCP + fallback):** "MCP connectors are not automatically the right tool. The
+  reference setup *abandoned* the Atlassian MCP server in favor of curl-based skills
+  because raw REST calls were more reliable and debuggable. Requirement: for at least one
+  connector, implement **both** the MCP route and a REST-skill fallback, and document in
+  your write-up which one you kept and why."
+- **§5 (write-up):** "MCP-vs-REST decision for the connector you built both ways (§2.4),
+  with evidence."
+- **§4 (acceptance):** the connector line is the Obsidian *write* side ("Obsidian vault
+  receives a run summary"). There is **no** §4 checkbox requiring the MCP+REST dual route
+  or the Architect's tool grant to be independently live-demonstrated.
+
+*Findings on the audit questions (no inference beyond the text):* (1) Architect wording
+is literally "Read/grep/glob + your docs connectors." (2) MCP+fallback wording is
+literally "implement **both** the MCP route and a REST-skill fallback." (3) The
+assignment says **"REST-skill fallback"** / "curl-based skills" / "raw REST calls" -- not
+a bare "REST," but the fallback is clearly a real REST/HTTP route, not a filesystem read.
+(4) The assignment does **not** require the same connector to expose both routes *to the
+Architect* -- §2.4 is about a connector; §2.2 is a separate requirement. (5) Obsidian is
+**not** mandated as the dual-route connector. (6) Jira is **not** mandated either -- but
+it is the assignment's own worked example ("the Atlassian MCP server"). (7) The
+assignment requires **at least one** connector built both ways. (8) Live proof of both
+*routes* is not an explicit §4 acceptance item; §5 requires the decision "with
+evidence." (9) The assignment requires **implementing both** and **documenting which one
+you kept** -- it explicitly frames REST as a "fallback" and does not require both to stay
+active in production.
+
+*Connector chosen for the dual route: **Jira.*** Rationale (exact assignment closure,
+smallest safe change): §2.4's "REST-skill fallback" wording and its own motivating story
+are about a genuine REST/HTTP connector -- Jira has a real Jira Cloud REST API v3
+boundary already implemented (`jira_connector.py`); Obsidian is a filesystem vault with
+no REST half, so calling a filesystem read "REST" would be dishonest. The Architect
+docs-connector requirement (§2.2) is a **separate** requirement and is closed with
+**Obsidian** (a read-only MCP tool), not folded into the dual route.
+
+*MCP route architecture (Route A).* `harness/mcp/` -- real, stdlib-only JSON-RPC 2.0
+stdio MCP servers (not a facade: `initialize` / `notifications/initialized` /
+`tools/list` / `tools/call` / `ping`, newline-delimited, drivable by `claude mcp` and by
+an external client):
+- `harness/mcp/_server_base.py` -- the ~150-line protocol server (`McpServer`, `Tool`).
+- `harness/mcp/jira_server.py` -- one read-only tool, `get_issue(issue_key)`, wrapping
+  `jira_connector.resolve_issue`. No write tool. Rejects a `base_url`/`email`/`api_token`/
+  `env` argument. Result carries only the connector's classification + a whitelist of
+  issue fields -- never the `Authorization` header or raw HTTP body.
+- `harness/orchestrator/mcp_client.py` -- the deterministic MCP stdio client
+  (`call_tool`), with a swappable `Transport` seam (`StdioTransport` = a real
+  `python -m <server>` subprocess in production; `InProcessTransport` / `ScriptedTransport`
+  for tests only). Classifies every MCP-layer failure: `mcp_ok` / `mcp_unavailable` /
+  `mcp_transport_error` / `mcp_protocol_error` / `mcp_invalid_response` / `mcp_tool_error`.
+- `.mcp.json` (project root) registers both servers (`jira`, `obsidian`). Claude Code
+  recognizes them as "Project config (shared via .mcp.json)", pending one-time approval
+  (`claude mcp list` confirmed). This is the actual supported project-local MCP mechanism
+  -- no invented `.mcp.json` semantics. **[Corrected 2026-09-14: the one-time project
+  approval has since been granted in this environment -- `claude mcp list` / `claude mcp
+  get jira` / `claude mcp get obsidian` now report both servers "✔ Connected", not
+  pending, and `.claude/settings.local.json`'s `enabledMcpjsonServers: ["jira",
+  "obsidian"]` is the persistent (untracked, machine-local) approval record. See the
+  "Final contract + native-integration audit (2026-09-14)" note below -- native MCP
+  availability is no longer the open item this paragraph originally described.]**
+
+*Fallback route architecture (Route B) -- the kept route.* `jira_connector.resolve_issue`
+unchanged: a direct, in-process, identity-checked `GET /rest/api/3/issue/{key}` with the
+same seven classifications. Ticket-mode `/work` continues to call it directly via
+`resolve_jira_issue` -- **the Jira ticket-intake path is unchanged by this milestone.**
+
+*Routing / fallback policy.* `harness/orchestrator/connector_router.py`
+(`resolve_issue_routed`), reached through `live_cli.py`'s new `resolve_jira_issue_routed`
+operation. Deterministic, no reasoning:
+- `RoutesPolicy.REST_FIRST` (default): REST first. An **authoritative** REST outcome
+  (`resolved` / `not_found` / `unauthorized` / `identity_mismatch` / `invalid_issue_key`)
+  is final -- MCP is **not** run, because a fallback could only repeat it or mask it.
+  `connector_unavailable` runs the MCP route **only to corroborate** (both must agree). A
+  non-authoritative transport-class failure (`invalid_response`) **falls back** to MCP.
+- `RoutesPolicy.MCP_FIRST`: the mirror image (parity tests + the `mcp_first` live proof).
+- **A fallback is never attempted past a real `unauthorized` or `identity_mismatch`** --
+  a fabricated MCP success can never override a real authorization failure or a real
+  identity mismatch.
+
+*Route-selection classifications.* Per-route `RouteResult.outcome` reuses
+`jira_connector`'s seven, plus `route_error` (an MCP-layer failure that never reached
+Jira). Final `RouteOutcome.status` (in `ROUTE_STATUSES`): `resolved_via_rest` /
+`resolved_via_mcp` / `rest_failed_mcp_resolved` / `mcp_failed_rest_resolved` (the four
+affirmative) / `connector_unavailable` / `not_found` / `unauthorized` /
+`identity_mismatch` / `invalid_issue_key` / `both_routes_failed`. (This design never emits
+a `route_disagreement` status -- a fallback runs only when the primary route was
+non-authoritative or unavailable, so there is no authoritative-vs-authoritative conflict;
+`both_routes_failed` covers "neither route produced an authoritative answer.")
+The record retains: connector, operation, requested key, policy, primary route, fallback
+route, primary result, whether fallback was attempted + why, fallback result, final
+authoritative route, final status, reason, timestamp -- so "capability exists" vs "route
+selected" vs "route succeeded" vs "fallback occurred" vs "real connector response" are
+never conflated.
+
+*Evidence structure.* `runs/<run_id>/jira/routing/route-<n>.json`
+(`evidence_io.retain_connector_routing_evidence`, collision-guarded) -- structurally
+distinct from `runs/<run_id>/jira/issue-resolution.json` (the ordinary Jira result) --
+plus a `connector_routing` policy event. No `Authorization` header or raw HTTP body is
+ever retained (`connector_router` drops the `raw` echo before retention).
+
+*Architect docs-connector permission (§2.2), the second requirement.*
+`.claude/agents/architect.md` frontmatter is now **exactly**
+`tools: Read, Grep, Glob, mcp__obsidian__search_notes, mcp__obsidian__read_note`. The two
+`mcp__obsidian__*` tools are the narrow, read-only "docs connector," backed by
+`harness/mcp/obsidian_server.py` (a project-local stdio MCP server wrapping
+`obsidian_reader` unchanged -- `search_notes` / `read_note` only, no write tool, rejects a
+`vault_path`/`env` argument, `OBSIDIAN_VAULT_PATH` read fresh from the server's own
+environment, all `safe_note_target` / `_eligible_md_files` containment and hidden-path
+exclusion inherited verbatim). **No `Bash`, `Edit`, `Write`, `NotebookEdit`, `Skill`,
+`Agent`, `WebFetch`, `WebSearch`, and no MCP tool other than the two Obsidian ones**
+(`.mcp.json`'s `jira` server tool is deliberately NOT granted to the Architect).
+`architect.md`'s body gained an "Obsidian docs connector (your direct read-only tools)"
+section: consult only when materially helpful; the connector enforces path safety;
+**echo every used read back as an `obsidian_reads` array** so the orchestrator retains a
+normalized `runs/<run_id>/obsidian/read/` record after the dispatch (Option A); run
+identity, scope, and dispatch authority stay the orchestrator's; the connector adds no
+authority (a vault note is still `metadata`-tier historical evidence, never repository
+truth). The old "You never read the vault yourself" wording is replaced; the
+orchestrator-mediated Discovery/Research consultation (`work/SKILL.md`'s "# Obsidian
+Discovery/Research consultation") stays the primary path.
+
+*Final Architect effective allowlist:* `Read`, `Grep`, `Glob`,
+`mcp__obsidian__search_notes`, `mcp__obsidian__read_note` -- and nothing else
+(`tests/test_agent_definitions.py::TestArchitectFrontmatter`,
+`tests/test_mcp_config.py::test_architect_frontmatter_mcp_tools_map_to_a_registered_server`
+guard this exactly).
+
+*Least-privilege analysis.* The Architect gains a real docs-connector capability in its
+own permission model (a named MCP tool in `tools:`, the exact supported Claude Code
+syntax) while gaining **zero** shell, filesystem-write, agent-dispatch, or
+non-docs-connector reach. The tool is read-only by construction (the server exposes no
+write tool), vault-contained (delegated to `obsidian_reader`), and cannot be pointed
+elsewhere (no `vault_path` argument; env read server-side). The orchestrator still owns
+run/task identity and evidence retention. This satisfies §2.2's literal wording without
+violating its own "restricting tools is the whole point" principle or §3.5 least
+privilege.
+
+*Preferred / kept production route: **REST (Route B).*** Documented in
+`.claude/skills/jira/SKILL.md` §9 and `work/SKILL.md`'s "# Connector routing," with a
+five-point evidence-based rationale matching the reference setup's own conclusion: fewer
+moving parts (no subprocess, no second protocol surface), directly debuggable (one
+retained request/response pair vs. a multi-step cross-process exchange), minimal
+deterministic evidence, no `.mcp.json`-approval / subprocess-health dependency, and
+identical authority (both routes hit the same endpoint and identity check -- MCP buys
+surface, not trust). MCP is retained as an implemented, live-exercised alternate (and the
+`mcp_first` policy exists) so "implement both" is genuinely met and the decision rests on
+real evidence, not assertion. This decision was **not** made by defaulting to MCP because
+this milestone adds it.
+
+*Status distinctions -- kept explicit, never collapsed:*
+
+| item | implemented | deterministically tested | live-proven |
+|---|---|---|---|
+| Jira MCP server (`get_issue`) | yes | yes (27 tests) | yes -- real `python -m harness.mcp.jira_server` subprocess, real JSON-RPC, `mcp_ok` returned |
+| MCP stdio client | yes | yes (14 tests) | yes -- real subprocess round-trip |
+| REST route (`jira_connector`) | unchanged | unchanged | unchanged (was already so) |
+| Dual-route selection / fallback policy | yes | yes (21 tests) | **partial** -- both transports run for real and corroborate `connector_unavailable`; a `resolved` outcome through either route is deterministic-test-only (no Jira credentials, no legitimate issue -- none invented) |
+| `resolve_jira_issue_routed` live-CLI op | yes | yes (7 tests) | yes -- `runs/run-20260909-connectorroute-001/jira/routing/route-1.json` (`rest_first`) + `route-2.json` (`mcp_first`) |
+| Architect `mcp__obsidian__*` frontmatter grant | yes | yes (agent-def + mcp-config tests) | **[Corrected 2026-09-14]** live-proven: a real `Agent` dispatch of `subagent_type: "architect"` (its actual, unmodified `tools:` frontmatter -- no `mcpServers:` field) genuinely invoked `mcp__obsidian__search_notes` at runtime; the call resolved and executed (returning `connector_unavailable` only because this environment has no `OBSIDIAN_VAULT_PATH` configured, not because the tool was missing) |
+| Obsidian MCP server (`read_note` / `search_notes`) | yes | yes | **yes (affirmative)** -- `runs/run-20260909-connectorroute-001/obsidian/read/mcp-read-1.json`: real subprocess, real `read` of the single harness-owned note, independent SHA-256 + byte-count match; live path-traversal rejection; no vault-wide search, no write |
+
+*MCP live-proof status:* the MCP *transport and both project-local servers* are
+LIVE-PROVEN (real subprocesses, real protocol; the Obsidian server with a real
+affirmative `read`). A Jira MCP `resolved` issue is NOT live-proven (no credentials / no
+legitimate issue; not invented) -- deterministic-test-proven only.
+*Fallback (REST) live-proof status:* the REST transport is live-exercised in the same run
+(`connector_unavailable`, corroborating MCP). A REST `resolved` issue is likewise
+deterministic-test-only in this environment (unchanged from the Jira-intake milestone).
+*Full `/work` proof status:* OPEN -- no four-phase `/work` run has exercised
+`resolve_jira_issue_routed` or the Architect's direct `mcp__obsidian__*` tool
+in-pipeline. Same open-item status the write-back / route-back / memory-loop /
+usage-accounting milestones all carry for their own full-pipeline demonstrations.
+**[2026-09-14: this remains accurate and is deliberately unchanged by the audit below --
+a single narrow `Agent` dispatch proving the MCP tool itself is reachable (see the
+audit note) is not a four-phase `/work` run and is not claimed to be one.]**
+
+*Focused tests:* **+91** (1014 -> 1105 collected; 1103 passed + 2 skipped -- the same two
+pre-existing Windows create-symlink skips, unchanged). New files: `test_mcp_servers.py`
+(27), `test_orchestrator_mcp_client.py` (14), `test_orchestrator_connector_router.py`
+(21), `test_mcp_config.py` (6). Additions: `test_orchestrator_evidence_io.py` (+4),
+`test_orchestrator_live_cli.py` (+7), `test_agent_definitions.py` (+4),
+`test_skill_definitions.py` (+3), `test_work_skill.py` (+5). Demo suite: **106 passed**,
+unchanged; `git status --short -- demo-repo` empty. `git diff --check` clean.
+
+*Unchanged, verified:* `.claude/settings.json` and all four hooks
+(`pre_dispatch_check.py`, `skill_enforcement.py`, `completion_guardrail.py`,
+`record_agent_usage.py`); `obsidian.py` (write-back); `jira_connector.py` and the
+`resolve_jira_issue` op (ticket intake); `github.py`; `memory.py`; `checkpoint.py`;
+`usage.py`; `core.py`; `demo-repo/`. No commit or push occurred;
+`git rev-list --left-right --count origin/main...main` reports `0 0` and `HEAD` remains
+`9f55aeb` throughout this session.
+
+*Remaining limitations.* (a) No Jira credentials / MCP Atlassian server in this
+environment, so a `resolved` issue through either route is deterministic-test-only; (b)
+**[Corrected 2026-09-14]** the Architect's direct `mcp__obsidian__*` tool has now been
+exercised by a real, standalone Architect dispatch (not yet inside a full four-phase
+`/work` run -- that part of the limitation still holds, see (d)); (c) `search_notes`
+against the real personal vault is deliberately not live-proven (privacy -- deterministic
+tests + the targeted single-note `read` only); (d) no full four-phase `/work` run
+exercised either new capability end-to-end.
+
+**Final contract + native-integration audit (2026-09-14).** Closes two narrow, real
+contract gaps in the milestone above, before its first commit. Scope was deliberately
+kept to exactly these two items -- no flaky-test demo, no architecture diagram, no final
+write-up, no full `/work` integration run.
+
+*1. `findings.schema.json` vs. `architect.md`'s `obsidian_reads` promise -- a real
+contract bug, now fixed.* `architect.md` (and `work/SKILL.md`, `obsidian/SKILL.md`)
+already documented that a direct Architect MCP read is echoed back as a top-level
+`obsidian_reads` array in its findings response. `findings.schema.json`'s root had
+`additionalProperties: false` and no `obsidian_reads` property at all -- so a real
+Architect response using its own `mcp__obsidian__*` tools would have been rejected by
+the exact same `validate_against_schema` / `op_validate_artifact` / `op_promote_artifact`
+path an ordinary response passes, before semantic validation even ran. Verified, not
+inferred: a representative payload (an ordinary `found` finding plus one
+`mcp__obsidian__search_notes` and one `mcp__obsidian__read_note` entry) was run through
+the real `harness/evidence.py` validators and through `live_cli.op_validate_artifact` /
+`op_promote_artifact` against a scratch run directory -- confirmed rejected
+(`"obsidian_reads" was unexpected`) before the fix, confirmed promoted (byte-identical on
+disk) after it. Fix: `findings.schema.json` gained an OPTIONAL `obsidian_reads` array
+(`$defs.obsidianReadEntry`, `maxItems: 20`) that is `additionalProperties: false` and
+required `[tool, query_or_note_path, status]`. `tool` is an enum of exactly
+`mcp__obsidian__search_notes` / `mcp__obsidian__read_note` (no Jira tool, no wildcard, no
+write/mutation tool -- none exists on the real connector). `status` is an enum of the
+real union of `obsidian_reader.READ_STATUSES` / `SEARCH_STATUSES` (`found`, `no_matches`,
+`invalid_query`, `search_failed`, `read`, `not_found`, `invalid_note_path`,
+`read_failed`, `connector_unavailable`, `invalid_destination`,
+`destination_unavailable`) -- never an invented classification. `query_or_note_path` /
+optional `note_path` are length-bounded and pattern-rejected for a leading `/` or `\`,
+a drive-letter prefix, or `..` (no absolute vault path can validate); `note_path`
+additionally requires a literal `.md` suffix (the connector only ever reads Markdown
+notes). Optional `content_sha256` must be a strict 64-lowercase-hex-digit string (a real
+`hashlib.sha256().hexdigest()` shape). No note body and no credential field exists in the
+shape. An ordinary findings document with no `obsidian_reads` key continues to validate
+exactly as before -- the base contract was not loosened.
+Tests added (**+18**, none carried over from the milestone's own count above):
+`tests/test_artifact_contracts.py` (+15) covers the baseline-still-valid case, a fully
+valid two-entry `obsidian_reads` array through both schema and semantic validation, and
+one rejection test each for: unknown tool, write-tool, Jira-tool, malformed sha256,
+uppercase sha256, unexpected property, absolute POSIX path, absolute Windows/drive path,
+`..` traversal, missing `.md` suffix, unrecognized status, >20 entries, and a missing
+required field; `tests/test_orchestrator_live_cli.py` (+2) proves the real
+`op_validate_artifact`/`op_promote_artifact` path promotes a valid `obsidian_reads`
+payload byte-for-byte and rejects an unknown-tool one before any `findings.json` is
+written; `tests/test_orchestrator_checkpoint.py` (+1) proves `checkpoint.evaluate_resume`'s
+real per-artifact revalidation (`_revalidate_artifact` -> `validate_against_schema` +
+`validate_findings_semantics`, the same functions resume() relies on to trust a reused
+phase without re-dispatching it) accepts a promoted `findings.json` carrying
+`obsidian_reads` and returns the field back in `decision.docs` unchanged --
+checkpoint/resume safety was a direct, provable consequence of the schema fix, not a
+separate code change, since neither `checkpoint.py` nor `evidence_io.py` special-cases
+`findings.json`'s shape at all.
+
+*2. Claude Code MCP configuration + Architect permission -- audited, one correction
+applied to this document (no code change needed).* `claude mcp list` / `claude mcp get
+jira` / `claude mcp get obsidian` were run for real against the installed Claude Code
+(2.1.270): both servers report "✔ Connected", "Scope: Project config (shared via
+.mcp.json)" -- **not** "Pending approval" (`claude mcp get`'s own documented state for an
+unapproved `.mcp.json` server). `.claude/settings.local.json`'s `enabledMcpjsonServers:
+["jira", "obsidian"]` (untracked, machine-local -- confirmed via `git ls-files` /
+`git log`, never committed) is the persistent one-time-approval record; this corrects the
+milestone text above, which was accurate as of 2026-09-09 but is superseded now that
+approval has actually been granted in this environment. Server-side tool names
+(`harness/mcp/jira_server.py`'s `Tool(name="get_issue", ...)`,
+`harness/mcp/obsidian_server.py`'s `Tool(name="search_notes", ...)` /
+`Tool(name="read_note", ...)`) confirm the client-visible names are exactly
+`mcp__jira__get_issue`, `mcp__obsidian__search_notes`, `mcp__obsidian__read_note` --
+matching `architect.md`'s `tools:` line exactly, with no Jira tool and no wildcard.
+`architect.md`'s effective allowlist is unchanged and confirmed exactly `Read`, `Grep`,
+`Glob`, `mcp__obsidian__search_notes`, `mcp__obsidian__read_note`, and confirmed absent:
+`Bash`, `Write`, `Edit`, `NotebookEdit`, `Skill`, `Agent`, `WebFetch`, `WebSearch`, the
+Jira MCP tool, and any wildcard MCP grant (unchanged from 2026-09-09; re-verified, not
+re-implemented).
+`mcpServers:` frontmatter question -- resolved empirically rather than by asserting
+documentation either way: a real `Agent` dispatch of `subagent_type: "architect"`,
+using `architect.md`'s actual, already-committed frontmatter (`tools:` naming the two
+exact `mcp__obsidian__*` tools, **no** `mcpServers:` field of any kind), genuinely
+invoked `mcp__obsidian__search_notes(query="pagination design decisions")` at runtime.
+The call resolved as a real tool and executed -- it returned `connector_unavailable`
+(this environment's `OBSIDIAN_VAULT_PATH` is unset), not a "tool not found" failure --
+and the Architect's real, live response echoed a schema-conforming `obsidian_reads` entry
+for it, which was independently validated against the fixed `findings.schema.json` (0
+errors) and promoted through the real `op_promote_artifact` path
+(`runs/run-20260914-mcpaudit-001/findings.json`). This is direct, in-session proof that an
+exact `mcp__<server>__<tool>` name in a subagent's `tools:` frontmatter is sufficient to
+reach an already project-approved MCP server's tool, with no `mcpServers:` frontmatter
+needed -- so the architecture is correctly left unchanged. (A documentation-lookup
+subagent run during this same audit claimed `mcpServers:` frontmatter both exists and is
+the "primary" attachment mechanism; that claim was not taken on faith and is contradicted
+by this session's own direct empirical result, so it was not acted on.)
+*MCP protocol compatibility.* `harness/mcp/_server_base.py`'s `initialize` handler echoes
+back whatever `protocolVersion` the connecting client requests, falling back to its own
+`DEFAULT_PROTOCOL_VERSION = "2025-06-18"` only when the client omits one -- it never
+unilaterally asserts a version the client didn't ask for, so it cannot claim support for
+a newer protocol revision it does not implement. The installed Claude Code's own
+`claude mcp list` health check completing both servers as "✔ Connected" is real end-to-end
+proof this negotiation and the newline-delimited JSON-RPC 2.0 `initialize` ->
+`notifications/initialized` -> `tools/list` -> `tools/call` sequence are accepted as-is;
+no protocol rewrite was needed or made. Documented here as a legacy-compatible stdio MCP
+server, accurately.
+
+*Status distinctions for this audit -- kept explicit, never collapsed:*
+
+| item | implemented | configured | approved | deterministically tested | live-exercised |
+|---|---|---|---|---|---|
+| `findings.schema.json` `obsidian_reads` field | yes | n/a | n/a | yes (18 new tests) | yes -- a real live Architect dispatch's genuine response validated (0 errors) and promoted through the real path |
+| `.mcp.json` project MCP configuration | yes (2026-09-09) | yes | **yes** (`enabledMcpjsonServers`, this environment) | yes | yes -- `claude mcp list`/`get` both report Connected |
+| Architect exact MCP tool permission (`tools:`) | yes (2026-09-09) | yes | yes (server-level, above) | yes (agent-def + mcp-config tests) | yes -- reached and invoked at runtime this session |
+| `mcpServers:` frontmatter on the Architect | n/a -- investigated and found unnecessary | -- | -- | -- | proven unnecessary by a real successful invocation without it |
+| Real Architect MCP invocation inside `/work` | no | no | no | no | **OPEN** -- today's proof is one standalone `Agent` dispatch (`runs/run-20260914-mcpaudit-001/`), not an in-pipeline `/work` phase dispatch |
+
+*Test reconciliation.* `python -m pytest tests -q`: **1123 collected / 1121 passed / 2
+skipped** (the same two pre-existing Windows create-symlink skips, unchanged) -- up from
+this milestone's own pre-audit 1105/1103/2 by exactly **+18**, all listed above.
+`python -m pytest demo-repo/tests -q`: **106 passed**, unchanged. `git diff --check`:
+clean (only line-ending advisories, no real conflict markers or trailing-whitespace
+errors). `git status --short -- demo-repo`: empty. `git rev-list --left-right --count
+origin/main...main`: `0 0`. Confirmed unchanged: `demo-repo/`, all four hooks
+(`pre_dispatch_check.py`, `skill_enforcement.py`, `completion_guardrail.py`,
+`record_agent_usage.py`), Jira ticket intake, Obsidian write-back, `github.py`,
+`memory.py`, `checkpoint.py`, `usage.py`, `core.py` -- this audit's only source edit is
+`harness/schemas/findings.schema.json`; everything else touched is a test file or this
+document. No secret committed; no user-specific absolute vault path committed in any
+production/config file (this session's `OBSIDIAN_VAULT_PATH` was confirmed unset, never
+hardcoded anywhere). No external mutation (the one real Obsidian MCP call this audit made
+returned `connector_unavailable` -- nothing was read or written in any vault). **No
+commit or push occurred.**
+
+*Remaining limitations (this audit).* (a) The real Architect MCP invocation proven above
+is a standalone `Agent` dispatch outside `/work`'s own dispatch machinery, not an
+in-pipeline Research-phase call -- that remains open, same as the milestone's own (d)
+above; (b) the orchestrator side of the Architect's `obsidian_reads` promise -- "after the
+dispatch returns, the orchestrator retains each echoed read as a normalized
+`runs/<run_id>/obsidian/read/<name>.json` record" (`work/SKILL.md` §11) -- has zero code
+in `harness/orchestrator/core.py` today; nothing parses `obsidian_reads` back out of a
+promoted `findings.json` to write that retained record. This was deliberately left
+unfixed: it is full `/work`-integration work, explicitly out of this audit's scope, not a
+schema/contract defect -- the schema and promotion path this audit closes are what make
+that future retention code possible to write correctly, not a substitute for writing it.
+
+*Is the MCP + REST milestone now ready to commit?* Yes, on the evidence gathered here: the
+schema contract bug is fixed and regression-tested, the full harness and demo suites pass,
+demo-repo/hooks/other connectors are unchanged, and no commit or push has been made
+pending the user's own decision to do so.
+
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
 followed. Implementation should track this spec; if the two diverge, update this file first.
@@ -1512,12 +1871,14 @@ reused rather than reimplemented.
   skill), not yet implemented.
 
 ### Subagents (≥3)
-- `architect.md` — Research. **Actual frontmatter `tools: Read, Grep, Glob`** — no source
-  edits. `ASSIGNMENT.md` §2.2's tool line is "Read/grep/glob + your docs connectors"; the
-  Read/Grep/Glob half is implemented, the **direct docs-connector tool half is still
-  OPEN** (deliberate least-privilege; the Architect *consumes* Obsidian evidence the
-  orchestrator injects, but holds no connector tool of its own — see the "Milestone update
-  (2026-09-08, later)" note's status list, item 6, and the MCP + REST milestone).
+- `architect.md` — Research. **Actual frontmatter (since 2026-09-09):
+  `tools: Read, Grep, Glob, mcp__obsidian__search_notes, mcp__obsidian__read_note`** — no
+  source edits. `ASSIGNMENT.md` §2.2's tool line is "Read/grep/glob + your docs
+  connectors"; **both halves are now implemented** — the two `mcp__obsidian__*` tools are
+  a real, narrow, read-only Obsidian docs connector (`harness/mcp/obsidian_server.py`),
+  granted with no `Bash`/`Edit`/`Write`/`Skill`/`Agent`/filesystem access and no `jira`
+  MCP tool. The orchestrator-mediated injection path also still exists. See the
+  "Milestone update (2026-09-09)" note above.
   Evidence hierarchy: executable code > test assertions > runtime config > comments > metadata. Every
   claim has `file:line`. Labels findings as Found / Not Found / Inferred. Reads method bodies,
   not just signatures. Searches the whole repo; distinguishes current code from legacy.
@@ -1610,17 +1971,18 @@ reused rather than reimplemented.
 | Connector | Used in phase | Purpose |
 |---|---|---|
 | GitHub (MCP server or `gh` CLI) | Discovery, Research, Verification | Read issues/PRs, search code, verify pushes landed |
-| Obsidian (filesystem vault via `OBSIDIAN_VAULT_PATH`) | Discovery, Research: read/search *boundary* — **COMPLETE 2026-09-08** (`obsidian_reader.py`; targeted direct read live-proven, `runs/run-20260908-obsidianread-002/`); Architect *consumes* the evidence via orchestrator mediation (**IMPLEMENTED**); Architect's own literal §2.2 docs-connector *tool permission* — **OPEN** (frontmatter stays `Read, Grep, Glob`, resolve with MCP+REST); full `/work` Architect-in-pipeline read — **OPEN**. Orchestrator run-summary write-back — **COMPLETE and LIVE-PROVEN 2026-09-08** | Personal knowledge vault: design notes, past decisions, calibration docs (the read side — historical/contextual evidence only, never repository truth); the orchestrator publishes a concise run summary back to it (the write-back side) |
-| Atlassian/Jira | Discovery | Ticket intake (read-only resolution, complete); status transitions / completion comments remain out of scope |
+| Obsidian (filesystem vault via `OBSIDIAN_VAULT_PATH`) | Discovery, Research: read/search *boundary* — **COMPLETE 2026-09-08**; orchestrator-mediated Architect consumption — **IMPLEMENTED**; Architect's own literal §2.2 docs-connector *tool permission* — **CLOSED 2026-09-09** (`mcp__obsidian__search_notes`/`mcp__obsidian__read_note` in `architect.md` frontmatter, backed by `harness/mcp/obsidian_server.py`; `read_note` live-proven `runs/run-20260909-connectorroute-001/`); full `/work` Architect-in-pipeline read — **OPEN**. Orchestrator run-summary write-back — **COMPLETE and LIVE-PROVEN 2026-09-08** | Personal knowledge vault: design notes, past decisions, calibration docs (the read side — historical/contextual evidence only, never repository truth); the orchestrator publishes a concise run summary back to it (the write-back side) |
+| Atlassian/Jira | Discovery | Ticket intake (read-only resolution, complete). **Dual route (§2.4) — CLOSED 2026-09-09:** Route A = `harness/mcp/jira_server.py` (project-local stdio MCP), Route B = `jira_connector.py` REST v3 (the **kept** route); selected by `connector_router.py` / `resolve_jira_issue_routed`. Status transitions / completion comments remain out of scope. |
 
 For at least one connector, both the MCP route and a REST-skill fallback must be implemented,
-with a documented decision on which was kept and why (the reference setup dropped the Atlassian
-MCP server in favor of curl-based skills for reliability/debuggability). **Status: still
-open.** No MCP server is configured in this environment for any of the three connectors
-(`claude mcp list` reports none; no `.mcp.json` exists), so GitHub, Jira, and Obsidian
-are each currently a single real REST/CLI/filesystem connector, not a dual
-implementation. `ASSIGNMENT.md` does not name which connector must be built both ways;
-this remains its own future milestone and Obsidian is not required to be it.
+with a documented decision on which was kept and why. **Status: CLOSED 2026-09-09 for
+Jira** — see the "Milestone update (2026-09-09)" note above. `.mcp.json` (project root)
+registers the two project-local stdio MCP servers (`jira`, `obsidian`); Claude Code sees
+them as project config pending one-time approval. The **kept** production route for Jira
+is **REST** (`jira_connector.py`), matching the reference setup's own conclusion; the MCP
+route is a real, live-exercised alternate. A `resolved` Jira issue through either route
+stays deterministic-test-only in this environment (no Jira credentials). GitHub and
+Obsidian remain single connectors — `ASSIGNMENT.md` requires only "at least one."
 
 ### Hooks (≥3, plus cost tracking)
 - Skill-enforcement hook — **Implemented** (2026-08-05) at `.claude/hooks/skill_enforcement.py`
@@ -1819,14 +2181,16 @@ this remains its own future milestone and Obsidian is not required to be it.
   - *Architect-mediated Obsidian evidence consumption:* **IMPLEMENTED** --
     `architect.md`'s "Obsidian historical evidence" section; the orchestrator injects a
     labelled block into the Architect's dispatch prompt.
-  - *Architect direct docs-connector tool permission (literal §2.2 wording):* **OPEN** --
-    frontmatter stays `Read, Grep, Glob`; the Architect holds no connector tool of its
-    own; to be resolved with the MCP + REST work, never by giving the Architect `Bash`.
+  - *Architect direct docs-connector tool permission (literal §2.2 wording):*
+    **CLOSED 2026-09-09** -- frontmatter is now
+    `Read, Grep, Glob, mcp__obsidian__search_notes, mcp__obsidian__read_note`; a real
+    read-only Obsidian MCP tool (`harness/mcp/obsidian_server.py`), no `Bash`. See the
+    "Milestone update (2026-09-09)" note above.
   - *Full `/work` live integration (publication step reached in a real run; Architect
     consulting the vault in-pipeline):* **OPEN.**
-  - *MCP + REST dual connector:* **OPEN** (its own item below, entirely open).
-  Not an MCP server (none is configured; `ASSIGNMENT.md` names `mcp-obsidian` only as an
-  example).
+  - *MCP + REST dual connector:* **CLOSED 2026-09-09 for Jira** (see below); Obsidian is
+    deliberately not that connector. A project-local read-only Obsidian MCP server now
+    exists for the Architect's §2.2 tool, registered in `.mcp.json`.
 - Full `github/` skill pack breadth (`pr-review`, `commit-history`)
 - Full `jira/` skill pack + field-reference doc
 - ~~Skill-enforcement hook~~ **COMPLETE** (2026-08-05) — implemented ahead of this list's
@@ -1834,7 +2198,9 @@ this remains its own future milestone and Obsidian is not required to be it.
   route-back milestone (2026-08-05)"
 - ~~Post-agent cost/token-tracking hook~~ **COMPLETE** (2026-08-14) — see §3 "Hooks" and
   the "Milestone update (2026-08-14): per-agent token usage and cost accounting" note
-- MCP-vs-REST dual implementation + write-up decision
+- ~~MCP-vs-REST dual implementation + write-up decision~~ **COMPLETE 2026-09-09 for Jira**
+  (implementation + the kept-route decision, REST, with evidence) — see the "Milestone
+  update (2026-09-09)" note above. The 1–2 page write-up itself (§5) is still open.
 - Flaky-vs-logic classification with retry/backoff
 - Planted-bug demo scenarios (flaky test, logic bug, deleted evidence, false push claim)
 
@@ -1879,10 +2245,19 @@ AgenticHarness/
 │   │                              #        verb_noun convention (skill_enforcement,
 │   │                              #        pre_dispatch_check, completion_guardrail)
 │
-├── .mcp.json                      # GitHub / Obsidian / Atlassian MCP server config (repo root)
+├── .mcp.json                      # [DONE] (MCP + REST milestone, 2026-09-09) -- registers the
+│                                   #        two project-local stdio MCP servers: `jira`
+│                                   #        (harness.mcp.jira_server, Route A of the §2.4 dual
+│                                   #        route) and `obsidian` (harness.mcp.obsidian_server,
+│                                   #        the Architect's §2.2 read-only docs connector)
 │
 ├── harness/                       # Python glue code invoked BY hooks/skills, not a separate agent runtime
 │   ├── __init__.py                # [DONE]
+│   ├── mcp/                       # [DONE] (MCP + REST milestone, 2026-09-09) -- real stdlib-only
+│   │   │                          #        JSON-RPC 2.0 stdio MCP servers
+│   │   ├── _server_base.py        # [DONE] the ~150-line protocol server (McpServer, Tool)
+│   │   ├── jira_server.py         # [DONE] one read-only tool get_issue -> jira_connector.resolve_issue
+│   │   └── obsidian_server.py     # [DONE] read_note / search_notes -> obsidian_reader (read-only)
 │   ├── orchestrator/checkpoint.py # [DONE] pipeline state save/resume (checkpoint/resume milestone,
 │   │                              #        2026-08-06) -- lives under harness/orchestrator/, not
 │   │                              #        directly under harness/ as this file map originally
@@ -1922,6 +2297,13 @@ AgenticHarness/
 │       │                          #        semantics -- lives under harness/orchestrator/ for the
 │       │                          #        same relative-import consistency reason memory.py/
 │       │                          #        checkpoint.py/discovery.py/evidence_io.py/paths.py do
+│       ├── mcp_client.py          # [DONE] (MCP + REST milestone, 2026-09-09) -- deterministic MCP
+│       │                          #        stdio client (call_tool), swappable Transport seam;
+│       │                          #        Route A of the §2.4 Jira dual route
+│       ├── connector_router.py    # [DONE] (MCP + REST milestone, 2026-09-09) -- deterministic
+│       │                          #        dual-route selection (resolve_issue_routed): MCP route
+│       │                          #        + REST fallback, kept-route = REST, never masks
+│       │                          #        unauthorized/identity_mismatch
 │       └── live_cli.py            # [DONE] thin JSON-in/JSON-out bridge the /work skill calls -- no agent
 │                                   #        reasoning; deterministically tested (see §10 "Live architecture
 │                                   #        decision (Option C)"); the memory-loop milestone's four
@@ -2158,10 +2540,13 @@ Demonstrated live, on a repo with ≥50 files:
       (`runs/run-20260908-obsidianread-002/`, `read_obsidian_note` -> `read`, independent
       SHA-256 + byte-count match, no write; an earlier search/read diagnostic,
       `runs/run-20260908-obsidianread-001/`, is retained as historical evidence). **Still
-      open on the read side:** the Architect's own literal §2.2 direct docs-connector
-      *tool permission* (frontmatter stays `Read, Grep, Glob`; to be resolved with MCP +
-      REST), and a live vault-wide search over a real personal vault (deterministic tests
-      only, deliberately). The full
+      open on the read side:** ~~the Architect's own literal §2.2 direct docs-connector
+      *tool permission*~~ **[CLOSED 2026-09-09** -- `mcp__obsidian__search_notes` /
+      `mcp__obsidian__read_note` in `architect.md` frontmatter, backed by
+      `harness/mcp/obsidian_server.py`; `read_note` live-proven
+      `runs/run-20260909-connectorroute-001/`. See the "Milestone update (2026-09-09)"
+      note.**]**, and a live vault-wide search over a real personal vault (deterministic
+      tests only, deliberately). The full
       `/work` Architect-in-pipeline read demonstration, and a live proof of the vault-wide
       *search* against a real personal vault, both remain open (the latter deliberately --
       deterministic tests only, per the user's privacy constraint). **The lessons-learned/second-run-uses-a-lesson half is demonstrated
@@ -3280,10 +3665,12 @@ documentation may require additional time after the working MVP closes.
    **Discovery/Research read/search *boundary* + Architect *evidence consumption***
    (`obsidian_reader.py` + `search_obsidian`/`read_obsidian_note` + `obsidian` Skill
    sections 11-16 + `architect.md` + standing rule 20; targeted direct read live-proven,
-   2026-09-08) are complete; **still open:** the Architect's own literal §2.2 direct
-   docs-connector *tool permission* (frontmatter stays `Read, Grep, Glob`; to be resolved
-   with the MCP + REST work, not by giving the Architect `Bash`), the MCP-vs-REST dual
-   connector, a full four-phase `/work` run exercising the newer integrations (including
-   the Architect consulting the vault in-pipeline), and planted-defect (flaky-test /
-   false-push-in-a-live-run) demos. See the dated milestone
-   notes above for the authoritative per-item status.
+   2026-09-08), the Architect's literal §2.2 direct docs-connector *tool permission*
+   (2026-09-09 -- `mcp__obsidian__*`, backed by `harness/mcp/obsidian_server.py`), and the
+   §2.4 **MCP + REST dual route for Jira** (2026-09-09 -- `harness/mcp/jira_server.py` +
+   `jira_connector.py` + `connector_router.py`; kept route = REST) are complete;
+   **still open:** a full four-phase `/work` run exercising the newer integrations
+   (including the Architect consulting the vault in-pipeline via its `mcp__obsidian__*`
+   tool, and `resolve_jira_issue_routed`), the 1–2 page write-up (§5), and planted-defect
+   (flaky-test / false-push-in-a-live-run) demos. See the dated milestone notes above for
+   the authoritative per-item status.

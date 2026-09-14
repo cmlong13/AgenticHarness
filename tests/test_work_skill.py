@@ -980,7 +980,12 @@ class TestObsidianDiscoveryResearchRead:
         assert "before dispatching the Architect" in section
         assert "Obsidian historical/contextual evidence" in section
         assert "corroborated / stale / contradicted / context-only" in section
-        assert "Architect never reads the vault itself" in section
+        # After the MCP + REST milestone the Architect ALSO holds two read-only vault
+        # tools directly; orchestrator mediation stays the primary path and identity
+        # still originates from the orchestrator.
+        assert "two narrow, read-only vault tools directly" in section
+        assert "run identity, scope, and dispatch authority stay the orchestrator's" in section
+        assert "does **not** change the orchestrator architecture" in section
 
     def test_phase_1_points_at_consultation(self) -> None:
         phase1 = self._phase_slice("# Phase 1: Discovery", "# Phase 2: Research")
@@ -1007,3 +1012,60 @@ class TestObsidianDiscoveryResearchRead:
         section = self._flat_slice("# Obsidian Discovery/Research consultation", "# Phase 1: Discovery")
         assert "separate direction" in section or "distinct direction" in section
         assert "never affects the run verdict" in section
+
+
+class TestConnectorRouting:
+    """Structural checks for the ASSIGNMENT.md §2.4 dual-route Jira connector milestone:
+    standing rule 21, the '# Connector routing' section, the resolve_jira_issue_routed
+    ops-table row, and the 'What to state' bullet. Ticket-mode intake must stay on the
+    single-route resolve_jira_issue (kept-route = REST), unchanged."""
+
+    def setup_method(self) -> None:
+        self.text = SKILL_PATH.read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+
+    def _slice(self, start: str, end: str) -> str:
+        s = self.text.index(start)
+        return " ".join(self.text[s:self.text.index(end, s)].split())
+
+    def test_standing_rule_21_present(self) -> None:
+        assert "21. The Jira connector is built **both ways**" in self.text
+        rule = self._slice("21. The Jira connector is built", "# Parsing $ARGUMENTS")
+        assert "Route B, **REST**" in rule and "the route this harness **keeps**" in rule
+        assert "Route A, **MCP**" in rule and "harness.mcp.jira_server" in rule
+        assert "never lets a fallback mask an\n    authoritative" in self.text or "never lets a fallback mask an authoritative" in rule
+        assert "it is never given `Bash`, `Skill`, `Agent`" in rule
+
+    def test_connector_routing_section_present_with_kept_route_rationale(self) -> None:
+        assert "# Connector routing (Jira: MCP route + REST fallback)" in self.text
+        section = self._slice("# Connector routing (Jira: MCP route + REST fallback)", "# The live bridge")
+        for phrase in [
+            "The connector built both ways is **Jira**",
+            "Route B -- REST",
+            "Route A -- MCP",
+            "real JSON-RPC 2.0 stdio boundary",
+            "registered in the project-root `.mcp.json`",
+            'policy: "rest_first"',
+            'policy: "mcp_first"',
+            "A fallback is **never** attempted past a real `unauthorized` or `identity_mismatch`",
+            "The route this harness keeps, and why: REST (Route B).",
+            "runs/<run_id>/jira/routing/route-<n>.json",
+        ]:
+            assert phrase in section, f"missing {phrase!r}"
+
+    def test_ticket_mode_intake_stays_on_single_route_rest(self) -> None:
+        rule = self._slice("21. The Jira connector is built", "# Parsing $ARGUMENTS")
+        assert "ticket-mode\n    `/work` continues to resolve tickets through it via `resolve_jira_issue`" in self.text \
+            or "ticket-mode `/work` continues to resolve tickets through it via `resolve_jira_issue`" in rule
+
+    def test_ops_table_row_for_routed_operation(self) -> None:
+        assert "| `resolve_jira_issue_routed` |" in self.text
+        row = self._slice("| `resolve_jira_issue_routed` |", "\n| `publish_run_summary` |")
+        assert "dual-route" in row and "connector_router.py" in row
+        assert "Not wired into ticket-mode intake" in row
+
+    def test_what_to_state_bullet_present(self) -> None:
+        reporting = " ".join(self.text[self.text.index("## What to state, every time"):].split())
+        assert "Connector routing, whenever this run called `resolve_jira_issue_routed`" in reporting
+        assert "REST is the kept production route" in reporting
+        assert "never masked an `unauthorized`/`identity_mismatch`" in reporting

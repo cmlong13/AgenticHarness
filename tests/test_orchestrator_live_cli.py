@@ -295,6 +295,57 @@ class TestValidateAndPromoteFindings:
         on_disk = json.loads((repo_root / "runs" / "run-1" / "findings.json").read_text(encoding="utf-8"))
         assert on_disk == doc
 
+    def test_findings_with_valid_obsidian_reads_promotes_and_round_trips(self, repo_root, capsys) -> None:
+        """A representative real Architect response that directly used its two
+        mcp__obsidian__* tools -- the exact obsidian_reads shape architect.md's "Obsidian
+        docs connector" section promises -- must pass through the SAME validate_artifact /
+        promote_artifact path an ordinary response does, and survive on disk unchanged."""
+        doc = _findings_doc()
+        doc["obsidian_reads"] = [
+            {
+                "tool": "mcp__obsidian__search_notes",
+                "query_or_note_path": "pagination design decisions",
+                "status": "no_matches",
+            },
+            {
+                "tool": "mcp__obsidian__read_note",
+                "query_or_note_path": "design/pagination-decisions.md",
+                "status": "read",
+                "note_path": "design/pagination-decisions.md",
+                "content_sha256": "a" * 64,
+            },
+        ]
+
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "validate_artifact", "phase": "research", "doc": doc}, capsys,
+        )
+        assert exit_code == 0
+        assert resp == {"operation": "validate_artifact", "status": "valid"}
+
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "promote_artifact", "run_id": "run-1", "phase": "research", "doc": doc}, capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "promoted"
+        on_disk = json.loads((repo_root / resp["path"]).read_text(encoding="utf-8"))
+        assert on_disk == doc
+        assert on_disk["obsidian_reads"] == doc["obsidian_reads"]
+
+    def test_findings_with_unknown_obsidian_tool_is_rejected_at_promotion(self, repo_root, capsys) -> None:
+        # A fabricated/unknown MCP tool name must never slip through the real promotion
+        # path -- only the two exact read-only Obsidian tools are ever legitimate.
+        doc = _findings_doc()
+        doc["obsidian_reads"] = [
+            {"tool": "mcp__obsidian__write_note", "query_or_note_path": "q", "status": "no_matches"}
+        ]
+
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "promote_artifact", "run_id": "run-1", "phase": "research", "doc": doc}, capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "invalid"
+        assert not (repo_root / "runs" / "run-1" / "findings.json").exists()
+
     def test_context_ref_resolution_for_verification_phase(self, repo_root, capsys) -> None:
         """Proves the generic phase-dispatch path also works for a phase whose semantic
         validator needs external context (scope_doc), not just findings (which needs none)."""
@@ -1414,6 +1465,89 @@ class TestResolveJiraIssue:
         sig = inspect.signature(live_cli.op_resolve_jira_issue)
         params = list(sig.parameters)
         assert params == ["req"]
+
+
+class TestResolveJiraIssueRouted:
+    """op_resolve_jira_issue_routed -- the ASSIGNMENT.md §2.4 dual-route Jira boundary.
+    With no JIRA_* credentials set (the environment's real state), both the REST and MCP
+    transports run for real and independently report connector_unavailable."""
+
+    def _no_creds(self, monkeypatch):
+        for k in ("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"):
+            monkeypatch.delenv(k, raising=False)
+
+    def test_rest_first_connector_unavailable_corroborated_by_mcp(self, repo_root, monkeypatch, capsys) -> None:
+        self._no_creds(monkeypatch)
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "resolve_jira_issue_routed", "run_id": "run-1", "task_id": "T-1", "issue_key": "PROJ-1"},
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "connector_unavailable"
+        assert resp["fallback_attempted"] is True
+        assert resp["primary_route"] == "rest" and resp["fallback_route"] == "mcp"
+        assert resp["primary_result"]["outcome"] == "connector_unavailable"
+        assert resp["fallback_result"]["outcome"] == "connector_unavailable"
+
+    def test_mcp_first_policy_runs_mcp_route_first(self, repo_root, monkeypatch, capsys) -> None:
+        self._no_creds(monkeypatch)
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "resolve_jira_issue_routed", "run_id": "run-2", "task_id": "T-1",
+             "issue_key": "PROJ-1", "policy": "mcp_first"},
+            capsys,
+        )
+        assert resp["policy"] == "mcp_first" and resp["primary_route"] == "mcp"
+        assert resp["status"] == "connector_unavailable"
+
+    def test_routing_evidence_and_policy_event_retained(self, repo_root, monkeypatch, capsys) -> None:
+        self._no_creds(monkeypatch)
+        _run_main(
+            repo_root,
+            {"operation": "resolve_jira_issue_routed", "run_id": "run-3", "task_id": "T-1", "issue_key": "PROJ-1"},
+            capsys,
+        )
+        routing = json.loads(
+            (repo_root / "runs" / "run-3" / "jira" / "routing" / "route-1.json").read_text(encoding="utf-8")
+        )
+        assert routing["status"] == "connector_unavailable"
+        assert routing["kept_route"] == "rest"
+        # No secret / raw HTTP echo anywhere in the retained routing record.
+        blob = json.dumps(routing)
+        assert "Authorization" not in blob and "Basic " not in blob and '"raw"' not in blob
+        events = (repo_root / "runs" / "run-3" / "logs" / "policy-events.jsonl").read_text(encoding="utf-8")
+        assert '"kind": "connector_routing"' in events
+
+    def test_invalid_policy_is_a_usage_error(self, repo_root, monkeypatch, capsys) -> None:
+        self._no_creds(monkeypatch)
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "resolve_jira_issue_routed", "run_id": "run-4", "task_id": "T-1",
+             "issue_key": "PROJ-1", "policy": "whatever"},
+            capsys,
+        )
+        assert exit_code == 2
+        assert "policy" in resp["error"]
+
+    def test_credentials_and_transport_request_fields_are_rejected(self, repo_root, monkeypatch, capsys) -> None:
+        self._no_creds(monkeypatch)
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "resolve_jira_issue_routed", "run_id": "run-5", "task_id": "T-1",
+             "issue_key": "PROJ-1", "env": {"JIRA_API_TOKEN": "x"}},
+            capsys,
+        )
+        assert exit_code == 2
+
+    def test_affirmative_routed_statuses_are_ok_statuses(self) -> None:
+        for status in ("resolved_via_rest", "resolved_via_mcp", "rest_failed_mcp_resolved", "mcp_failed_rest_resolved"):
+            assert status in live_cli.OK_STATUSES
+        for status in ("connector_unavailable", "both_routes_failed", "not_found", "unauthorized", "identity_mismatch"):
+            assert status not in live_cli.OK_STATUSES
+
+    def test_operation_never_exposes_a_credentials_parameter(self) -> None:
+        assert list(inspect.signature(live_cli.op_resolve_jira_issue_routed).parameters) == ["req"]
 
 
 class TestPublishRunSummary:

@@ -1,0 +1,19 @@
+{
+  "task_id": "CONNECTOR-ROUTE-001",
+  "run_id": "run-20260909-connectorroute-001",
+  "operation": "mcp__obsidian__read_note",
+  "phase": "research",
+  "connector": "obsidian_mcp_stdio",
+  "transport": "mcp_stdio",
+  "server_module": "harness.mcp.obsidian_server",
+  "mcp_client_status": "mcp_ok",
+  "tool_status": "read",
+  "note_path": "Harness Run Summaries/run-summary-run-20260908-obsidianlive-001.md",
+  "byte_count": 1552,
+  "line_count": 39,
+  "content_sha256": "5e017d2de6e3aea81aad60001061d75739584e44fd1e9d7c4dfcf25e0c198679",
+  "independent_sha256": "5e017d2de6e3aea81aad60001061d75739584e44fd1e9d7c4dfcf25e0c198679",
+  "independent_byte_count": 1552,
+  "identity_match": true,
+  "note": "Live proof of the Architect docs-connector (mcp__obsidian__read_note) through a real python -m harness.mcp.obsidian_server subprocess and real JSON-RPC 2.0. Read-only, single harness-owned note, no vault-wide search, no write."
+}

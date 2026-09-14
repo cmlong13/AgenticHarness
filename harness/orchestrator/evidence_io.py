@@ -150,6 +150,21 @@ def retain_obsidian_read_evidence(run_directory: Path, filename: str, doc: dict)
     return path
 
 
+def retain_connector_routing_evidence(run_directory: Path, connector: str, filename: str, doc: dict) -> Path:
+    """Collision-guarded write for dual-route connector-selection evidence (see
+    harness/orchestrator/connector_router.py -- the ASSIGNMENT.md §2.4 "implement both
+    the MCP route and a REST-skill fallback" requirement). Retained under
+    runs/<run_id>/<connector>/routing/ -- deliberately a subdirectory of the connector's
+    own evidence area (runs/<run_id>/jira/) and structurally distinct from that
+    connector's ordinary result evidence (jira/issue-resolution.json): a routing record
+    answers "which transport was tried, which succeeded, and why," not "what did the
+    connector say about this object." Shares promote_canonical's collision guard -- a
+    caller needing a second record passes a distinctly named filename (route-2.json)."""
+    path = run_directory / connector / "routing" / filename
+    _write_new(path, (json.dumps(doc, indent=2) + "\n").encode("utf-8"))
+    return path
+
+
 def retain_jira_evidence(run_directory: Path, filename: str, doc: dict) -> Path:
     """Collision-guarded write for Jira evidence documents (issue-resolution.json -- see
     harness/orchestrator/jira_connector.py), retained under runs/<run_id>/jira/ for the

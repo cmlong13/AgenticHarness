@@ -23,9 +23,14 @@ Hold every Obsidian action `/work` performs to one standard, in **both** directi
   Sections 11-16 below.
 
 This skill does not execute anything itself -- it is the procedure the orchestrator
-follows (the only session that touches Obsidian in this harness; the Architect holds only
-Read/Grep/Glob and consumes vault context the orchestrator retrieves for it, exactly as
-its `findings.json` is written for it). It uses `harness/orchestrator/live_cli.py`'s
+follows. The orchestrator is the primary session that touches Obsidian in this harness
+(publication, and the Discovery/Research consultation it performs on the Architect's
+behalf, exactly as its `findings.json` is written for it). The Architect *additionally*
+holds two narrow read-only vault tools of its own (`mcp__obsidian__search_notes`,
+`mcp__obsidian__read_note` -- `ASSIGNMENT.md` §2.2's "your docs connectors", backed by
+`harness/mcp/obsidian_server.py` wrapping the same `obsidian_reader` boundary this skill
+documents); see section 11 for how an Architect-initiated read is retained. It uses
+`harness/orchestrator/live_cli.py`'s
 `publish_run_summary` operation (`harness/orchestrator/obsidian.py`) for the one real
 vault write, and its `search_obsidian` / `read_obsidian_note` operations
 (`harness/orchestrator/obsidian_reader.py`) for every read -- and every piece of retained
@@ -78,13 +83,15 @@ are read fresh from the real environment on every call
 (`obsidian.resolve_destination`) -- never cached, never accepted as a request field.
 When `OBSIDIAN_VAULT_PATH` is unset or blank, the outcome is a genuine, honest
 `connector_unavailable` -- **not a fabricated success, not a silent fallback, not a
-substitution of some other local folder.** No `.mcp.json` / `mcp-obsidian` server is
-configured in this environment; `ASSIGNMENT.md` names `mcp-obsidian` only as an example
-(`e.g.`), and its own §2.4 caveat is that an MCP server is not automatically the right
-tool -- this repository already made GitHub and Jira real REST/CLI connectors, not MCP
-servers, for that reason. This is deliberately **not** the MCP-vs-REST dual
-implementation `ASSIGNMENT.md` §2.4 requires "for at least one connector" -- Obsidian is
-never named as that connector, and that requirement remains its own future milestone.
+substitution of some other local folder.** The **write-back / publication** path is
+deliberately a direct filesystem write, never routed through an MCP server: `ASSIGNMENT.md`
+names `mcp-obsidian` only as an example (`e.g.`), and its own §2.4 caveat is that an MCP
+server is not automatically the right tool. (A project-local *read-only* Obsidian MCP
+server, `harness/mcp/obsidian_server.py`, does exist -- it backs the Architect's §2.2
+docs-connector tool grant, section 11 -- but it exposes no write capability and the
+publication path never uses it.) Obsidian is **not** the connector `ASSIGNMENT.md` §2.4
+requires be built "both ways" (MCP route + REST-skill fallback) -- **Jira is** (see
+`.claude/skills/jira/SKILL.md` §9 and `work/SKILL.md`'s "# Connector routing").
 
 # 2. Path safety
 `obsidian.resolve_destination` / `obsidian.safe_note_target` reject:
@@ -216,6 +223,25 @@ a run that consults nothing is normal and honest. Invoke this skill (the `Skill`
 `skill: "obsidian"`) before the first `search_obsidian`/`read_obsidian_note` call of a
 run, exactly as the `github`/`jira` skills are invoked before their operations, and
 `retain_policy_event` (`kind: "skill_invocation"`) after.
+
+**The Architect's own docs-connector tools (`ASSIGNMENT.md` §2.2).** The Architect holds
+`mcp__obsidian__search_notes` and `mcp__obsidian__read_note` directly in its `tools:`
+frontmatter -- a real, read-only MCP boundary (`harness/mcp/obsidian_server.py`, a
+project-local stdio server registered in `.mcp.json`) wrapping this same
+`obsidian_reader` module. It may use them during Research when the orchestrator's
+injected "Obsidian historical/contextual evidence" block does not cover something
+material. This does not change the harness's architecture: the tools are read-only (no
+create/update/delete/rename tool exists), reach nothing outside the configured vault
+(`safe_note_target` / `_eligible_md_files` containment, unchanged), and grant the
+Architect no `Bash`, `Skill`, `Agent`, `Edit`/`Write`, or filesystem access. Run
+identity, scope, and dispatch authority stay the orchestrator's. The Architect echoes
+every direct read as an `obsidian_reads` array entry in its findings response; **after
+the dispatch returns, the orchestrator retains each echoed read as a normalized
+`runs/<run_id>/obsidian/read/<name>.json` record** (a `read_obsidian_note` call against
+the same `note_path`, or a `retain_policy_event(kind: "obsidian_read")` when the note is
+already retained), so every vault observation is attributable to the current run. The
+read cardinal rule below binds an Architect-initiated read exactly as it binds an
+orchestrator-mediated one.
 
 # 12. Read path safety
 `obsidian_reader.resolve_vault` / `obsidian_reader.safe_note_target` reject:

@@ -49,6 +49,7 @@ from harness.evidence import (
 
 from . import (
     checkpoint,
+    connector_router,
     discovery,
     evidence_io,
     github,
@@ -108,9 +109,18 @@ SEMANTIC_VALIDATORS = {
 # a well-formed negative read outcome that must be retained honestly and treated as
 # "no vault evidence retrieved," never as authority. `no_matches` in particular is a
 # real, honest "nothing there," not a connector failure.
+# op_resolve_jira_issue_routed (the ASSIGNMENT.md §2.4 dual-route Jira connector) has its
+# own four affirmative classifications from harness.orchestrator.connector_router --
+# "resolved_via_rest" / "resolved_via_mcp" / "rest_failed_mcp_resolved" /
+# "mcp_failed_rest_resolved" (a route genuinely returned a matching, identity-checked
+# issue). Its non-affirmative siblings ("connector_unavailable", "not_found",
+# "unauthorized", "identity_mismatch", "invalid_issue_key", "both_routes_failed",
+# "route_disagreement") are deliberately absent -- each is a well-formed negative routing
+# outcome, never evidence a real ticket was resolved.
 OK_STATUSES = {
     "valid", "match", "ok", "retained", "promoted", "written", "resumable", "appended", "captured", "verified",
     "resolved", "published", "read", "found",
+    "resolved_via_rest", "resolved_via_mcp", "rest_failed_mcp_resolved", "mcp_failed_rest_resolved",
 }
 
 # op_write_checkpoint's `kind` field selects which checkpoint.py record_* builder runs.
@@ -884,6 +894,58 @@ def op_resolve_jira_issue(req: dict) -> dict:
     return {"operation": "resolve_jira_issue", "path": _rel(path), **result.as_dict()}
 
 
+def op_resolve_jira_issue_routed(req: dict) -> dict:
+    """27. Resolve a Jira issue through the ASSIGNMENT.md §2.4 dual-route connector
+    (harness.orchestrator.connector_router) -- Route A (the MCP route, a real
+    JSON-RPC stdio boundary to harness.mcp.jira_server) and Route B (the REST-skill
+    fallback, jira_connector.resolve_issue). ``policy`` selects the deterministic
+    route order: "rest_first" (default -- REST is the kept production route; MCP is a
+    fallback/corroboration) or "mcp_first" (the parity/live-proof order). Both routes
+    always run for real -- there is no simulated seam on this boundary. Every outcome
+    (resolved_via_rest / resolved_via_mcp / rest_failed_mcp_resolved /
+    mcp_failed_rest_resolved / connector_unavailable / not_found / unauthorized /
+    identity_mismatch / invalid_issue_key / both_routes_failed / route_disagreement)
+    is retained unconditionally to runs/<run_id>/jira/routing/<filename>
+    (default route-1.json, evidence_io.retain_connector_routing_evidence,
+    collision-guarded) with a matching ``connector_routing`` policy event. A fallback
+    never masks an authoritative ``unauthorized`` / ``identity_mismatch``; no secret
+    (auth header, raw HTTP body) is ever retained -- the ``raw`` echo is dropped by
+    connector_router before this operation sees the result."""
+    run_id = _require_str(req, "run_id")
+    task_id = _require_str(req, "task_id")
+    requested_issue_key_raw = _require_str(req, "issue_key")
+    policy_name = req.get("policy", connector_router.RoutesPolicy.REST_FIRST.value)
+    filename = req.get("filename", "route-1.json")
+    if "env" in req or "credentials" in req or "transport" in req:
+        raise LiveCliUsageError("credentials/transport are read from the environment, never from the request")
+    try:
+        policy = connector_router.RoutesPolicy(policy_name)
+    except ValueError:
+        raise LiveCliUsageError(
+            f"'policy' must be one of {[p.value for p in connector_router.RoutesPolicy]}, got {policy_name!r}"
+        )
+
+    normalized_key = jira_connector.normalize_issue_key(requested_issue_key_raw)
+    outcome = connector_router.resolve_issue_routed(normalized_key, policy=policy)
+    doc = {
+        "task_id": task_id, "run_id": run_id, "requested_issue_key_raw": requested_issue_key_raw,
+        "kept_route": connector_router.KEPT_ROUTE, "resolved_at": _utc_now_iso(), **outcome.as_dict(),
+    }
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    evidence_io.ensure_run_dirs(run_directory)
+    try:
+        path = evidence_io.retain_connector_routing_evidence(run_directory, "jira", filename, doc)
+    except evidence_io.EvidenceCollisionError as exc:
+        return {"operation": "resolve_jira_issue_routed", "status": "blocked", "error": str(exc)}
+    evidence_io.retain_policy_event(
+        run_directory, "connector_routing",
+        {"connector": "jira", "operation": "resolve_issue", "policy": outcome.policy,
+         "primary_route": outcome.primary_route, "fallback_attempted": outcome.fallback_attempted,
+         "final_route": outcome.final_route, "status": outcome.status, "reason": outcome.reason},
+    )
+    return {"operation": "resolve_jira_issue_routed", "status": outcome.status, "path": _rel(path), **outcome.as_dict()}
+
+
 def _opt_json_under_run(run_directory: Path, ref: object) -> dict | None:
     """Best-effort load of an optional artifact a run-summary references. Returns None
     (never raises, never fabricates) for a missing/blank ref or an unreadable file --
@@ -1107,6 +1169,7 @@ OPERATIONS = {
     "verify_push": op_verify_push,
     "gh_repo_metadata": op_gh_repo_metadata,
     "resolve_jira_issue": op_resolve_jira_issue,
+    "resolve_jira_issue_routed": op_resolve_jira_issue_routed,
     "publish_run_summary": op_publish_run_summary,
     "search_obsidian": op_search_obsidian,
     "read_obsidian_note": op_read_obsidian_note,

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "jira": {
+      "command": "python",
+      "args": ["-m", "harness.mcp.jira_server"],
+      "env": {}
+    },
+    "obsidian": {
+      "command": "python",
+      "args": ["-m", "harness.mcp.obsidian_server"],
+      "env": {}
+    }
+  }
+}

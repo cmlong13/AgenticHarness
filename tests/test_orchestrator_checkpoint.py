@@ -445,3 +445,40 @@ def test_evaluate_resume_returns_resumable_for_a_genuinely_valid_checkpoint(tmp_
     assert decision.task_id == TASK_ID
     assert decision.target_repo_path == TARGET_REPO_PATH
     assert decision.docs["discovery"]["task_id"] == TASK_ID
+
+
+def test_evaluate_resume_preserves_research_artifact_with_obsidian_reads(tmp_path):
+    """A completed research phase whose findings.json carries a real obsidian_reads
+    array (the Architect's own direct mcp__obsidian__* echo -- findings.schema.json's
+    obsidian_reads contract fix) must revalidate cleanly on resume, exactly like an
+    ordinary findings.json, and the field must come back byte-for-byte in decision.docs
+    -- resume() re-derives findings_doc from exactly this, never re-dispatching research."""
+    _make_fixture_repo(tmp_path)
+    run_directory = _run_dir(tmp_path)
+    scope_ref = _promote_scope(run_directory, tmp_path)
+
+    findings = _findings_doc(scope_ref=scope_ref)
+    findings["obsidian_reads"] = [
+        {
+            "tool": "mcp__obsidian__read_note",
+            "query_or_note_path": "design/decisions.md",
+            "status": "read",
+            "note_path": "design/decisions.md",
+            "content_sha256": "c" * 64,
+        }
+    ]
+    findings_path = evidence_io.promote_canonical(run_directory, "findings.json", findings)
+    findings_ref = str(findings_path.resolve().relative_to(tmp_path.resolve())).replace("\\", "/")
+
+    checkpoint.record_phase_progress(
+        run_directory, task_id=TASK_ID, run_id=RUN_ID, target_repo_path=TARGET_REPO_PATH,
+        updated_at=UPDATED_AT, completed_phases=["discovery", "research"],
+        artifact_refs={"discovery": scope_ref, "research": findings_ref},
+    )
+
+    decision = checkpoint.evaluate_resume(run_directory, requested_run_id=RUN_ID, repo_root=tmp_path)
+
+    assert decision.resumable is True
+    assert decision.code == "ok"
+    assert decision.next_phase == "implementation"
+    assert decision.docs["research"]["obsidian_reads"] == findings["obsidian_reads"]

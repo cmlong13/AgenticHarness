@@ -286,6 +286,28 @@ class TestJiraSkill:
         for phrase in ["JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN", "never retained in any evidence file"]:
             assert phrase in self.flat_text
 
+    def test_connector_routing_section_documents_both_routes_and_the_kept_one(self) -> None:
+        assert "# 9. Connector routing -- MCP route + REST fallback" in self.text
+        for phrase in [
+            "**Jira is that connector**",
+            "**Route B -- REST (kept).**",
+            "**Route A -- MCP.**",
+            "harness/mcp/jira_server.py",
+            "harness/orchestrator/connector_router.py",
+            "resolve_jira_issue_routed",
+            'policy: "rest_first"',
+            'policy: "mcp_first"',
+            "Fallback is forbidden past a real `unauthorized` or `identity_mismatch`",
+            "runs/<run_id>/jira/routing/route-<n>.json",
+            "**The kept route: REST.**",
+        ]:
+            assert phrase in self.flat_text, f"expected routing phrase {phrase!r}"
+
+    def test_routing_section_is_read_only_and_secret_safe(self) -> None:
+        assert "one read-only tool" in self.flat_text
+        assert "a `get_issue` argument carrying `base_url`/`email`/`api_token`/`env` is rejected" in self.flat_text
+        assert "No `Authorization` header or raw HTTP body is ever in it" in self.flat_text
+
     def test_boundaries_present(self) -> None:
         for phrase in ["must not", "Fabricate, soften, or infer a resolution result", "Duplicate the test-runner"]:
             assert phrase in self.flat_text
@@ -369,9 +391,13 @@ class TestObsidianSkill:
         ]:
             assert phrase in self.flat_text
 
-    def test_mcp_vs_rest_left_as_separate_milestone(self) -> None:
-        assert "not** the MCP-vs-REST dual implementation" in self.flat_text
-        assert "that requirement remains its own future milestone" in self.flat_text
+    def test_obsidian_is_not_the_dual_route_connector_jira_is(self) -> None:
+        assert 'Obsidian is **not** the connector `ASSIGNMENT.md` §2.4 requires be built "both ways"' in self.flat_text
+        assert "**Jira is**" in self.flat_text
+
+    def test_write_back_never_routes_through_mcp(self) -> None:
+        assert "write-back / publication** path is deliberately a direct filesystem write, never routed through an MCP server" in self.flat_text
+        assert "the publication path never uses it" in self.flat_text
 
     def test_live_cli_operation_named(self) -> None:
         assert "publish_run_summary" in self.text

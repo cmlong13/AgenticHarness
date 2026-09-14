@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-MCPAUDIT-001",
+  "run_id": "run-20260914-mcpaudit-001",
+  "created_at": "2026-09-14T00:00:00Z",
+  "scope_ref": {
+    "path": "runs/run-20260914-mcpaudit-001/scope.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "The mcp__obsidian__search_notes tool is listed in the Architect's tool allowlist and was successfully invoked at runtime with query \"pagination design decisions\"; the call executed (it did not fail to resolve as a tool) and returned status \"connector_unavailable\" (reason: no Obsidian vault is configured in this environment, OBSIDIAN_VAULT_PATH is not set).",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": ".claude/agents/architect.md",
+          "start_line": 4,
+          "end_line": 4,
+          "evidence_tier": "metadata",
+          "excerpt": "tools: Read, Grep, Glob, mcp__obsidian__search_notes, mcp__obsidian__read_note"
+        }
+      ]
+    }
+  ],
+  "obsidian_reads": [
+    {
+      "tool": "mcp__obsidian__search_notes",
+      "query_or_note_path": "pagination design decisions",
+      "status": "connector_unavailable"
+    }
+  ]
+}

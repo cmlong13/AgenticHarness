@@ -19,6 +19,12 @@
     "open_questions": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 }
+    },
+    "obsidian_reads": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/obsidianReadEntry" }
     }
   },
   "$defs": {
@@ -107,7 +113,40 @@
         { "$ref": "#/$defs/notFoundFinding" },
         { "$ref": "#/$defs/inferredFinding" }
       ]
+    },
+    "obsidianReadEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "query_or_note_path", "status"],
+      "properties": {
+        "tool": {
+          "enum": ["mcp__obsidian__search_notes", "mcp__obsidian__read_note"]
+        },
+        "query_or_note_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "^(?!.*\\.\\.)(?![/\\\\])(?![A-Za-z]:)\\S.*$"
+        },
+        "status": {
+          "enum": [
+            "found", "no_matches", "invalid_query", "search_failed",
+            "read", "not_found", "invalid_note_path", "read_failed",
+            "connector_unavailable", "invalid_destination", "destination_unavailable"
+          ]
+        },
+        "note_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "pattern": "^(?!.*\\.\\.)(?![/\\\\])(?![A-Za-z]:)\\S.*\\.md$"
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
     }
   },
-  "$comment": "Semantic rules not enforced here (deferred to the future Python validator): (1) findings[].id must be unique within this array; (2) inferredFinding.supporting_finding_ids must resolve to ids of other entries in this same findings array whose classification is 'found'."
+  "$comment": "Semantic rules not enforced here (deferred to the future Python validator): (1) findings[].id must be unique within this array; (2) inferredFinding.supporting_finding_ids must resolve to ids of other entries in this same findings array whose classification is 'found'. obsidian_reads is an optional, bounded (<=20) array of strict entries echoing the Architect's own mcp__obsidian__* calls (harness/schemas/findings.schema.json's $defs.obsidianReadEntry): tool is restricted to exactly the two Obsidian read/search tools (no Jira tool, no wildcard, no write tool -- none exists); status is restricted to the real union of harness/orchestrator/obsidian_reader.py's READ_STATUSES and SEARCH_STATUSES (never an invented classification); query_or_note_path and note_path are bounded, reject '..', a leading '/' or '\\\\', and a drive-letter prefix (no absolute vault path, matching obsidian_reader.safe_note_target's own path-safety rejections), and note_path additionally requires a literal '.md' suffix (only Markdown notes are ever read); content_sha256, only meaningful for a read, is a strict lowercase 64-hex-digit sha256 hexdigest. No note body and no credential ever has a place to go in this shape."
 }

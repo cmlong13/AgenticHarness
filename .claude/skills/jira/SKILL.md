@@ -115,6 +115,60 @@ against the Jira REST API bypassing this skill) -- if a future ticket genuinely 
 writes, they belong here, behind the same identity-checked, evidence-retaining pattern
 this file already establishes for reads, not as an ad hoc bypass.
 
+# 9. Connector routing -- MCP route + REST fallback (ASSIGNMENT.md §2.4)
+`ASSIGNMENT.md` §2.4 requires that, "for at least one connector, implement **both** the
+MCP route and a REST-skill fallback, and document ... which one you kept and why." **Jira
+is that connector** -- the assignment's own example ("the reference setup abandoned the
+Atlassian MCP server in favor of curl-based skills because raw REST calls were more
+reliable and debuggable").
+
+**Route B -- REST (kept).** Everything in sections 1-8 above: a direct
+`jira_connector.resolve_issue` call to `GET /rest/api/3/issue/{key}`, reached through
+`resolve_jira_issue`. This is the route this harness keeps as its production Jira
+connector, and the route ticket-mode `/work` uses, unchanged.
+
+**Route A -- MCP.** `harness/mcp/jira_server.py`, a real project-local JSON-RPC 2.0 stdio
+MCP server exposing one read-only tool, `get_issue(issue_key)`, that itself calls the
+same `jira_connector.resolve_issue`. It is registered in the project-root `.mcp.json`.
+`harness/orchestrator/mcp_client.py` drives it (`initialize` ->
+`notifications/initialized` -> `tools/call`), classifying every MCP-layer failure
+(`mcp_unavailable` / `mcp_transport_error` / `mcp_protocol_error` /
+`mcp_invalid_response` / `mcp_tool_error`).
+
+**Route selection** is `harness/orchestrator/connector_router.py`, reached through
+`live_cli.py`'s `resolve_jira_issue_routed`:
+- `policy: "rest_first"` (default): REST first; an authoritative outcome (`resolved` /
+  `not_found` / `unauthorized` / `identity_mismatch` / `invalid_issue_key`) is final and
+  the MCP route is not run; `connector_unavailable` runs the MCP route only to
+  corroborate; a transport-class `invalid_response` falls back to MCP.
+- `policy: "mcp_first"`: the mirror image, used to exercise/prefer MCP.
+- **Fallback is forbidden past a real `unauthorized` or `identity_mismatch`** -- a
+  fallback route must never mask an authorization failure or silently accept a different
+  ticket.
+
+**Route identity / success proof.** Each route returns a normalized `RouteResult`; the
+final `RouteOutcome` records the primary route, whether fallback ran and why, the
+`final_route`, and one `ROUTE_STATUSES` value. `resolved_via_rest` / `resolved_via_mcp` /
+`rest_failed_mcp_resolved` / `mcp_failed_rest_resolved` are the only affirmative ones,
+and only when a route genuinely returned a matching, identity-checked issue -- never
+because fallback code exists.
+
+**Evidence.** `runs/<run_id>/jira/routing/route-<n>.json` (structurally distinct from
+`issue-resolution.json`) + a `connector_routing` policy event, retained on every outcome.
+No `Authorization` header or raw HTTP body is ever in it.
+
+**Secret handling / least privilege.** The MCP server reads `JIRA_*` fresh from its own
+process environment; a `get_issue` argument carrying `base_url`/`email`/`api_token`/`env`
+is rejected outright. The tool result carries only the connector's classification plus a
+whitelist of issue fields.
+
+**The kept route: REST.** Fewer moving parts (no subprocess, no second protocol surface),
+directly debuggable (one retained request/response pair), minimal deterministic evidence,
+no `.mcp.json`-approval / server-health dependency, and identical authority (both routes
+hit the same endpoint and the same identity check). MCP is retained as an implemented,
+live-exercised alternate so "implement both" is genuinely met and this decision rests on
+real evidence.
+
 # Safe operations (apply to every step above)
 - Never write, transition, comment on, or otherwise mutate a real Jira issue.
 - Never store `JIRA_BASE_URL`/`JIRA_EMAIL`/`JIRA_API_TOKEN` (or any credential derived

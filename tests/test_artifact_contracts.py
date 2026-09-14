@@ -153,6 +153,215 @@ def test_findings_supporting_id_must_be_found_classification():
 
 
 # ---------------------------------------------------------------------------
+# Schema validation -- findings.obsidian_reads
+#
+# The Architect's own contract (.claude/agents/architect.md's "Obsidian docs connector"
+# section) says a direct mcp__obsidian__* call it used is echoed back as a top-level
+# obsidian_reads array entry. Before the fix these tests guard, findings.schema.json's
+# root additionalProperties:false rejected that property outright -- a real Architect
+# response using its own MCP tools could never pass the same validate_against_schema /
+# op_promote_artifact path an ordinary response does. The fix adds obsidian_reads as an
+# OPTIONAL, bounded, strict array ($defs.obsidianReadEntry) -- it must never loosen
+# anything about the base findings contract.
+# ---------------------------------------------------------------------------
+
+
+def _findings_schema() -> dict:
+    pair = next(p for p in COMPLETE_PAIRS if p.name == "findings")
+    return load_json(pair.schema_path)
+
+
+def _findings_with_obsidian_reads(obsidian_reads: list) -> dict:
+    doc = copy.deepcopy(_load("findings"))
+    doc["obsidian_reads"] = obsidian_reads
+    return doc
+
+
+VALID_SEARCH_READ = {
+    "tool": "mcp__obsidian__search_notes",
+    "query_or_note_path": "pagination design decisions",
+    "status": "no_matches",
+}
+
+VALID_NOTE_READ = {
+    "tool": "mcp__obsidian__read_note",
+    "query_or_note_path": "design/pagination-decisions.md",
+    "status": "read",
+    "note_path": "design/pagination-decisions.md",
+    "content_sha256": "a" * 64,
+}
+
+
+def test_findings_example_without_obsidian_reads_still_validates():
+    # Baseline: an ordinary Architect response (no direct MCP use) must continue to
+    # validate exactly as before the fix -- obsidian_reads is optional, never required.
+    schema = _findings_schema()
+    doc = _load("findings")
+    assert "obsidian_reads" not in doc
+
+    errors = validate_against_schema(doc, schema, artifact="findings.example.json")
+
+    assert not errors, "\n".join(str(e) for e in errors)
+
+
+def test_findings_with_valid_obsidian_reads_validates_end_to_end():
+    # The representative real payload: schema-level AND semantic-level, exactly the two
+    # steps live_cli.op_validate_artifact / op_promote_artifact run in sequence.
+    schema = _findings_schema()
+    doc = _findings_with_obsidian_reads([VALID_SEARCH_READ, VALID_NOTE_READ])
+
+    schema_errors = validate_against_schema(doc, schema, artifact="findings (obsidian_reads)")
+    assert not schema_errors, "\n".join(str(e) for e in schema_errors)
+
+    semantic_errors = validate_findings_semantics(doc, artifact="findings (obsidian_reads)")
+    assert not semantic_errors, "\n".join(str(e) for e in semantic_errors)
+
+
+def test_findings_obsidian_reads_unknown_tool_is_rejected():
+    schema = _findings_schema()
+    doc = _findings_with_obsidian_reads(
+        [{**VALID_SEARCH_READ, "tool": "mcp__obsidian__list_notes"}]
+    )
+
+    errors = validate_against_schema(doc, schema, artifact="findings (unknown tool)")
+
+    assert any("tool" in e.json_path for e in errors)
+
+
+def test_findings_obsidian_reads_write_tool_is_rejected():
+    # No write/mutation tool exists on the real connector -- confirm the schema does not
+    # merely happen to accept ordinary tools, but actually enumerates only the two exact
+    # read-only ones.
+    schema = _findings_schema()
+    doc = _findings_with_obsidian_reads(
+        [{**VALID_SEARCH_READ, "tool": "mcp__obsidian__write_note"}]
+    )
+
+    errors = validate_against_schema(doc, schema, artifact="findings (write tool)")
+
+    assert any("tool" in e.json_path for e in errors)
+
+
+def test_findings_obsidian_reads_jira_tool_is_rejected():
+    # The Architect must never be able to claim a Jira MCP read either -- it holds no
+    # such tool, and the schema must not accidentally permit citing one.
+    schema = _findings_schema()
+    doc = _findings_with_obsidian_reads(
+        [{**VALID_SEARCH_READ, "tool": "mcp__jira__get_issue"}]
+    )
+
+    errors = validate_against_schema(doc, schema, artifact="findings (jira tool)")
+
+    assert any("tool" in e.json_path for e in errors)
+
+
+def test_findings_obsidian_reads_malformed_sha256_is_rejected():
+    schema = _findings_schema()
+    doc = _findings_with_obsidian_reads(
+        [{**VALID_NOTE_READ, "content_sha256": "not-a-real-hash"}]
+    )
+
+    errors = validate_against_schema(doc, schema, artifact="findings (malformed sha256)")
+
+    assert any("content_sha256" in e.json_path for e in errors)
+
+
+def test_findings_obsidian_reads_uppercase_sha256_is_rejected():
+    # hashlib.sha256().hexdigest() is always lowercase -- an uppercase digest could not
+    # have come from the real connector.
+    schema = _findings_schema()
+    doc = _findings_with_obsidian_reads([{**VALID_NOTE_READ, "content_sha256": "A" * 64}])
+
+    errors = validate_against_schema(doc, schema, artifact="findings (uppercase sha256)")
+
+    assert any("content_sha256" in e.json_path for e in errors)
+
+
+def test_findings_obsidian_reads_unexpected_property_is_rejected():
+    schema = _findings_schema()
+    doc = _findings_with_obsidian_reads(
+        [{**VALID_SEARCH_READ, "vault_path": "/home/someone/vault"}]
+    )
+
+    errors = validate_against_schema(doc, schema, artifact="findings (unexpected property)")
+
+    assert any("Additional properties" in e.message for e in errors)
+
+
+def test_findings_obsidian_reads_absolute_posix_path_is_rejected():
+    schema = _findings_schema()
+    doc = _findings_with_obsidian_reads(
+        [{**VALID_SEARCH_READ, "query_or_note_path": "/etc/passwd"}]
+    )
+
+    errors = validate_against_schema(doc, schema, artifact="findings (absolute posix path)")
+
+    assert any("query_or_note_path" in e.json_path for e in errors)
+
+
+def test_findings_obsidian_reads_absolute_windows_path_is_rejected():
+    schema = _findings_schema()
+    doc = _findings_with_obsidian_reads(
+        [{**VALID_NOTE_READ, "note_path": "C:/Users/someone/vault/note.md"}]
+    )
+
+    errors = validate_against_schema(doc, schema, artifact="findings (absolute windows path)")
+
+    assert any("note_path" in e.json_path for e in errors)
+
+
+def test_findings_obsidian_reads_traversal_path_is_rejected():
+    schema = _findings_schema()
+    doc = _findings_with_obsidian_reads(
+        [{**VALID_SEARCH_READ, "query_or_note_path": "../../etc/passwd"}]
+    )
+
+    errors = validate_against_schema(doc, schema, artifact="findings (traversal path)")
+
+    assert any("query_or_note_path" in e.json_path for e in errors)
+
+
+def test_findings_obsidian_reads_note_path_without_md_suffix_is_rejected():
+    # obsidian_reader only ever reads .md notes -- a note_path lacking that suffix could
+    # not have come from a real read_note result.
+    schema = _findings_schema()
+    doc = _findings_with_obsidian_reads([{**VALID_NOTE_READ, "note_path": "design/notes"}])
+
+    errors = validate_against_schema(doc, schema, artifact="findings (note_path missing .md)")
+
+    assert any("note_path" in e.json_path for e in errors)
+
+
+def test_findings_obsidian_reads_unrecognized_status_is_rejected():
+    schema = _findings_schema()
+    doc = _findings_with_obsidian_reads([{**VALID_SEARCH_READ, "status": "success"}])
+
+    errors = validate_against_schema(doc, schema, artifact="findings (bogus status)")
+
+    assert any("status" in e.json_path for e in errors)
+
+
+def test_findings_obsidian_reads_excessive_entries_are_rejected():
+    schema = _findings_schema()
+    many = [dict(VALID_SEARCH_READ, query_or_note_path=f"query {i}") for i in range(21)]
+    doc = _findings_with_obsidian_reads(many)
+
+    errors = validate_against_schema(doc, schema, artifact="findings (excessive obsidian_reads)")
+
+    assert any("too long" in e.message for e in errors)
+
+
+def test_findings_obsidian_reads_missing_required_field_is_rejected():
+    schema = _findings_schema()
+    incomplete = {"tool": "mcp__obsidian__search_notes", "query_or_note_path": "q"}  # no status
+    doc = _findings_with_obsidian_reads([incomplete])
+
+    errors = validate_against_schema(doc, schema, artifact="findings (missing status)")
+
+    assert any("status" in e.message for e in errors)
+
+
+# ---------------------------------------------------------------------------
 # Semantic validation -- implementation report
 # ---------------------------------------------------------------------------
 

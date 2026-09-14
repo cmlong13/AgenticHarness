@@ -1,0 +1,23 @@
+{
+  "task_id": "CONNECTOR-ROUTE-001",
+  "run_id": "run-20260909-connectorroute-001",
+  "operation": "read_obsidian_note",
+  "phase": "research",
+  "connector": "filesystem_vault",
+  "attempted_at": "2026-09-09T16:33:57Z",
+  "requested_note_path": "Harness Run Summaries/run-summary-run-20260908-obsidianlive-001.md",
+  "vault": {
+    "configured": true,
+    "vault_path": "C:\\Users\\caleb\\Documents\\Obsidian Vault",
+    "raw_env_value": "C:/Users/caleb/Documents/Obsidian Vault"
+  },
+  "status": "read",
+  "note_path": "Harness Run Summaries/run-summary-run-20260908-obsidianlive-001.md",
+  "reason": "note read from the configured Obsidian vault",
+  "absolute_path": "C:\\Users\\caleb\\Documents\\Obsidian Vault\\Harness Run Summaries\\run-summary-run-20260908-obsidianlive-001.md",
+  "content": "---\nrun_id: run-20260908-obsidianlive-001\ntask_id: OBSIDIAN-LIVE-001\nfinal_verdict: blocked\ngenerated_at: 2026-09-08T21:50:00Z\nharness: agentic-harness\n---\n\n# Harness run summary \u2014 run-20260908-obsidianlive-001\n\n- **Run ID:** run-20260908-obsidianlive-001\n- **Task ID:** OBSIDIAN-LIVE-001\n- **Source mode:** unknown\n- **Objective:** Live proof of the Obsidian run-summary publication boundary: a dedicated harness fixture run (not a four-phase /work pipeline) exercising harness/orchestrator/obsidian.py through live_cli.py's publish_run_summary operation and the production filesystem VaultWriter, publishing one harmless note into a dedicated 'Harness Run Summaries' folder of the configured vault.\n- **Final verdict:** blocked\n- **Phases completed:** (none)\n- **Generated at:** 2026-09-08T21:50:00Z\n\n## Pipeline artifacts\n- Discovery / scope: `runs/run-20260908-obsidianlive-001/run-summary.json`\n\n## Tests\n- Tests executed: no verification-report.json retained for this run\n\n## Memory\n- Memory influenced this run: no\n- Lessons appended this run: 0\n\n## Usage / cost\n- (no usage summary retained)\n\n## Evidence gaps\n- This is a dedicated CLI demonstration of the Obsidian connector, not a live four-phase /work pipeline run.\n- MCP-vs-REST dual implementation remains a separate future milestone; ASSIGNMENT.md does not name Obsidian as that connector.\n- A live /work run that naturally reaches the Obsidian publication step remains open.\n\n---\n_Generated 2026-09-08T21:50:00Z from retained run evidence under `runs/run-20260908-obsidianlive-001/`._\n",
+  "byte_count": 1552,
+  "line_count": 39,
+  "content_sha256": "5e017d2de6e3aea81aad60001061d75739584e44fd1e9d7c4dfcf25e0c198679",
+  "truncated": false
+}

@@ -97,6 +97,41 @@ def test_retain_git_evidence_collision_is_rejected(tmp_path):
     assert doc == {"status": "verified"}
 
 
+def test_retain_connector_routing_evidence_writes_under_connector_routing_subdirectory(tmp_path):
+    run_directory = evidence_io.run_dir(tmp_path, "run-1")
+    evidence_io.ensure_run_dirs(run_directory)
+
+    path = evidence_io.retain_connector_routing_evidence(
+        run_directory, "jira", "route-1.json", {"status": "connector_unavailable"}
+    )
+
+    assert path == run_directory / "jira" / "routing" / "route-1.json"
+    assert json.loads(path.read_text(encoding="utf-8")) == {"status": "connector_unavailable"}
+
+
+def test_retain_connector_routing_evidence_creates_subdirectory_on_demand(tmp_path):
+    run_directory = evidence_io.run_dir(tmp_path, "run-1")
+    path = evidence_io.retain_connector_routing_evidence(run_directory, "jira", "route-1.json", {"status": "resolved_via_rest"})
+    assert path.is_file()
+
+
+def test_retain_connector_routing_evidence_collision_is_rejected(tmp_path):
+    run_directory = evidence_io.run_dir(tmp_path, "run-1")
+    evidence_io.retain_connector_routing_evidence(run_directory, "jira", "route-1.json", {"status": "resolved_via_rest"})
+    with pytest.raises(evidence_io.EvidenceCollisionError):
+        evidence_io.retain_connector_routing_evidence(run_directory, "jira", "route-1.json", {"status": "not_found"})
+    doc = json.loads((run_directory / "jira" / "routing" / "route-1.json").read_text(encoding="utf-8"))
+    assert doc == {"status": "resolved_via_rest"}
+
+
+def test_routing_evidence_is_distinct_from_ordinary_jira_evidence(tmp_path):
+    run_directory = evidence_io.run_dir(tmp_path, "run-1")
+    routing = evidence_io.retain_connector_routing_evidence(run_directory, "jira", "route-1.json", {"a": 1})
+    resolution = evidence_io.retain_jira_evidence(run_directory, "issue-resolution.json", {"b": 2})
+    assert routing.parent != resolution.parent
+    assert routing.parent == run_directory / "jira" / "routing"
+
+
 def test_retain_jira_evidence_writes_under_jira_subdirectory(tmp_path):
     run_directory = evidence_io.run_dir(tmp_path, "run-1")
     evidence_io.ensure_run_dirs(run_directory)

@@ -1,0 +1,57 @@
+{
+  "task_id": "CONNECTOR-ROUTE-001",
+  "run_id": "run-20260909-connectorroute-001",
+  "requested_issue_key_raw": "HARNESS-1",
+  "kept_route": "rest",
+  "resolved_at": "2026-09-09T16:33:14Z",
+  "connector": "jira",
+  "operation": "resolve_issue",
+  "requested_issue_key": "HARNESS-1",
+  "policy": "rest_first",
+  "primary_route": "rest",
+  "fallback_route": "mcp",
+  "primary_result": {
+    "route": "rest",
+    "transport": "jira_rest_v3",
+    "outcome": "connector_unavailable",
+    "reason": "no Jira connector is configured in this environment (JIRA_BASE_URL/JIRA_EMAIL/JIRA_API_TOKEN are not all set)",
+    "issue": null,
+    "detail": {
+      "status": "connector_unavailable",
+      "requested_issue_key": "HARNESS-1",
+      "issue": null,
+      "reason": "no Jira connector is configured in this environment (JIRA_BASE_URL/JIRA_EMAIL/JIRA_API_TOKEN are not all set)"
+    }
+  },
+  "fallback_attempted": true,
+  "fallback_reason": "primary route reported connector_unavailable; the other route was run to corroborate",
+  "fallback_result": {
+    "route": "mcp",
+    "transport": "mcp_stdio",
+    "outcome": "connector_unavailable",
+    "reason": "no Jira connector is configured in this environment (JIRA_BASE_URL/JIRA_EMAIL/JIRA_API_TOKEN are not all set)",
+    "issue": null,
+    "detail": {
+      "status": "mcp_ok",
+      "server": "jira",
+      "tool": "get_issue",
+      "reason": "tool returned a result",
+      "text": "{\n  \"route\": \"mcp\",\n  \"connector\": \"jira\",\n  \"tool\": \"get_issue\",\n  \"requested_issue_key\": \"HARNESS-1\",\n  \"status\": \"connector_unavailable\",\n  \"reason\": \"no Jira connector is configured in this environment (JIRA_BASE_URL/JIRA_EMAIL/JIRA_API_TOKEN are not all set)\",\n  \"issue\": null\n}",
+      "parsed": {
+        "route": "mcp",
+        "connector": "jira",
+        "tool": "get_issue",
+        "requested_issue_key": "HARNESS-1",
+        "status": "connector_unavailable",
+        "reason": "no Jira connector is configured in this environment (JIRA_BASE_URL/JIRA_EMAIL/JIRA_API_TOKEN are not all set)",
+        "issue": null
+      },
+      "is_error": false
+    }
+  },
+  "final_route": "none",
+  "status": "connector_unavailable",
+  "reason": "both the REST and MCP routes independently report no Jira connector is configured",
+  "issue": null,
+  "attempted_at": "2026-09-09T16:33:13Z"
+}

@@ -170,6 +170,23 @@ $ARGUMENTS
     this harness forces none. A read failure (`connector_unavailable` / `no_matches` /
     `not_found` / ...) is simply "no vault evidence retrieved," never a pipeline
     failure. See "# Obsidian Discovery/Research consultation" below.
+21. The Jira connector is built **both ways** (`ASSIGNMENT.md` §2.4: "for at least one
+    connector, implement both the MCP route and a REST-skill fallback, and document ...
+    which one you kept and why"). Route B, **REST** -- a direct
+    `jira_connector.resolve_issue` call -- is the route this harness **keeps** as its
+    production connector (see "# Connector routing" below for the rationale); ticket-mode
+    `/work` continues to resolve tickets through it via `resolve_jira_issue`, unchanged.
+    Route A, **MCP** -- a real JSON-RPC stdio boundary to `harness.mcp.jira_server`,
+    driven by `harness/orchestrator/mcp_client.py` -- is implemented and live-exercised so
+    "implement both" is genuinely met. `live_cli.py`'s `resolve_jira_issue_routed`
+    operation (`harness/orchestrator/connector_router.py`) is the dual-route entry point:
+    it runs the two transports under a deterministic `policy` (`rest_first` default /
+    `mcp_first`), classifies every outcome, and **never lets a fallback mask an
+    authoritative `unauthorized` or `identity_mismatch`**. It always retains
+    `runs/<run_id>/jira/routing/route-<n>.json` and a `connector_routing` policy event.
+    The Architect's separate docs-connector grant (`mcp__obsidian__*`, `ASSIGNMENT.md`
+    §2.2) is read-only Obsidian only -- it is never given `Bash`, `Skill`, `Agent`,
+    `Edit`/`Write`, arbitrary filesystem access, or the `jira` MCP tool.
 
 # Parsing $ARGUMENTS
 
@@ -295,6 +312,77 @@ completes with `status: "resolved"`.
    this run's Discovery input is Jira-sourced, not human-typed -- see "What to state,
    every time" below for the exact terminal-report bullet this becomes.
 
+# Connector routing (Jira: MCP route + REST fallback) -- standing rule 21
+
+`ASSIGNMENT.md` §2.4 requires that, "for at least one connector, implement both the MCP
+route and a REST-skill fallback, and document ... which one you kept and why." The
+connector built both ways is **Jira** -- the assignment's own motivating example ("the
+reference setup abandoned the Atlassian MCP server in favor of curl-based skills because
+raw REST calls were more reliable and debuggable").
+
+**The two routes, both real:**
+
+- **Route B -- REST** (`harness/orchestrator/jira_connector.py`, reached through
+  `resolve_jira_issue` / `resolve_jira_issue_routed`): a direct, in-process,
+  identity-checked `GET /rest/api/3/issue/{key}`. Credentials from `JIRA_*` env vars,
+  never a request field. Seven classifications; only `resolved` counts.
+- **Route A -- MCP** (`harness/mcp/jira_server.py`, a project-local stdio MCP server,
+  driven by `harness/orchestrator/mcp_client.py`): the *same* resolution reached over a
+  real JSON-RPC 2.0 stdio boundary -- `initialize` -> `notifications/initialized` ->
+  `tools/call get_issue`. The server is registered in the project-root `.mcp.json`, so
+  Claude Code connects to it like any external MCP server once the `.mcp.json` server is
+  approved. One read-only tool, no write capability, no caller-supplied base URL/token.
+
+**When the MCP route is attempted / when fallback is allowed / when it is forbidden**
+(deterministic, in `connector_router.resolve_issue_routed`):
+
+- `policy: "rest_first"` (default): REST runs first. An **authoritative** REST outcome
+  (`resolved` / `not_found` / `unauthorized` / `identity_mismatch` / `invalid_issue_key`)
+  is final -- the MCP route is **not** run, because a fallback could only repeat it or,
+  worse, mask an authorization failure or an identity mismatch. A `connector_unavailable`
+  REST outcome runs the MCP route too, **purely to corroborate** that the connector
+  really is unconfigured (both must agree). A non-authoritative transport-class REST
+  failure (`invalid_response`) **falls back** to the MCP route.
+- `policy: "mcp_first"`: the mirror image -- MCP first, REST as the fallback. Used to
+  exercise / prefer the MCP transport (parity tests and the live proof).
+- A fallback is **never** attempted past a real `unauthorized` or `identity_mismatch`.
+
+**How route identity is proven / what counts as success:** each route returns a
+normalized `RouteResult` (`route`, `transport`, `outcome`, `issue`); the final
+`RouteOutcome` records the primary route, whether fallback was attempted and why, the
+fallback result, the `final_route`, and one of the `ROUTE_STATUSES`. A route is only
+`resolved` when it genuinely returned a matching, identity-checked issue -- never merely
+because fallback code exists.
+
+**Evidence:** `runs/<run_id>/jira/routing/route-<n>.json` (distinct from
+`runs/<run_id>/jira/issue-resolution.json`, the ordinary Jira result evidence) plus a
+`connector_routing` policy event -- retained on every outcome. No auth header or raw HTTP
+body is ever in it (`connector_router` drops the `raw` echo before retention).
+
+**Least privilege / secret handling:** the MCP server reads `JIRA_*` fresh from its own
+process environment; a `get_issue` argument carrying `base_url`/`email`/`api_token`/`env`
+is rejected. The tool result carries only the connector's classification plus a whitelist
+of issue fields -- never the request headers or the token.
+
+**The route this harness keeps, and why: REST (Route B).** Rationale, matching the
+reference setup's own conclusion and confirmed by this milestone's evidence:
+
+1. **Fewer moving parts.** REST is one in-process HTTP exchange. The MCP route adds a
+   subprocess, a second protocol surface (JSON-RPC framing, handshake, tool schemas), and
+   its own failure modes (server won't launch, protocol error, hang) -- all of which
+   `mcp_client` must classify and none of which add capability.
+2. **Directly debuggable.** A REST failure is one retained request/response pair. An MCP
+   failure is a multi-step exchange across a process boundary.
+3. **Deterministic, minimal evidence.** `issue-resolution.json` is a single small record.
+4. **No install/approval/health dependency.** REST works as long as `JIRA_*` is set. The
+   MCP route additionally needs the `.mcp.json` server approved and a healthy subprocess.
+5. **Same authority either way.** Both routes hit the same Jira REST v3 endpoint and the
+   same identity check -- MCP buys no extra trust, only extra surface.
+
+MCP is retained as an implemented, live-exercised alternate (and the `mcp_first` policy
+exists) so the "implement both" requirement is genuinely met and the decision above rests
+on real evidence, not assertion.
+
 # The live bridge: `harness/orchestrator/live_cli.py`
 
 Never inline multi-line `python -c` snippets. For every validation, retention, or
@@ -338,6 +426,7 @@ function's own docstring for the authoritative field-level contract):
 | `verify_push` | The one independent push-verification call (ASSIGNMENT.md's cardinal rule). Runs a real `git ls-remote <remote> refs/heads/<branch>` and classifies the result: `verified` / `mismatch` / `remote_ref_missing` / `command_failed` / `invalid_output` / `wrong_repository`. Always retains `runs/<run_id>/git/push-verification.json`, whatever the classification. Never accepts a simulated result -- the real subprocess runs every time this operation is called. |
 | `gh_repo_metadata` | Read-only GitHub-side metadata via `gh repo view` (nameWithOwner/url/defaultBranchRef) -- never a substitute for `verify_push`'s `git ls-remote` check. |
 | `resolve_jira_issue` | The one Jira ticket-resolution entry point for a ticket-mode run (`harness/orchestrator/jira_connector.py`). Normalizes `issue_key`, reads credentials fresh from the environment (never from the request), and returns one of seven classifications (`resolved` / `not_found` / `unauthorized` / `connector_unavailable` / `identity_mismatch` / `invalid_issue_key` / `invalid_response`) -- only `resolved` may ever be treated as "this ticket exists." Always retains `runs/<run_id>/jira/issue-resolution.json` and a `jira_issue_resolution` policy event, whatever the outcome. See "Ticket-mode Jira resolution" above for the full protocol. |
+| `resolve_jira_issue_routed` | The `ASSIGNMENT.md` §2.4 **dual-route** Jira resolution (`harness/orchestrator/connector_router.py`): runs Route A (MCP -- a real JSON-RPC stdio boundary to `harness.mcp.jira_server`) and Route B (REST -- `jira_connector.resolve_issue`, the **kept** route) under a deterministic `policy` (`"rest_first"` default / `"mcp_first"`). Fields: `run_id`, `task_id`, `issue_key`, optional `policy`, optional `filename` (default `route-1.json`). A fallback never masks an authoritative `unauthorized`/`identity_mismatch`; `connector_unavailable` from one route triggers the other purely to corroborate. Affirmative statuses: `resolved_via_rest` / `resolved_via_mcp` / `rest_failed_mcp_resolved` / `mcp_failed_rest_resolved`. Always retains `runs/<run_id>/jira/routing/<filename>` and a `connector_routing` policy event. Not wired into ticket-mode intake (that stays on `resolve_jira_issue`, standing rule 21) -- this is the mechanism for exercising or preferring MCP. |
 | `publish_run_summary` | Call exactly once per run, immediately **after** `write_run_summary`, for every terminal outcome (see "Obsidian run-summary publication" below). Renders this run's concise summary note strictly from retained evidence and publishes it to the configured Obsidian vault via the real filesystem `VaultWriter` (`harness/orchestrator/obsidian.py`) -- never a simulated write. Always retains `runs/<run_id>/obsidian/summary-publication.json` and an `obsidian_publication` policy event, whatever the outcome. Only `status: "published"` is a delivered note; `connector_unavailable` / `invalid_destination` / `destination_unavailable` / `collision` / `write_failed` are external-delivery failures that never affect the run verdict. |
 | `search_obsidian` | Discovery/Research only. Deterministic, bounded text search across eligible `.md` vault notes for prior design context (`harness/orchestrator/obsidian_reader.py`; the real vault, `OBSIDIAN_VAULT_PATH` from the environment -- no request field can point it elsewhere). Fields: `run_id`, `task_id`, `phase` (`discovery`|`research`), `query`, optional `filename` (default `search-1.json`, increment for a second call). Returns at most 8 matches, each with a vault-relative `note_path`, bounded `snippet`, `line`, `score`. Always retains `runs/<run_id>/obsidian/read/<filename>` and an `obsidian_read` policy event. `found` is the only affirmative status; `no_matches` is an honest "nothing there," not a failure. |
 | `read_obsidian_note` | Discovery/Research only. Reads one vault-relative Markdown note in full (body bounded to 64 KiB; full-file SHA-256 + byte count always complete), for a specific prior-decision/calibration note `search_obsidian` surfaced. Fields: `run_id`, `task_id`, `phase`, `note_path`, optional `filename` (default `read-1.json`). Path safety is total -- an absolute / `..` / non-`.md` / hidden-system / vault-escaping path is `invalid_note_path`; a safe path naming no file is `not_found` (never a silent read of a different file). Always retains `runs/<run_id>/obsidian/read/<filename>` and an `obsidian_read` policy event. `read` is the only affirmative status. |
@@ -604,10 +693,24 @@ bounded note body. `architect.md`'s own "Obsidian historical evidence" section g
 how the Architect must treat it: never as current code truth without confirming against
 the repository, citing the repository `file:line` as the real evidence, and recording
 whether each consulted note was **corroborated / stale / contradicted / context-only**.
-The Architect never reads the vault itself (it holds only Read/Grep/Glob). If the
-Architect's findings materially rest on a vault note, its `findings.json` cites the
-retained read-evidence file as a `metadata`-tier entry (never the sole evidence for a
-behavioral claim) or notes it in `open_questions`.
+
+The Architect also holds two narrow, read-only vault tools directly
+(`mcp__obsidian__search_notes`, `mcp__obsidian__read_note` -- `ASSIGNMENT.md` §2.2's
+"Read/grep/glob + your docs connectors", backed by `harness.mcp.obsidian_server` wrapping
+the same `obsidian_reader` boundary) and may consult the vault itself during Research when
+the injected block does not cover something material. This does **not** change the
+orchestrator architecture: run identity, scope, and dispatch authority stay the
+orchestrator's; the connector is read-only and reaches nothing outside the configured
+vault; and a vault note remains historical/contextual `metadata`-tier evidence, never
+repository truth. When the Architect uses a direct read, it echoes an `obsidian_reads`
+array in its findings response (`{tool, query_or_note_path, status, note_path,
+content_sha256}`); after the dispatch returns, the orchestrator retains each echoed read
+as a normalized `runs/<run_id>/obsidian/read/<name>.json` record (a `read_obsidian_note`
+call against the same `note_path`, or a `retain_policy_event(kind: "obsidian_read")` when
+the note is already retained), so every vault observation stays attributable to this run
+(Option A). If the Architect's findings materially rest on a vault note, its
+`findings.json` cites the retained read-evidence file as a `metadata`-tier entry (never
+the sole evidence for a behavioral claim) or notes it in `open_questions`.
 
 # Phase 1: Discovery (main session, no subagent)
 
@@ -1591,6 +1694,13 @@ State plainly, every time:
   `reason` from that same retained evidence and that Discovery was never reached -- never
   soften a failed resolution into "the ticket might exist." A free-form run states
   plainly that no ticket resolution was attempted.
+- Connector routing, whenever this run called `resolve_jira_issue_routed` (see
+  "# Connector routing" above): the `policy`, the `primary_route`, whether a fallback was
+  attempted and why, the `final_route`, and the exact `status` (citing
+  `runs/<run_id>/jira/routing/route-<n>.json`). State plainly that REST is the kept
+  production route, that a fallback never masked an `unauthorized`/`identity_mismatch`,
+  and -- for `connector_unavailable` -- that both the REST and MCP transports were
+  exercised and independently agree no Jira connector is configured in this environment.
 - Obsidian run-summary delivery, every terminal run (see "Obsidian run-summary
   publication" above): the exact `publish_run_summary` classification and `reason`
   (citing `runs/<run_id>/obsidian/summary-publication.json`), and, on `published`, the

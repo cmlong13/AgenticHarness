@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-MCPAUDIT-001",
+  "run_id": "run-20260914-mcpaudit-001",
+  "created_at": "2026-09-14T00:00:00Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "Narrow live-invocation check of the Architect's direct Obsidian MCP tools."
+  },
+  "objective": "Prove whether the Architect subagent can actually invoke its own mcp__obsidian__search_notes tool at runtime (native MCP wiring check only -- no repository code claim is being investigated).",
+  "in_scope": [
+    ".claude/agents/architect.md"
+  ],
+  "out_of_scope": [
+    "everything else in the repository"
+  ],
+  "constraints": [
+    "Call mcp__obsidian__search_notes exactly once with query \"pagination design decisions\", regardless of whether it succeeds, and echo the result as an obsidian_reads entry.",
+    "Do not investigate any other claim; produce exactly one 'found' finding stating whether the tool call itself executed (any status) or was unavailable as a named tool."
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "The obsidian_reads array (or its genuine absence) is reported honestly."
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-1",
+      "description": "Attempt one direct Obsidian MCP call",
+      "phase": "research",
+      "depends_on": []
+    }
+  ],
+  "status": "approved"
+}
