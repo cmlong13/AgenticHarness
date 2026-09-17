@@ -430,6 +430,7 @@ function's own docstring for the authoritative field-level contract):
 | `publish_run_summary` | Call exactly once per run, immediately **after** `write_run_summary`, for every terminal outcome (see "Obsidian run-summary publication" below). Renders this run's concise summary note strictly from retained evidence and publishes it to the configured Obsidian vault via the real filesystem `VaultWriter` (`harness/orchestrator/obsidian.py`) -- never a simulated write. Always retains `runs/<run_id>/obsidian/summary-publication.json` and an `obsidian_publication` policy event, whatever the outcome. Only `status: "published"` is a delivered note; `connector_unavailable` / `invalid_destination` / `destination_unavailable` / `collision` / `write_failed` are external-delivery failures that never affect the run verdict. |
 | `search_obsidian` | Discovery/Research only. Deterministic, bounded text search across eligible `.md` vault notes for prior design context (`harness/orchestrator/obsidian_reader.py`; the real vault, `OBSIDIAN_VAULT_PATH` from the environment -- no request field can point it elsewhere). Fields: `run_id`, `task_id`, `phase` (`discovery`|`research`), `query`, optional `filename` (default `search-1.json`, increment for a second call). Returns at most 8 matches, each with a vault-relative `note_path`, bounded `snippet`, `line`, `score`. Always retains `runs/<run_id>/obsidian/read/<filename>` and an `obsidian_read` policy event. `found` is the only affirmative status; `no_matches` is an honest "nothing there," not a failure. |
 | `read_obsidian_note` | Discovery/Research only. Reads one vault-relative Markdown note in full (body bounded to 64 KiB; full-file SHA-256 + byte count always complete), for a specific prior-decision/calibration note `search_obsidian` surfaced. Fields: `run_id`, `task_id`, `phase`, `note_path`, optional `filename` (default `read-1.json`). Path safety is total -- an absolute / `..` / non-`.md` / hidden-system / vault-escaping path is `invalid_note_path`; a safe path naming no file is `not_found` (never a silent read of a different file). Always retains `runs/<run_id>/obsidian/read/<filename>` and an `obsidian_read` policy event. `read` is the only affirmative status. |
+| `retain_architect_obsidian_reads` | Research only, called once immediately after `promote_artifact` (`phase: "research"`) -- see "Architect direct-MCP Obsidian evidence retention bridge" below. Fields: `run_id`, `task_id`, `findings` (inline doc or `findings_ref` naming the just-promoted `findings.json`). Consumes the Architect's own `obsidian_reads` echo (from its direct `mcp__obsidian__*` tools) and retains one normalized, independently-classified record per entry to `runs/<run_id>/obsidian/read/architect-mcp-<n>.json` (1-based array position) plus an `architect_obsidian_read` policy event per entry. Always `status: "retained"`, even when `obsidian_reads` is absent/empty (a normal no-op) -- never fails Research. Idempotent: an index already retained on disk is reported `already_retained` and neither re-verified nor rewritten, so a resumed run never repeats a personal-vault read. |
 | `build_usage_summary` | Call exactly once per run, immediately before `write_run_summary`, for **every** terminal outcome of this run -- not only a genuine `pass`. Aggregates every per-agent usage record this run's own `usage/` directory holds into `runs/<run_id>/usage-summary.json` and returns its `path`; never hand-author usage totals inside `run-summary.json` yourself. See "Terminal usage summary" below. |
 
 # Per-agent usage accounting (after every fresh `Agent` dispatch)
@@ -704,13 +705,22 @@ orchestrator's; the connector is read-only and reaches nothing outside the confi
 vault; and a vault note remains historical/contextual `metadata`-tier evidence, never
 repository truth. When the Architect uses a direct read, it echoes an `obsidian_reads`
 array in its findings response (`{tool, query_or_note_path, status, note_path,
-content_sha256}`); after the dispatch returns, the orchestrator retains each echoed read
-as a normalized `runs/<run_id>/obsidian/read/<name>.json` record (a `read_obsidian_note`
-call against the same `note_path`, or a `retain_policy_event(kind: "obsidian_read")` when
-the note is already retained), so every vault observation stays attributable to this run
-(Option A). If the Architect's findings materially rest on a vault note, its
-`findings.json` cites the retained read-evidence file as a `metadata`-tier entry (never
-the sole evidence for a behavioral claim) or notes it in `open_questions`.
+content_sha256}`); immediately after `promote_artifact` (`phase: "research"`, Phase 2
+step 5 below) promotes that `findings.json`, call `retain_architect_obsidian_reads`
+once -- it retains each echoed entry as a normalized
+`runs/<run_id>/obsidian/read/architect-mcp-<n>.json` record and an
+`architect_obsidian_read` policy event, so every vault observation stays attributable
+to this run (Option A). The Architect's echo is agent-reported metadata, not
+automatically authoritative: the operation independently re-reads an affirmative
+`mcp__obsidian__read_note` observation via the same `obsidian_reader` boundary and
+compares SHA-256 (`verified` / `hash_mismatch` / `verification_unavailable` /
+`not_found`), never independently re-runs a `mcp__obsidian__search_notes` observation
+(retained as `architect_reported` instead, per least privilege), and retains a negative
+connector outcome honestly without manufacturing an affirmative read -- see
+"Architect direct-MCP Obsidian evidence retention bridge" in `live_cli.py`. If the
+Architect's findings materially rest on a vault note, its `findings.json` cites the
+retained read-evidence file as a `metadata`-tier entry (never the sole evidence for a
+behavioral claim) or notes it in `open_questions`.
 
 # Phase 1: Discovery (main session, no subagent)
 
@@ -787,7 +797,10 @@ the sole evidence for a behavioral claim) or notes it in `open_questions`.
      problem and is not eligible for correction -- go straight to "the run ends" below.
 5. If valid (either on the first attempt or after a successful transport repair below),
    `promote_artifact` (`phase: "research"`) to produce the canonical `findings.json`,
-   then `write_checkpoint` (`kind: "progress"`, `completed_phases: ["discovery",
+   then immediately `retain_architect_obsidian_reads` (`run_id`, `task_id`,
+   `findings_ref` naming the just-promoted `findings.json`) -- always, even when the
+   Architect used no direct MCP tool (a normal no-op in that case). Then
+   `write_checkpoint` (`kind: "progress"`, `completed_phases: ["discovery",
    "research"]`, `artifact_refs` naming both `scope.json` and `findings.json`) -- the
    second progress checkpoint.
 6. Absent a transport repair, the Architect returns one final message and is not resumed

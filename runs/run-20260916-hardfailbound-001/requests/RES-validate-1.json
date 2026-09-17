@@ -1,0 +1,8 @@
+{
+  "operation": "validate_artifact",
+  "phase": "research",
+  "doc_ref": "runs/run-20260916-hardfailbound-001/architect-raw-1.json",
+  "context_refs": {
+    "scope": "runs/run-20260916-hardfailbound-001/scope.json"
+  }
+}

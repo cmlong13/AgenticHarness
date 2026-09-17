@@ -24,6 +24,10 @@ class Thresholds:
             raise ConfigError("dti_low_max must not exceed dti_medium_max")
         if self.ltv_low_max.basis_points > self.ltv_medium_max.basis_points:
             raise ConfigError("ltv_low_max must not exceed ltv_medium_max")
+        if self.max_dti_hard_fail.basis_points < self.dti_medium_max.basis_points:
+            raise ConfigError("max_dti_hard_fail must not be below dti_medium_max")
+        if self.max_ltv_hard_fail.basis_points < self.ltv_medium_max.basis_points:
+            raise ConfigError("max_ltv_hard_fail must not be below ltv_medium_max")
         if not (300 <= self.min_credit_score <= 850):
             raise ConfigError("min_credit_score must be between 300 and 850")
 

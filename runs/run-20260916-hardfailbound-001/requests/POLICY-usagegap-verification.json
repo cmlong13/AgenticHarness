@@ -1,0 +1,10 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260916-hardfailbound-001",
+  "kind": "usage_accounting_gap",
+  "payload": {
+    "phase": "verification",
+    "agent_id": "af3690abb68bcca8c",
+    "reason": "no_quarantine_record"
+  }
+}

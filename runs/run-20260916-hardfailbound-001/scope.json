@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-HARDFAILBOUND",
+  "run_id": "run-20260916-hardfailbound-001",
+  "created_at": "2026-09-16T16:04:37Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "Audit demo-repo and fix a small, real, bounded gap: loanflow.config.Thresholds validates dti_low_max<=dti_medium_max, ltv_low_max<=ltv_medium_max, and the credit-score range, but never validates that max_dti_hard_fail is at or above dti_medium_max, or that max_ltv_hard_fail is at or above ltv_medium_max. A misconfigured threshold file with an inverted hard-fail/medium relationship silently makes the high-band/borderline DTI or LTV outcome unreachable (every DTI or LTV above the medium band immediately hard-fails instead of ever reaching the borderline/high-band review path), and load_thresholds's config loader currently has no check that would catch it. Add the missing invariant to Thresholds.__post_init__, raising ConfigError exactly like the existing invariants, plus regression tests in demo-repo/tests/unit/test_config.py."
+  },
+  "objective": "Add a config invariant to loanflow.config.Thresholds ensuring max_dti_hard_fail is not below dti_medium_max and max_ltv_hard_fail is not below ltv_medium_max, so a misconfigured threshold file can never silently make the borderline/high-band DTI or LTV rule outcome unreachable.",
+  "in_scope": [
+    "demo-repo/src/loanflow/config.py",
+    "demo-repo/tests/unit/test_config.py"
+  ],
+  "out_of_scope": [
+    "demo-repo/src/loanflow/config_loader.py",
+    "demo-repo/src/loanflow/risk_bands.py",
+    "demo-repo/src/loanflow/underwriting_rules.py",
+    "demo-repo/config/thresholds.json"
+  ],
+  "constraints": [
+    "No new dependencies without written justification",
+    "Standard library only",
+    "No change to Thresholds' public field shape (same dataclass fields, same constructor signature)",
+    "Extend the existing __post_init__ validation pattern (raise loanflow.errors.ConfigError, mirroring the existing dti_low_max/dti_medium_max and ltv_low_max/ltv_medium_max invariant checks) rather than introducing a new validation mechanism"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "Constructing Thresholds with max_dti_hard_fail below dti_medium_max raises loanflow.errors.ConfigError"
+    },
+    {
+      "id": "AC-2",
+      "description": "Constructing Thresholds with max_ltv_hard_fail below ltv_medium_max raises loanflow.errors.ConfigError"
+    },
+    {
+      "id": "AC-3",
+      "description": "All tests in demo-repo/tests/unit/test_config.py pass, including the two new regression tests above, and DEFAULT_THRESHOLDS still constructs successfully under the new invariant"
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-1",
+      "description": "Confirm Thresholds.__post_init__'s current invariant checks and error type, and confirm DEFAULT_THRESHOLDS already satisfies the proposed new invariant",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-2",
+      "description": "Add the max_dti_hard_fail/dti_medium_max and max_ltv_hard_fail/ltv_medium_max invariant checks to Thresholds.__post_init__ and add regression tests",
+      "phase": "implementation",
+      "depends_on": [
+        "N-1"
+      ]
+    },
+    {
+      "id": "N-3",
+      "description": "Verify the narrow test_config.py suite and the full demo-repo test suite",
+      "phase": "verification",
+      "depends_on": [
+        "N-2"
+      ]
+    }
+  ],
+  "status": "approved"
+}

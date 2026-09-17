@@ -1,0 +1,8 @@
+{
+  "operation": "validate_artifact",
+  "phase": "verification",
+  "doc_ref": "runs/run-20260916-hardfailbound-001/qe-raw-final.json",
+  "context_refs": {
+    "scope": "runs/run-20260916-hardfailbound-001/scope.json"
+  }
+}

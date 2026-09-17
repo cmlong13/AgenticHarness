@@ -41,3 +41,19 @@ def test_thresholds_rejects_inverted_ltv_bounds() -> None:
 def test_thresholds_rejects_out_of_range_credit_score() -> None:
     with pytest.raises(ConfigError):
         _thresholds(min_credit_score=200)
+
+
+def test_thresholds_rejects_dti_hard_fail_below_medium() -> None:
+    with pytest.raises(ConfigError):
+        _thresholds(
+            dti_medium_max=Percentage.from_ratio(0.43),
+            max_dti_hard_fail=Percentage.from_ratio(0.40),
+        )
+
+
+def test_thresholds_rejects_ltv_hard_fail_below_medium() -> None:
+    with pytest.raises(ConfigError):
+        _thresholds(
+            ltv_medium_max=Percentage.from_ratio(0.95),
+            max_ltv_hard_fail=Percentage.from_ratio(0.90),
+        )

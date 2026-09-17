@@ -1,0 +1,14 @@
+{
+  "operation": "retain_rejection",
+  "run_id": "run-20260916-hardfailbound-001",
+  "rejection": {
+    "message_type": "command_rejected",
+    "task_id": "T-HARDFAILBOUND",
+    "run_id": "run-20260916-hardfailbound-001",
+    "command_id": "ORCH-2",
+    "command": "python -m pytest -q",
+    "working_directory": "demo-repo",
+    "rejection_reason": "at least one positional test file, directory, or node ID is required -- bare 'python -m pytest' with no target is not accepted",
+    "rejection_category": "grammar_no_match"
+  }
+}

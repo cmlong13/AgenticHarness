@@ -17,6 +17,7 @@ REPO_ROOT) -- every test validates against the real, checked-in schemas.
 """
 from __future__ import annotations
 
+import hashlib
 import inspect
 import json
 import subprocess
@@ -1858,3 +1859,271 @@ class TestReadObsidianNote:
         )
         assert exit_code == 2
         assert "environment" in resp["error"]
+
+
+class TestRetainArchitectObsidianReads:
+    """op_retain_architect_obsidian_reads -- the production bridge that consumes a
+    promoted findings.json's optional `obsidian_reads` array (the Architect's own
+    direct mcp__obsidian__* tool echo) and retains normalized, independently-
+    classified evidence under runs/<run_id>/obsidian/read/architect-mcp-<n>.json."""
+
+    def _vault(self, tmp_path):
+        v = tmp_path / "vault"
+        (v / "Harness Run Summaries").mkdir(parents=True)
+        (v / "Harness Run Summaries" / "note.md").write_text("# Note\nSome content.\n", encoding="utf-8")
+        return v
+
+    def _req(self, *, findings_extra_reads=None, **overrides) -> dict:
+        doc = _findings_doc()
+        if findings_extra_reads is not None:
+            doc["obsidian_reads"] = findings_extra_reads
+        req = {"operation": "retain_architect_obsidian_reads", "run_id": "run-1", "task_id": "T-1", "findings": doc}
+        req.update(overrides)
+        return req
+
+    # 1. No obsidian_reads -> existing Research behavior unchanged (a normal no-op).
+    def test_no_obsidian_reads_is_a_no_op(self, repo_root, capsys) -> None:
+        exit_code, resp = _run_main(repo_root, self._req(), capsys)
+        assert exit_code == 0
+        assert resp == {
+            "operation": "retain_architect_obsidian_reads", "status": "retained",
+            "run_id": "run-1", "task_id": "T-1", "count": 0, "entries": [],
+        }
+        assert not (repo_root / "runs" / "run-1" / "obsidian" / "read").exists()
+
+    # 2. One negative direct MCP observation retained.
+    def test_negative_observation_retained_without_manufactured_read(self, repo_root, capsys) -> None:
+        reads = [
+            {"tool": "mcp__obsidian__read_note", "query_or_note_path": "Harness Run Summaries/gone.md",
+             "status": "connector_unavailable"}
+        ]
+        exit_code, resp = _run_main(repo_root, self._req(findings_extra_reads=reads), capsys)
+        assert exit_code == 0
+        assert resp["count"] == 1
+        assert resp["entries"][0]["status"] == "retained"
+        assert resp["entries"][0]["verification_result"] == "not_applicable"
+        doc = json.loads(
+            (repo_root / "runs" / "run-1" / "obsidian" / "read" / "architect-mcp-1.json").read_text()
+        )
+        assert doc["status"] == "connector_unavailable"
+        assert doc["source"] == "architect_direct_mcp"
+        assert doc["phase"] == "research"
+        assert doc["verification"]["performed"] is False
+        assert doc["verification"]["result"] == "not_applicable"
+
+    # 3. Multiple observations retain deterministic ordering.
+    def test_multiple_observations_retain_deterministic_ordering(self, repo_root, capsys) -> None:
+        reads = [
+            {"tool": "mcp__obsidian__search_notes", "query_or_note_path": "alpha", "status": "no_matches"},
+            {"tool": "mcp__obsidian__read_note", "query_or_note_path": "b.md", "status": "not_found"},
+            {"tool": "mcp__obsidian__search_notes", "query_or_note_path": "gamma", "status": "invalid_query"},
+        ]
+        exit_code, resp = _run_main(repo_root, self._req(findings_extra_reads=reads), capsys)
+        assert exit_code == 0
+        assert [e["filename"] for e in resp["entries"]] == [
+            "architect-mcp-1.json", "architect-mcp-2.json", "architect-mcp-3.json",
+        ]
+        read_dir = repo_root / "runs" / "run-1" / "obsidian" / "read"
+        for n, expected_query in enumerate(["alpha", "b.md", "gamma"], start=1):
+            doc = json.loads((read_dir / f"architect-mcp-{n}.json").read_text())
+            assert doc["query_or_note_path"] == expected_query
+
+    # 4. Affirmative direct read + matching independent SHA -> verified.
+    def test_affirmative_read_with_matching_sha_is_verified(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        vault = self._vault(tmp_path)
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(vault))
+        actual_sha = hashlib.sha256((vault / "Harness Run Summaries" / "note.md").read_bytes()).hexdigest()
+        reads = [
+            {"tool": "mcp__obsidian__read_note", "query_or_note_path": "Harness Run Summaries/note.md",
+             "status": "read", "note_path": "Harness Run Summaries/note.md", "content_sha256": actual_sha}
+        ]
+        exit_code, resp = _run_main(repo_root, self._req(findings_extra_reads=reads), capsys)
+        assert exit_code == 0
+        assert resp["entries"][0]["verification_result"] == "verified"
+        doc = json.loads(
+            (repo_root / "runs" / "run-1" / "obsidian" / "read" / "architect-mcp-1.json").read_text()
+        )
+        assert doc["verification"]["result"] == "verified"
+        assert doc["verification"]["independent_content_sha256"] == actual_sha
+
+    # 5. Affirmative read + mismatching SHA -> hash mismatch, never treated as valid evidence.
+    def test_affirmative_read_with_mismatching_sha_is_hash_mismatch(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        vault = self._vault(tmp_path)
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(vault))
+        reads = [
+            {"tool": "mcp__obsidian__read_note", "query_or_note_path": "Harness Run Summaries/note.md",
+             "status": "read", "note_path": "Harness Run Summaries/note.md", "content_sha256": "f" * 64}
+        ]
+        exit_code, resp = _run_main(repo_root, self._req(findings_extra_reads=reads), capsys)
+        assert exit_code == 0
+        assert resp["entries"][0]["verification_result"] == "hash_mismatch"
+        doc = json.loads(
+            (repo_root / "runs" / "run-1" / "obsidian" / "read" / "architect-mcp-1.json").read_text()
+        )
+        assert doc["verification"]["result"] == "hash_mismatch"
+        assert doc["verification"]["independent_content_sha256"] != "f" * 64
+
+    # 6. Independent verification unavailable -> honest verification_unavailable, not silently valid.
+    def test_verification_unavailable_when_connector_unconfigured(self, repo_root, monkeypatch, capsys) -> None:
+        monkeypatch.delenv("OBSIDIAN_VAULT_PATH", raising=False)
+        reads = [
+            {"tool": "mcp__obsidian__read_note", "query_or_note_path": "Harness Run Summaries/note.md",
+             "status": "read", "note_path": "Harness Run Summaries/note.md", "content_sha256": "a" * 64}
+        ]
+        exit_code, resp = _run_main(repo_root, self._req(findings_extra_reads=reads), capsys)
+        assert exit_code == 0
+        assert resp["entries"][0]["verification_result"] == "verification_unavailable"
+
+    # 7. No raw note body retained from agent output.
+    def test_no_note_body_ever_retained(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        vault = self._vault(tmp_path)
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(vault))
+        actual_sha = hashlib.sha256((vault / "Harness Run Summaries" / "note.md").read_bytes()).hexdigest()
+        reads = [
+            {"tool": "mcp__obsidian__read_note", "query_or_note_path": "Harness Run Summaries/note.md",
+             "status": "read", "note_path": "Harness Run Summaries/note.md", "content_sha256": actual_sha}
+        ]
+        _run_main(repo_root, self._req(findings_extra_reads=reads), capsys)
+        raw = (repo_root / "runs" / "run-1" / "obsidian" / "read" / "architect-mcp-1.json").read_text()
+        assert "Some content" not in raw
+        doc = json.loads(raw)
+        assert "content" not in doc
+
+    # 8. A search observation is never automatically re-searched (least privilege).
+    def test_search_observation_is_not_automatically_researched(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        vault = self._vault(tmp_path)
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(vault))
+
+        def _forbidden_search(**kwargs):
+            raise AssertionError("search_notes must never be independently re-run for retention")
+
+        from harness.orchestrator import obsidian_reader
+        monkeypatch.setattr(obsidian_reader, "search", _forbidden_search)
+
+        reads = [{"tool": "mcp__obsidian__search_notes", "query_or_note_path": "risk band calibration", "status": "found"}]
+        exit_code, resp = _run_main(repo_root, self._req(findings_extra_reads=reads), capsys)
+        assert exit_code == 0
+        assert resp["entries"][0]["verification_result"] == "architect_reported"
+        doc = json.loads(
+            (repo_root / "runs" / "run-1" / "obsidian" / "read" / "architect-mcp-1.json").read_text()
+        )
+        assert doc["verification"]["performed"] is False
+        assert doc["verification"]["result"] == "architect_reported"
+
+    # 9. Collision protection: a pre-existing retained record is never overwritten or re-verified.
+    def test_pre_existing_retained_record_is_not_overwritten(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        vault = self._vault(tmp_path)
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(vault))
+        read_dir = repo_root / "runs" / "run-1" / "obsidian" / "read"
+        read_dir.mkdir(parents=True)
+        sentinel = {"sentinel": "already retained by an earlier attempt"}
+        (read_dir / "architect-mcp-1.json").write_text(json.dumps(sentinel), encoding="utf-8")
+
+        def _forbidden_read(**kwargs):
+            raise AssertionError("an already-retained index must never be independently re-read")
+
+        from harness.orchestrator import obsidian_reader
+        monkeypatch.setattr(obsidian_reader, "read_note", _forbidden_read)
+
+        reads = [
+            {"tool": "mcp__obsidian__read_note", "query_or_note_path": "Harness Run Summaries/note.md",
+             "status": "read", "note_path": "Harness Run Summaries/note.md", "content_sha256": "a" * 64}
+        ]
+        exit_code, resp = _run_main(repo_root, self._req(findings_extra_reads=reads), capsys)
+        assert exit_code == 0
+        assert resp["entries"][0]["status"] == "already_retained"
+        assert json.loads((read_dir / "architect-mcp-1.json").read_text()) == sentinel
+
+    # 10. Policy event emitted.
+    def test_policy_event_emitted_without_note_content(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        vault = self._vault(tmp_path)
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(vault))
+        actual_sha = hashlib.sha256((vault / "Harness Run Summaries" / "note.md").read_bytes()).hexdigest()
+        reads = [
+            {"tool": "mcp__obsidian__read_note", "query_or_note_path": "Harness Run Summaries/note.md",
+             "status": "read", "note_path": "Harness Run Summaries/note.md", "content_sha256": actual_sha}
+        ]
+        _run_main(repo_root, self._req(findings_extra_reads=reads), capsys)
+        events_path = repo_root / "runs" / "run-1" / "logs" / "policy-events.jsonl"
+        events = [json.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines()]
+        matching = [e for e in events if e["kind"] == "architect_obsidian_read"]
+        assert len(matching) == 1
+        assert matching[0]["verification_result"] == "verified"
+        assert "content" not in json.dumps(matching[0])
+        assert "Some content" not in json.dumps(matching[0])
+
+    # 11. run/task identity comes from the orchestrator's own request fields, never an entry.
+    def test_identity_comes_from_request_not_entry(self, repo_root, capsys) -> None:
+        reads = [{"tool": "mcp__obsidian__search_notes", "query_or_note_path": "q", "status": "no_matches"}]
+        exit_code, resp = _run_main(
+            repo_root, self._req(findings_extra_reads=reads, run_id="run-1", task_id="T-1"), capsys
+        )
+        assert exit_code == 0
+        doc = json.loads(
+            (repo_root / "runs" / "run-1" / "obsidian" / "read" / "architect-mcp-1.json").read_text()
+        )
+        assert doc["run_id"] == "run-1"
+        assert doc["task_id"] == "T-1"
+
+    # 12. Checkpoint/resume does not duplicate already-retained observations.
+    def test_second_call_after_resume_does_not_duplicate(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        vault = self._vault(tmp_path)
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(vault))
+        actual_sha = hashlib.sha256((vault / "Harness Run Summaries" / "note.md").read_bytes()).hexdigest()
+        reads = [
+            {"tool": "mcp__obsidian__read_note", "query_or_note_path": "Harness Run Summaries/note.md",
+             "status": "read", "note_path": "Harness Run Summaries/note.md", "content_sha256": actual_sha},
+            {"tool": "mcp__obsidian__search_notes", "query_or_note_path": "q", "status": "no_matches"},
+        ]
+        req = self._req(findings_extra_reads=reads)
+        exit_code, resp1 = _run_main(repo_root, req, capsys)
+        assert exit_code == 0
+        assert [e["status"] for e in resp1["entries"]] == ["retained", "retained"]
+
+        # Simulate a fresh process resuming the same run with the same promoted findings.
+        exit_code, resp2 = _run_main(repo_root, req, capsys)
+        assert exit_code == 0
+        assert [e["status"] for e in resp2["entries"]] == ["already_retained", "already_retained"]
+
+        events_path = repo_root / "runs" / "run-1" / "logs" / "policy-events.jsonl"
+        events = [json.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines()]
+        matching = [e for e in events if e["kind"] == "architect_obsidian_read"]
+        assert len(matching) == 2  # not 4 -- the resumed call added no new events
+
+    # 13. A malformed/unknown obsidian_reads tool remains schema-rejected at promotion,
+    # unchanged by this bridge (this operation is only ever reached with already-promoted,
+    # already-schema-valid findings -- see TestValidateAndPromoteFindings for the rejection
+    # itself). Confirmed here only as a cross-check that this operation's own request
+    # parsing never re-derives or loosens that rule.
+    def test_findings_ref_resolution_matches_get_doc_convention(self, repo_root, capsys) -> None:
+        findings_path = repo_root / "runs" / "run-1" / "findings.json"
+        findings_path.parent.mkdir(parents=True, exist_ok=True)
+        doc = _findings_doc()
+        findings_path.write_text(json.dumps(doc), encoding="utf-8")
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "retain_architect_obsidian_reads", "run_id": "run-1", "task_id": "T-1",
+             "findings_ref": "runs/run-1/findings.json"},
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["count"] == 0
+
+    # 14. Existing orchestrator-mediated Obsidian reads (search_obsidian/read_obsidian_note)
+    # remain unaffected by this bridge -- distinct filenames, distinct directory, no shared
+    # collision-guard interaction.
+    def test_does_not_collide_with_orchestrator_mediated_read_evidence(self, repo_root, monkeypatch, capsys, tmp_path) -> None:
+        vault = self._vault(tmp_path)
+        monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(vault))
+        _run_main(
+            repo_root,
+            {"operation": "read_obsidian_note", "run_id": "run-1", "task_id": "T-1",
+             "phase": "research", "note_path": "Harness Run Summaries/note.md"},
+            capsys,
+        )
+        reads = [{"tool": "mcp__obsidian__search_notes", "query_or_note_path": "q", "status": "no_matches"}]
+        exit_code, resp = _run_main(repo_root, self._req(findings_extra_reads=reads), capsys)
+        assert exit_code == 0
+        read_dir = repo_root / "runs" / "run-1" / "obsidian" / "read"
+        assert (read_dir / "read-1.json").is_file()
+        assert (read_dir / "architect-mcp-1.json").is_file()

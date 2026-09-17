@@ -1,0 +1,9 @@
+{
+  "task_id": "T-HARDFAILBOUND",
+  "run_id": "run-20260916-hardfailbound-001",
+  "command_id": "ORCH-2",
+  "command": "python -m pytest -q",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Orchestrator health-check: run the full demo-repo test suite to confirm no unrelated regression."
+}

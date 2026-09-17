@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-HARDFAILBOUND",
+  "run_id": "run-20260916-hardfailbound-001",
+  "created_at": "2026-09-16T16:04:37Z",
+  "scope_ref": { "path": "runs/run-20260916-hardfailbound-001/scope.json" },
+  "findings_ref": {
+    "path": "runs/run-20260916-hardfailbound-001/findings.json",
+    "finding_ids": ["F-1", "F-3", "F-4", "F-5"]
+  },
+  "minimal_change_rung": 2,
+  "minimal_change_rationale": "Reused the existing __post_init__ validation pattern in Thresholds (same ConfigError raise, same .basis_points integer comparison style already used by the dti_low_max/dti_medium_max and ltv_low_max/ltv_medium_max checks) to add the two missing hard-fail/medium invariants; no new helper, mechanism, or dependency was introduced.",
+  "changed_files": [
+    {
+      "path": "demo-repo/src/loanflow/config.py",
+      "change_type": "modified",
+      "lines_added": 4,
+      "lines_removed": 0
+    },
+    {
+      "path": "demo-repo/tests/unit/test_config.py",
+      "change_type": "modified",
+      "lines_added": 16,
+      "lines_removed": 0
+    }
+  ],
+  "commands": [
+    {
+      "id": "C-1",
+      "stage": "pre_implementation",
+      "command": "python -m pytest tests/unit/test_config.py -v",
+      "exit_code": 1,
+      "output_ref": "runs/run-20260916-hardfailbound-001/logs/C-1.log"
+    },
+    {
+      "id": "C-2",
+      "stage": "post_implementation",
+      "command": "python -m pytest tests/unit/test_config.py -v",
+      "exit_code": 0,
+      "output_ref": "runs/run-20260916-hardfailbound-001/logs/C-2.log"
+    }
+  ],
+  "test_first_evidence": {
+    "pre_implementation_command_id": "C-1",
+    "post_implementation_command_id": "C-2"
+  },
+  "tests": [
+    {
+      "test_file": "demo-repo/tests/unit/test_config.py",
+      "test_name": "test_thresholds_rejects_dti_hard_fail_below_medium",
+      "status": "added"
+    },
+    {
+      "test_file": "demo-repo/tests/unit/test_config.py",
+      "test_name": "test_thresholds_rejects_ltv_hard_fail_below_medium",
+      "status": "added"
+    }
+  ],
+  "dependency_changes": [],
+  "status": "ready_for_verification"
+}

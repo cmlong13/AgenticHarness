@@ -1,0 +1,28 @@
+{"kind": "memory_loaded", "files_read": ["memory/facts.jsonl", "memory/lessons-learned.md"], "keywords": ["audit", "demo-repo", "fix", "small", "real", "bounded", "gap", "loanflow", "config", "thresholds", "validates", "dti_low_max", "dti_medium_max", "ltv_low_max", "ltv_medium_max", "credit-score", "range", "but", "never", "max_dti_hard_fail", "above", "max_ltv_hard_fail", "misconfigured", "threshold", "file", "inverted", "hard-fail", "medium", "relationship", "silently", "makes", "high-band", "borderline", "dti", "ltv", "outcome", "unreachable", "every", "band", "immediately", "hard-fails", "instead", "ever", "reaching", "review", "path", "load_thresholds", "loader", "currently", "has", "check", "would", "catch", "add", "missing", "invariant", "post_init__", "raising", "configerror", "exactly", "like", "existing", "invariants", "plus", "regression", "tests", "unit", "test_config"], "valid_fact_count": 1, "valid_lesson_count": 1, "skipped_count": 0, "relevant_fact_ids": ["FACT-20260803-ARCHFENCE"], "relevant_lesson_ids": ["L-20260806-TRANSPORT-BUDGET"]}
+{"kind": "checkpoint_written", "status": "in_progress", "completed_phases": ["discovery"], "current_phase": "research"}
+{"kind": "agent_dispatch", "phase": "research", "subagent_type": "architect", "agent_id": "a8b4a130d3de2f3f7", "dispatch_sequence": 1}
+{"kind": "usage_accounting_gap", "phase": "research", "agent_id": "a8b4a130d3de2f3f7", "reason": "no_quarantine_record"}
+{"kind": "agent_usage_captured", "agent_id": "a8b4a130d3de2f3f7", "phase": "research", "subagent_type": "architect", "message_count": 17, "priced": true}
+{"kind": "architect_obsidian_read", "run_id": "run-20260916-hardfailbound-001", "task_id": "T-HARDFAILBOUND", "phase": "research", "tool": "mcp__obsidian__read_note", "status": "connector_unavailable", "verification_result": "not_applicable", "retained_path": "runs/run-20260916-hardfailbound-001/obsidian/read/architect-mcp-1.json"}
+{"kind": "checkpoint_written", "status": "in_progress", "completed_phases": ["discovery", "research"], "current_phase": "implementation"}
+{"kind": "agent_dispatch", "phase": "implementation", "subagent_type": "engineer", "agent_id": "ac32d2ccbf1acc8b9", "dispatch_sequence": 1}
+{"kind": "agent_usage_captured", "agent_id": "ac32d2ccbf1acc8b9", "phase": "implementation", "subagent_type": "engineer", "message_count": 16, "priced": true}
+{"kind": "usage_accounting_gap", "phase": "implementation", "agent_id": "ac32d2ccbf1acc8b9", "reason": "no_quarantine_record"}
+{"kind": "skill_invocation", "skill": "test-runner", "request_path": "runs/run-20260916-hardfailbound-001/requests/C-1.json", "invoked_via": "Skill tool"}
+{"kind": "agent_usage_captured", "agent_id": "ac32d2ccbf1acc8b9", "phase": "implementation", "subagent_type": "engineer", "message_count": 22, "priced": true}
+{"kind": "skill_invocation", "skill": "test-runner", "request_path": "runs/run-20260916-hardfailbound-001/requests/C-2.json", "invoked_via": "Skill tool"}
+{"kind": "agent_usage_captured", "agent_id": "ac32d2ccbf1acc8b9", "phase": "implementation", "subagent_type": "engineer", "message_count": 27, "priced": true}
+{"kind": "agent_usage_captured", "agent_id": "ac32d2ccbf1acc8b9", "phase": "implementation", "subagent_type": "engineer", "message_count": 33, "priced": true}
+{"kind": "checkpoint_written", "status": "in_progress", "completed_phases": ["discovery", "research", "implementation"], "current_phase": "verification"}
+{"kind": "agent_dispatch", "phase": "verification", "subagent_type": "quality-engineer", "agent_id": "af3690abb68bcca8c", "dispatch_sequence": 1}
+{"kind": "agent_usage_captured", "agent_id": "af3690abb68bcca8c", "phase": "verification", "subagent_type": "quality-engineer", "message_count": 13, "priced": true}
+{"kind": "usage_accounting_gap", "phase": "verification", "agent_id": "af3690abb68bcca8c", "reason": "no_quarantine_record"}
+{"kind": "skill_invocation", "skill": "test-runner", "request_path": "runs/run-20260916-hardfailbound-001/requests/V-1.json", "invoked_via": "Skill tool"}
+{"kind": "agent_usage_captured", "agent_id": "af3690abb68bcca8c", "phase": "verification", "subagent_type": "quality-engineer", "message_count": 16, "priced": true}
+{"kind": "skill_invocation", "skill": "test-runner", "request_path": "runs/run-20260916-hardfailbound-001/requests/ORCH-1.json", "invoked_via": "Skill tool"}
+{"kind": "skill_invocation", "skill": "test-runner", "request_path": "runs/run-20260916-hardfailbound-001/requests/ORCH-3.json", "invoked_via": "Skill tool"}
+{"kind": "checkpoint_written", "status": "complete", "completed_phases": ["discovery", "research", "implementation", "verification"], "current_phase": null}
+{"kind": "memory_fact_append", "candidate_id": "FACT-20260916-OBSIDIANUNCONFIGURED", "result": "appended", "errors": []}
+{"kind": "memory_lessons_append", "appended_ids": ["L-20260916-ORCH-COMMAND-GRAMMAR", "L-20260916-BRIDGE-NOT-APPLICABLE"], "skipped": []}
+{"kind": "skill_invocation", "skill": "obsidian", "invoked_via": "Skill tool", "purpose": "run-summary publication"}
+{"kind": "obsidian_publication", "status": "connector_unavailable", "note_name": "run-summary-run-20260916-hardfailbound-001.md", "note_relpath": "run-summary-run-20260916-hardfailbound-001.md", "reason": "no Obsidian vault is configured in this environment (OBSIDIAN_VAULT_PATH is not set)", "content_sha256": null}

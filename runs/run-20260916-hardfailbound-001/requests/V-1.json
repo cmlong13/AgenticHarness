@@ -1,0 +1,9 @@
+{
+  "task_id": "T-HARDFAILBOUND",
+  "run_id": "run-20260916-hardfailbound-001",
+  "command_id": "V-1",
+  "command": "python -m pytest tests/unit/test_config.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Quality Engineer verification: re-run the narrow test file independently to confirm AC-1/AC-2/AC-3."
+}

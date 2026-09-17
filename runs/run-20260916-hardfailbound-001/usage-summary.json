@@ -1,0 +1,175 @@
+{
+  "schema_version": "1.0",
+  "record_kind": "run_usage_summary",
+  "run_id": "run-20260916-hardfailbound-001",
+  "generated_at": "2026-09-16T16:25:06Z",
+  "agents": [
+    {
+      "schema_version": "1.0",
+      "record_kind": "agent_usage",
+      "agent_id": "a8b4a130d3de2f3f7",
+      "identity": {
+        "match_status": "matched",
+        "run_id": "run-20260916-hardfailbound-001",
+        "task_id": "T-HARDFAILBOUND",
+        "phase": "research",
+        "subagent_type": "architect",
+        "dispatch_sequence": 1,
+        "candidate_run_ids": [
+          "run-20260916-hardfailbound-001"
+        ]
+      },
+      "source": {
+        "hook_event_name": "SubagentStop",
+        "agent_transcript_path": "C:\\Users\\caleb\\.claude\\projects\\C--Users-caleb-Documents-Projects-AgenticHarness\\f686e4a6-52d8-4bb2-81a1-fc131b9b6b8b\\subagents\\agent-a8b4a130d3de2f3f7.jsonl",
+        "agent_type": "architect"
+      },
+      "captured_at": "2026-09-16T16:08:39Z",
+      "message_count": 17,
+      "models_seen": [
+        "claude-sonnet-5"
+      ],
+      "primary_model": "claude-sonnet-5",
+      "token_usage": {
+        "input_tokens": 34,
+        "output_tokens": 6395,
+        "cache_creation_input_tokens": 87883,
+        "cache_read_input_tokens": 217461,
+        "cache_creation_breakdown": {
+          "ephemeral_5m_input_tokens": 87883,
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "skipped_transcript_lines": [],
+      "cost": {
+        "priced": true,
+        "amount": "0.3272177",
+        "currency": "USD",
+        "reason": null,
+        "pricing_source": "https://platform.claude.com/docs/en/about-claude/pricing",
+        "pricing_verified_date": "2026-08-14"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "record_kind": "agent_usage",
+      "agent_id": "ac32d2ccbf1acc8b9",
+      "identity": {
+        "match_status": "matched",
+        "run_id": "run-20260916-hardfailbound-001",
+        "task_id": "T-HARDFAILBOUND",
+        "phase": "implementation",
+        "subagent_type": "engineer",
+        "dispatch_sequence": 1,
+        "candidate_run_ids": [
+          "run-20260916-hardfailbound-001"
+        ]
+      },
+      "source": {
+        "hook_event_name": "SubagentStop",
+        "agent_transcript_path": "C:\\Users\\caleb\\.claude\\projects\\C--Users-caleb-Documents-Projects-AgenticHarness\\f686e4a6-52d8-4bb2-81a1-fc131b9b6b8b\\subagents\\agent-ac32d2ccbf1acc8b9.jsonl",
+        "agent_type": "engineer"
+      },
+      "captured_at": "2026-09-16T16:16:11Z",
+      "message_count": 33,
+      "models_seen": [
+        "claude-sonnet-5"
+      ],
+      "primary_model": "claude-sonnet-5",
+      "token_usage": {
+        "input_tokens": 66,
+        "output_tokens": 8484,
+        "cache_creation_input_tokens": 105219,
+        "cache_read_input_tokens": 793840,
+        "cache_creation_breakdown": {
+          "ephemeral_5m_input_tokens": 105219,
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "skipped_transcript_lines": [],
+      "cost": {
+        "priced": true,
+        "amount": "0.5067875",
+        "currency": "USD",
+        "reason": null,
+        "pricing_source": "https://platform.claude.com/docs/en/about-claude/pricing",
+        "pricing_verified_date": "2026-08-14"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "record_kind": "agent_usage",
+      "agent_id": "af3690abb68bcca8c",
+      "identity": {
+        "match_status": "matched",
+        "run_id": "run-20260916-hardfailbound-001",
+        "task_id": "T-HARDFAILBOUND",
+        "phase": "verification",
+        "subagent_type": "quality-engineer",
+        "dispatch_sequence": 1,
+        "candidate_run_ids": [
+          "run-20260916-hardfailbound-001"
+        ]
+      },
+      "source": {
+        "hook_event_name": "SubagentStop",
+        "agent_transcript_path": "C:\\Users\\caleb\\.claude\\projects\\C--Users-caleb-Documents-Projects-AgenticHarness\\f686e4a6-52d8-4bb2-81a1-fc131b9b6b8b\\subagents\\agent-af3690abb68bcca8c.jsonl",
+        "agent_type": "quality-engineer"
+      },
+      "captured_at": "2026-09-16T16:20:14Z",
+      "message_count": 16,
+      "models_seen": [
+        "claude-sonnet-5"
+      ],
+      "primary_model": "claude-sonnet-5",
+      "token_usage": {
+        "input_tokens": 32,
+        "output_tokens": 4092,
+        "cache_creation_input_tokens": 78191,
+        "cache_read_input_tokens": 258542,
+        "cache_creation_breakdown": {
+          "ephemeral_5m_input_tokens": 78191,
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "skipped_transcript_lines": [],
+      "cost": {
+        "priced": true,
+        "amount": "0.2881699",
+        "currency": "USD",
+        "reason": null,
+        "pricing_source": "https://platform.claude.com/docs/en/about-claude/pricing",
+        "pricing_verified_date": "2026-08-14"
+      }
+    }
+  ],
+  "subagent_subtotal": {
+    "agent_count": 3,
+    "token_usage": {
+      "input_tokens": 132,
+      "output_tokens": 18971,
+      "cache_creation_input_tokens": 271293,
+      "cache_read_input_tokens": 1269843,
+      "cache_creation_breakdown": {
+        "ephemeral_5m_input_tokens": 271293,
+        "ephemeral_1h_input_tokens": 0
+      }
+    },
+    "cost": {
+      "priced": true,
+      "amount": "1.1221751",
+      "currency": "USD",
+      "unpriced_agent_ids": [],
+      "note": "complete over captured agents"
+    }
+  },
+  "orchestrator": {
+    "status": "not_measured",
+    "reason": "The main orchestrator session's own token usage is not observable while this run's own artifacts are still being written -- the Stop hook that would reveal it fires only at the very end of the turn, after any run-summary this milestone writes. Not captured this milestone; see PROJECT_SPEC.md.",
+    "token_usage": null,
+    "cost": null
+  },
+  "coverage_status": "partial",
+  "full_pipeline_total": null,
+  "full_pipeline_total_reason": "orchestrator usage was not captured this milestone -- a subagent subtotal is never reported as the full pipeline cost"
+}

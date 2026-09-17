@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-HARDFAILBOUND",
+  "run_id": "run-20260916-hardfailbound-001",
+  "created_at": "2026-09-16T16:04:37Z",
+  "scope_ref": { "path": "runs/run-20260916-hardfailbound-001/scope.json" },
+  "implementation_ref": { "path": "runs/run-20260916-hardfailbound-001/implementation-report.json" },
+  "attempts": [
+    {
+      "id": "V-1",
+      "command": "python -m pytest tests/unit/test_config.py -v",
+      "exit_code": 0,
+      "classification": "pass",
+      "output_ref": "runs/run-20260916-hardfailbound-001/logs/V-1.log",
+      "retried": false
+    }
+  ],
+  "retry_policy": { "max_retries": 2 },
+  "acceptance_criteria_results": [
+    {
+      "criteria_id": "AC-1",
+      "result": "passed",
+      "attempt_refs": ["V-1"],
+      "evidence_summary": "python -m pytest tests/unit/test_config.py -v exited 0, including test_thresholds_rejects_dti_hard_fail_below_medium, which constructs Thresholds with max_dti_hard_fail (0.40) below dti_medium_max (0.43) and asserts ConfigError is raised (confirmed present in config.py __post_init__ lines 27-28: 'if self.max_dti_hard_fail.basis_points < self.dti_medium_max.basis_points: raise ConfigError(...)')."
+    },
+    {
+      "criteria_id": "AC-2",
+      "result": "passed",
+      "attempt_refs": ["V-1"],
+      "evidence_summary": "Same V-1 run (exit 0) included test_thresholds_rejects_ltv_hard_fail_below_medium, which constructs Thresholds with max_ltv_hard_fail (0.90) below ltv_medium_max (0.95) and asserts ConfigError is raised (confirmed present in config.py __post_init__ lines 29-30: 'if self.max_ltv_hard_fail.basis_points < self.ltv_medium_max.basis_points: raise ConfigError(...)')."
+    },
+    {
+      "criteria_id": "AC-3",
+      "result": "passed",
+      "attempt_refs": ["V-1"],
+      "evidence_summary": "V-1 ran the full demo-repo/tests/unit/test_config.py file (6 tests total: original 4 plus the 2 new regression tests) and exited 0, meaning all tests pass including test_default_thresholds_are_valid, which constructs DEFAULT_THRESHOLDS successfully under the new invariant (DEFAULT_THRESHOLDS values 0.50>=0.43 and 1.00>=0.95 already satisfy the new checks, per findings.json F-3)."
+    }
+  ],
+  "final_verdict": "pass",
+  "routed_back_to_engineer": { "routed": false }
+}

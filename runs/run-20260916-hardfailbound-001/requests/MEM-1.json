@@ -1,0 +1,5 @@
+{
+  "operation": "load_memory",
+  "run_id": "run-20260916-hardfailbound-001",
+  "raw_prompt": "Audit demo-repo and fix a small, real, bounded gap: loanflow.config.Thresholds validates dti_low_max<=dti_medium_max, ltv_low_max<=ltv_medium_max, and the credit-score range, but never validates that max_dti_hard_fail is at or above dti_medium_max, or that max_ltv_hard_fail is at or above ltv_medium_max. A misconfigured threshold file with an inverted hard-fail/medium relationship silently makes the high-band/borderline DTI or LTV outcome unreachable (every DTI or LTV above the medium band immediately hard-fails instead of ever reaching the borderline/high-band review path), and load_thresholds's config loader currently has no check that would catch it. Add the missing invariant to Thresholds.__post_init__, raising ConfigError exactly like the existing invariants, plus regression tests in demo-repo/tests/unit/test_config.py."
+}

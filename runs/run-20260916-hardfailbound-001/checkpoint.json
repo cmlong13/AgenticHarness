@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-HARDFAILBOUND",
+  "run_id": "run-20260916-hardfailbound-001",
+  "target_repo_path": "demo-repo",
+  "updated_at": "2026-09-16T16:23:42Z",
+  "completed_phases": [
+    "discovery",
+    "research",
+    "implementation",
+    "verification"
+  ],
+  "current_phase": null,
+  "next_phase": null,
+  "artifact_refs": {
+    "discovery": "runs/run-20260916-hardfailbound-001/scope.json",
+    "research": "runs/run-20260916-hardfailbound-001/findings.json",
+    "implementation": "runs/run-20260916-hardfailbound-001/implementation-report.json",
+    "verification": "runs/run-20260916-hardfailbound-001/verification-report.json"
+  },
+  "blockers": [],
+  "next_resume_action": null,
+  "status": "complete"
+}

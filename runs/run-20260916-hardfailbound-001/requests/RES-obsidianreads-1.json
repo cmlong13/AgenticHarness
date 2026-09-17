@@ -1,0 +1,6 @@
+{
+  "operation": "retain_architect_obsidian_reads",
+  "run_id": "run-20260916-hardfailbound-001",
+  "task_id": "T-HARDFAILBOUND",
+  "findings_ref": "runs/run-20260916-hardfailbound-001/findings.json"
+}

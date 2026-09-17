@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-HARDFAILBOUND",
+  "run_id": "run-20260916-hardfailbound-001",
+  "created_at": "2026-09-16T16:04:37Z",
+  "scope_ref": {"path": "runs/run-20260916-hardfailbound-001/scope.json"},
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "Thresholds.__post_init__ (demo-repo/src/loanflow/config.py) currently validates exactly three invariants -- dti_low_max <= dti_medium_max, ltv_low_max <= ltv_medium_max, and 300 <= min_credit_score <= 850 -- raising loanflow.errors.ConfigError on violation of any of them.",
+      "classification": "found",
+      "evidence": [
+        {"path": "demo-repo/src/loanflow/config.py", "start_line": 22, "end_line": 28, "evidence_tier": "executable_code"},
+        {"path": "demo-repo/src/loanflow/config.py", "start_line": 7, "end_line": 7, "evidence_tier": "executable_code"}
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "Thresholds.__post_init__ has no check anywhere relating max_dti_hard_fail to dti_medium_max, or max_ltv_hard_fail to ltv_medium_max -- the entire method body (lines 22-28) contains only the three checks in F-1, and no other reference to max_dti_hard_fail or max_ltv_hard_fail exists anywhere else in demo-repo/src/loanflow/config.py.",
+      "classification": "not_found",
+      "search_attempts": [
+        {"method": "read", "query": "full body of Thresholds.__post_init__", "scope": "demo-repo/src/loanflow/config.py lines 22-28", "result": "only dti_low_max/dti_medium_max, ltv_low_max/ltv_medium_max, and min_credit_score-range checks present; no hard_fail comparison"},
+        {"method": "grep", "query": "hard_fail", "scope": "demo-repo/src/loanflow/config.py", "result": "matches only at lines 17-18 (dataclass field declarations) and 36-37 (DEFAULT_THRESHOLDS literal values); zero matches inside __post_init__ (lines 22-28) or anywhere else in the file"}
+      ]
+    },
+    {
+      "id": "F-3",
+      "claim": "DEFAULT_THRESHOLDS already satisfies max_dti_hard_fail >= dti_medium_max (0.50 >= 0.43) and max_ltv_hard_fail >= ltv_medium_max (1.00 >= 0.95); its literal field values are dti_low_max=0.36, dti_medium_max=0.43, ltv_low_max=0.80, ltv_medium_max=0.95, max_dti_hard_fail=0.50, max_ltv_hard_fail=1.00, min_credit_score=580, effective_date=2026-01-01.",
+      "classification": "found",
+      "evidence": [
+        {"path": "demo-repo/src/loanflow/config.py", "start_line": 31, "end_line": 40, "evidence_tier": "executable_code"}
+      ]
+    },
+    {
+      "id": "F-4",
+      "claim": "Percentage (demo-repo/src/loanflow/primitives.py) is a frozen, order=True dataclass with a single integer field basis_points (validated non-negative in its own __post_init__), and it exposes total ordering (<, <=, >, >=, ==) via the dataclass order=True machinery operating on that integer field -- the same .basis_points integer attribute Thresholds.__post_init__'s existing checks already compare directly (self.dti_low_max.basis_points > self.dti_medium_max.basis_points), so any new hard-fail/medium invariant would compare .basis_points integers identically.",
+      "classification": "found",
+      "evidence": [
+        {"path": "demo-repo/src/loanflow/primitives.py", "start_line": 47, "end_line": 55, "evidence_tier": "executable_code"},
+        {"path": "demo-repo/src/loanflow/config.py", "start_line": 23, "end_line": 26, "evidence_tier": "executable_code"}
+      ]
+    },
+    {
+      "id": "F-5",
+      "claim": "In underwriting_rules.py, both max_dti_rule and max_ltv_rule check the hard-fail comparison (profile value's basis_points > thresholds.max_*_hard_fail.basis_points) strictly before checking band membership (profile.dti_band is Band.HIGH / profile.ltv_band is Band.HIGH); consequently if a misconfigured Thresholds had max_dti_hard_fail's basis_points below dti_medium_max's basis_points (an inverted config), any DTI value strictly between the two thresholds would trip the first (hard-fail) branch and return early, and the borderline/high-band branch beneath it would never execute for that value -- the high-band/borderline outcome becomes unreachable for that range. The identical structure applies to max_ltv_rule with LTV/ltv_medium_max/max_ltv_hard_fail.",
+      "classification": "found",
+      "evidence": [
+        {"path": "demo-repo/src/loanflow/underwriting_rules.py", "start_line": 33, "end_line": 45, "evidence_tier": "executable_code"},
+        {"path": "demo-repo/src/loanflow/underwriting_rules.py", "start_line": 48, "end_line": 60, "evidence_tier": "executable_code"}
+      ]
+    },
+    {
+      "id": "F-6",
+      "claim": "demo-repo/tests/unit/test_config.py currently contains no test covering the max_dti_hard_fail/dti_medium_max or max_ltv_hard_fail/ltv_medium_max relationship; the file's only tests are test_default_thresholds_are_valid (asserts min_credit_score), test_thresholds_rejects_inverted_dti_bounds (dti_low_max vs dti_medium_max), test_thresholds_rejects_inverted_ltv_bounds (ltv_low_max vs ltv_medium_max), and test_thresholds_rejects_out_of_range_credit_score -- the hard_fail fields appear only as fixed default values inside the _thresholds() helper (lines 18-19), never as an overridden/asserted value in any test body.",
+      "classification": "not_found",
+      "search_attempts": [
+        {"method": "read", "query": "full contents of test_config.py (44 lines, entire file)", "scope": "demo-repo/tests/unit/test_config.py", "result": "only 4 test functions exist: default validity, inverted dti bounds, inverted ltv bounds, out-of-range credit score; none exercises max_dti_hard_fail vs dti_medium_max or max_ltv_hard_fail vs ltv_medium_max"},
+        {"method": "grep", "query": "hard_fail", "scope": "demo-repo/tests/unit/test_config.py", "result": "matches only at lines 18-19, inside the _thresholds() helper's fixed default kwargs -- never overridden or asserted against in any test"}
+      ]
+    }
+  ],
+  "open_questions": [
+    "This finding set is research-only per the Architect role: it confirms the gap (F-2, F-6) and confirms DEFAULT_THRESHOLDS already satisfies the proposed invariant (F-3), but does not, and must not, propose the actual __post_init__ code change or the new regression-test code for N-2 -- that implementation work belongs to a later phase, not to this Architect.",
+    "The Obsidian vault tool was exercised exactly once per this run's requirement, calling mcp__obsidian__read_note on 'Harness Run Summaries/run-summary-run-20260908-obsidianlive-001.md'; it returned connector_unavailable (no OBSIDIAN_VAULT_PATH configured in this environment). This is recorded honestly in obsidian_reads and was not used as evidence for, and is unrelated to, any finding above."
+  ],
+  "obsidian_reads": [
+    {
+      "tool": "mcp__obsidian__read_note",
+      "query_or_note_path": "Harness Run Summaries/run-summary-run-20260908-obsidianlive-001.md",
+      "status": "connector_unavailable",
+      "note_path": "Harness Run Summaries/run-summary-run-20260908-obsidianlive-001.md"
+    }
+  ]
+}

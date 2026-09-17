@@ -1,0 +1,5 @@
+{
+  "operation": "write_run_summary",
+  "run_id": "run-20260916-hardfailbound-001",
+  "summary_ref": "runs/run-20260916-hardfailbound-001/run-summary-candidate.json"
+}

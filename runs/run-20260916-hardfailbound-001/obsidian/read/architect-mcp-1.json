@@ -1,0 +1,18 @@
+{
+  "run_id": "run-20260916-hardfailbound-001",
+  "task_id": "T-HARDFAILBOUND",
+  "phase": "research",
+  "source": "architect_direct_mcp",
+  "tool": "mcp__obsidian__read_note",
+  "query_or_note_path": "Harness Run Summaries/run-summary-run-20260908-obsidianlive-001.md",
+  "status": "connector_unavailable",
+  "note_path": "Harness Run Summaries/run-summary-run-20260908-obsidianlive-001.md",
+  "content_sha256": null,
+  "retained_at": "2026-09-16T16:10:08Z",
+  "verification": {
+    "performed": false,
+    "result": "not_applicable",
+    "independent_content_sha256": null,
+    "reason": "Architect-reported status 'connector_unavailable' for tool 'mcp__obsidian__read_note' is not an affirmative read; the connector attempt and its status are retained honestly with no independent verification performed"
+  }
+}

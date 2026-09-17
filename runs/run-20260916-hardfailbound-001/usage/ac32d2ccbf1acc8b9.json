@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "record_kind": "agent_usage",
+  "agent_id": "ac32d2ccbf1acc8b9",
+  "identity": {
+    "match_status": "matched",
+    "run_id": "run-20260916-hardfailbound-001",
+    "task_id": "T-HARDFAILBOUND",
+    "phase": "implementation",
+    "subagent_type": "engineer",
+    "dispatch_sequence": 1,
+    "candidate_run_ids": [
+      "run-20260916-hardfailbound-001"
+    ]
+  },
+  "source": {
+    "hook_event_name": "SubagentStop",
+    "agent_transcript_path": "C:\\Users\\caleb\\.claude\\projects\\C--Users-caleb-Documents-Projects-AgenticHarness\\f686e4a6-52d8-4bb2-81a1-fc131b9b6b8b\\subagents\\agent-ac32d2ccbf1acc8b9.jsonl",
+    "agent_type": "engineer"
+  },
+  "captured_at": "2026-09-16T16:16:11Z",
+  "message_count": 33,
+  "models_seen": [
+    "claude-sonnet-5"
+  ],
+  "primary_model": "claude-sonnet-5",
+  "token_usage": {
+    "input_tokens": 66,
+    "output_tokens": 8484,
+    "cache_creation_input_tokens": 105219,
+    "cache_read_input_tokens": 793840,
+    "cache_creation_breakdown": {
+      "ephemeral_5m_input_tokens": 105219,
+      "ephemeral_1h_input_tokens": 0
+    }
+  },
+  "skipped_transcript_lines": [],
+  "cost": {
+    "priced": true,
+    "amount": "0.5067875",
+    "currency": "USD",
+    "reason": null,
+    "pricing_source": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "pricing_verified_date": "2026-08-14"
+  }
+}

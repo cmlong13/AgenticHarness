@@ -1,0 +1,48 @@
+command: python -m pytest tests/unit/test_config.py -v
+executed_as: C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe -m pytest tests/unit/test_config.py -v
+working_directory: demo-repo
+timeout_seconds: 300
+real_pytest_exit_code: 1
+reported_exit_code: 1
+
+--- STDOUT ---
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo
+configfile: pyproject.toml
+collecting ... collected 6 items
+
+tests/unit/test_config.py::test_default_thresholds_are_valid PASSED      [ 16%]
+tests/unit/test_config.py::test_thresholds_rejects_inverted_dti_bounds PASSED [ 33%]
+tests/unit/test_config.py::test_thresholds_rejects_inverted_ltv_bounds PASSED [ 50%]
+tests/unit/test_config.py::test_thresholds_rejects_out_of_range_credit_score PASSED [ 66%]
+tests/unit/test_config.py::test_thresholds_rejects_dti_hard_fail_below_medium FAILED [ 83%]
+tests/unit/test_config.py::test_thresholds_rejects_ltv_hard_fail_below_medium FAILED [100%]
+
+================================== FAILURES ===================================
+_____________ test_thresholds_rejects_dti_hard_fail_below_medium ______________
+
+    def test_thresholds_rejects_dti_hard_fail_below_medium() -> None:
+>       with pytest.raises(ConfigError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ConfigError
+
+tests\unit\test_config.py:47: Failed
+_____________ test_thresholds_rejects_ltv_hard_fail_below_medium ______________
+
+    def test_thresholds_rejects_ltv_hard_fail_below_medium() -> None:
+>       with pytest.raises(ConfigError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ConfigError
+
+tests\unit\test_config.py:55: Failed
+=========================== short test summary info ===========================
+FAILED tests/unit/test_config.py::test_thresholds_rejects_dti_hard_fail_below_medium
+FAILED tests/unit/test_config.py::test_thresholds_rejects_ltv_hard_fail_below_medium
+========================= 2 failed, 4 passed in 0.21s =========================
+
+--- STDERR ---
+
+--- MUTATION CHECK ---
+no persistent non-cache file addition, deletion, or modification detected

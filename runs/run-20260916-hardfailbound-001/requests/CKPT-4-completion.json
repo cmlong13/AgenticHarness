@@ -1,0 +1,14 @@
+{
+  "operation": "write_checkpoint",
+  "run_id": "run-20260916-hardfailbound-001",
+  "task_id": "T-HARDFAILBOUND",
+  "target_repo_path": "demo-repo",
+  "kind": "completion",
+  "completed_phases": ["discovery", "research", "implementation", "verification"],
+  "artifact_refs": {
+    "discovery": "runs/run-20260916-hardfailbound-001/scope.json",
+    "research": "runs/run-20260916-hardfailbound-001/findings.json",
+    "implementation": "runs/run-20260916-hardfailbound-001/implementation-report.json",
+    "verification": "runs/run-20260916-hardfailbound-001/verification-report.json"
+  }
+}

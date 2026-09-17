@@ -1769,6 +1769,173 @@ schema contract bug is fixed and regression-tested, the full harness and demo su
 demo-repo/hooks/other connectors are unchanged, and no commit or push has been made
 pending the user's own decision to do so.
 
+**Architect direct-MCP Obsidian evidence-retention bridge, completed and live-proven
+in-pipeline (2026-09-16).** Closes exactly the gap the prior audit's limitation (b) left
+open: "the orchestrator side of the Architect's `obsidian_reads` promise ... has zero code
+in `harness/orchestrator/core.py` today." This session resumed a session interrupted before
+that gap was closed (the interrupted diff -- `.claude/skills/work/SKILL.md` +29/-8,
+`harness/orchestrator/live_cli.py` +159, `tests/test_orchestrator_live_cli.py` +269 --
+was found already complete, not partial, on inspection: `op_retain_architect_obsidian_reads`
+and `_verify_architect_obsidian_read` in `live_cli.py`, 14 passing tests in
+`TestRetainArchitectObsidianReads`, and `work/SKILL.md`'s own updated Phase 2 step 5 and
+"Architect direct-MCP Obsidian evidence retention bridge" section were all present,
+internally consistent, and required no code change -- only verification). Nothing was
+rewritten; the existing implementation was run and independently confirmed correct.
+
+*Retention bridge (Part A) -- implemented, unchanged this session.* `op_retain_architect_obsidian_reads`
+(`harness/orchestrator/live_cli.py`) consumes a promoted `findings.json`'s optional
+`obsidian_reads` array and retains one normalized record per entry to
+`runs/<run_id>/obsidian/read/architect-mcp-<n>.json` plus an `architect_obsidian_read`
+policy event -- deterministic 1-based collision-guarded naming, no note body retained (the
+schema carries none), no credential, no absolute vault path. An affirmative
+`mcp__obsidian__read_note` observation is independently re-read through the same
+`obsidian_reader` boundary the orchestrator-mediated reads use and SHA-256 compared:
+matching -> `verified`; mismatching -> `hash_mismatch`; connector genuinely unreachable ->
+`verification_unavailable`. A `mcp__obsidian__search_notes` observation is never
+independently re-run (retained `architect_reported`, least privilege). Any negative
+connector outcome is retained honestly as `not_applicable` (no independent verification
+attempted), never upgraded into a manufactured affirmative read. An index already retained
+on disk is `already_retained` and neither re-verified nor rewritten -- resume-safe by
+construction.
+
+*Deterministic tests -- unchanged, re-confirmed green this session.* `tests/test_orchestrator_live_cli.py::TestRetainArchitectObsidianReads`
+(14 tests: no-op, negative observation, deterministic multi-entry ordering, verified,
+hash_mismatch, verification_unavailable, no-note-body, search-never-re-run, collision/
+already_retained, policy-event-emitted, identity-from-request, resume-no-duplication,
+findings_ref resolution, no collision with orchestrator-mediated read evidence) --
+**14/14 passed** in isolation. `python -m pytest tests -q`: **1135 passed, 2 skipped** --
+exactly **+14** over this milestone's own pre-existing 1121-passed baseline (the audit
+section above), all and only this bridge's own tests; nothing else regressed or changed.
+
+*Full `/work` live-integration proof (Part B) -- a real four-phase run, `run-20260916-hardfailbound-001`,
+task `T-HARDFAILBOUND`, free-form intake (not ticket mode).* Chosen demo task, from a
+real read-only audit of `demo-repo/`: `loanflow.config.Thresholds.__post_init__`
+(`demo-repo/src/loanflow/config.py:22-28`) validated `dti_low_max<=dti_medium_max`,
+`ltv_low_max<=ltv_medium_max`, and the credit-score range, but never validated
+`max_dti_hard_fail` against `dti_medium_max` or `max_ltv_hard_fail` against
+`ltv_medium_max` -- confirmed via `underwriting_rules.py`'s `max_dti_rule`/`max_ltv_rule`
+(hard-fail check strictly before band-membership check) that an inverted config would
+silently make the borderline/high-band DTI/LTV outcome unreachable for any value between
+the two thresholds, and confirmed via `demo-repo/tests/unit/test_config.py` that no
+regression test existed for this relationship. Bounded to exactly two files
+(`config.py` + `test_config.py`), no artificial defect planted, no broad refactor.
+
+- **Discovery.** `scope.json` promoted (`status: "approved"`), `in_scope` limited to the
+  two files above, three acceptance criteria (AC-1/AC-2 the two new invariants, AC-3 the
+  full narrow-file regression pass including `DEFAULT_THRESHOLDS`).
+- **Research / Architect.** Real dispatch (agent `a8b4a130d3de2f3f7`), single-shot, clean
+  unfenced JSON first attempt. 6 findings: 4 `found` (existing invariant pattern and
+  `ConfigError` type; `DEFAULT_THRESHOLDS` already compliant; `Percentage.basis_points`
+  comparison semantics; the hard-fail-before-band-check ordering that makes the gap real),
+  2 honest `not_found` (no existing check relating the two threshold pairs; no existing
+  test covering it) -- promoted to `findings.json`. **Exact MCP tool invocation:** exactly
+  one `mcp__obsidian__read_note` call for `Harness Run Summaries/run-summary-run-20260908-obsidianlive-001.md`,
+  no `search_notes` call. **MCP result:** `connector_unavailable` (`OBSIDIAN_VAULT_PATH`
+  unset in this environment) -- a real, honest connector attempt, not a simulated one.
+  **Retained Architect MCP evidence:** `runs/run-20260916-hardfailbound-001/obsidian/read/architect-mcp-1.json`.
+  **Independent verification classification:** `not_applicable` (the reported status was
+  not an affirmative `read`, so `_verify_architect_obsidian_read` correctly performed no
+  independent re-read and retained the negative observation honestly, per the bridge's own
+  contract -- this is the first time that exact code path has run against a real, live,
+  in-pipeline Architect dispatch rather than a deterministic test double).
+- **Implementation / Engineer.** Real dispatch (agent `ac32d2ccbf1acc8b9`), full staged
+  protocol (pre-test -> post-test -> finalization), no transport repair needed. Wrote two
+  failing regression tests first (independently confirmed via `git status`/`git diff` --
+  only the test file changed before any production edit); `C-1` (real test-runner Skill
+  invocation, exit 1, "DID NOT RAISE ConfigError" -- the expected reason, not an accident);
+  minimal rung-2 change -- two new `ConfigError` checks in `Thresholds.__post_init__`
+  mirroring the existing pattern (`config.py` +4/-0 lines); `C-2` (exit 0, 6 passed).
+  Independently re-confirmed via `git diff --stat` that exactly the claimed two files
+  changed with the claimed line counts (`config.py` +4/-0, `test_config.py` +16/-0) --
+  promoted `implementation-report.json`, `status: "ready_for_verification"`.
+- **QE / Verification.** Real dispatch (agent `af3690abb68bcca8c`). `V-1` (real test-runner
+  Skill invocation, exit 0) -> all three acceptance criteria `passed` -> `final_verdict:
+  "pass"`, `routed_back_to_engineer.routed: false` -- promoted `verification-report.json`.
+  **No route-back occurred** (the first verdict was a genuine pass; no `logic_bug` attempt
+  existed to route).
+- **Orchestrator independent re-verification** (never trusted the Quality Engineer's word
+  alone): `ORCH-1` re-ran the identical narrow command via the real test-runner Skill (exit
+  0); an initial `ORCH-2` health-check attempt (`python -m pytest -q`, no positional
+  target) was correctly `command_rejected` by the wrapper's own strict grammar -- retained
+  as evidence (`runs/run-20260916-hardfailbound-001/logs/ORCH-2.rejected.json`), then
+  corrected and reissued as `ORCH-3` (`python -m pytest tests -q`, exit 0, **108 passed** --
+  106 baseline + 2 new). `check_command_identity` matched for every `C-*`/`V-*`/`ORCH-*`
+  command this run made (Standing rule 13). `git status --short -- demo-repo` /
+  `git diff --stat -- demo-repo` independently confirmed exactly the two claimed files
+  changed, with no drift and no out-of-scope or Protected Path touch.
+- **Checkpoint evidence.** Four `write_checkpoint` calls this run:
+  `kind: "progress"` after Discovery, after Research, after Implementation, and
+  `kind: "completion"` (all four phases, all four canonical artifacts) as the terminal
+  write -- `runs/run-20260916-hardfailbound-001/checkpoint.json`, `status: "complete"`.
+- **Usage/cost evidence.** `runs/run-20260916-hardfailbound-001/usage-summary.json`:
+  3 agents, all `identity.match_status: "matched"` (the `reconcile_quarantined_usage` call
+  for each fresh dispatch returned `no_quarantine_record` in the moment, an honest,
+  expected accounting-gap timing artifact per "Per-agent usage accounting" -- each
+  agent's usage was captured normally by the real `SubagentStop` hook once its transcript
+  was available, before this run's terminal `build_usage_summary` aggregation ran).
+  `subagent_subtotal`: Architect $0.3272177, Engineer $0.5067875, Quality Engineer
+  $0.2881699 -- **$1.1221751 total across the three dispatches**. `orchestrator.status:
+  "not_measured"`, `full_pipeline_total: null` (per standing rule 16, never reported as
+  this run's total cost).
+- **Terminal run summary.** `runs/run-20260916-hardfailbound-001/run-summary.json`,
+  `final_verdict: "pass"`, `phases_completed`: all four. `memory_loaded: true`,
+  `memory_influenced_run: false` (one relevant fact and one relevant lesson were loaded
+  and held in mind, per Phase 0, but neither concretely changed a decision this run
+  actually made, so no `memory_applied` event was retained -- reported honestly rather
+  than manufactured). Terminal memory append: one fact
+  (`FACT-20260916-OBSIDIANUNCONFIGURED`, confirming the vault remains unconfigured in this
+  environment and that the bridge retained the resulting negative observation honestly)
+  and two lessons (`L-20260916-ORCH-COMMAND-GRAMMAR` -- the orchestrator's own `ORCH-*`
+  commands are bound by the identical strict command grammar and a rejection of one is the
+  orchestrator's own mistake to correct and reissue, not a phase-blocking event;
+  `L-20260916-BRIDGE-NOT-APPLICABLE` -- an evidence-retention bridge should classify a
+  non-affirmative self-reported observation as `not_applicable` rather than attempting any
+  substitute independent check) appended to `memory/facts.jsonl` /
+  `memory/lessons-learned.md` (well under the 5-per-run cap).
+- **Obsidian publication attempt.** `runs/run-20260916-hardfailbound-001/obsidian/summary-publication.json`:
+  `status: "connector_unavailable"` (`OBSIDIAN_VAULT_PATH` unset) -- an honest
+  external-delivery gap, independent of and never affecting the `pass` verdict above.
+- **Hooks.** All four hooks fired normally throughout this live run
+  (`pre_dispatch_check.py` gated every Architect/Engineer/Quality-Engineer dispatch on its
+  precondition artifact; `skill_enforcement.py` correctly blocked one orchestrator `Bash`
+  attempt to write a diff file whose command string mentioned a `demo-repo/` path, which
+  was worked around by supplying real `git diff --numstat` line counts directly instead of
+  a saved patch file -- `diff_ref` is optional per `implementation-report.schema.json`;
+  `record_agent_usage.py` produced the three `usage/` records the usage summary above
+  aggregates; `completion_guardrail.py` was engaged via the `.completion_claim.json`
+  marker before this run was reported complete).
+
+*Final harness/demo results (this session, post-run).* `python -m pytest tests -q`:
+**1135 passed, 2 skipped** (unchanged from the pre-run figure above -- the live run added
+no new harness-side test). `python -m pytest demo-repo/tests -q`: **108 passed** (106
+baseline + this run's 2 new regression tests). `git diff --check`: clean (line-ending
+advisories only). `git status --short`: the two pre-existing Part-A files, the two
+demo-repo files this run's Engineer changed, `memory/facts.jsonl` /
+`memory/lessons-learned.md` (this run's terminal append), the new
+`runs/run-20260916-hardfailbound-001/` directory, and the `SubagentStop` hook's own
+`runs/_unmatched_usage/` / `runs/_usage_corroboration/` housekeeping files -- demo-repo is
+*not* clean, and is not expected to be: a real bounded `/work` implementation modified it,
+per this task's own instructions. `git rev-list --left-right --count origin/main...main`:
+**0 0**. **No commit or push occurred.**
+
+*Remaining limitations.* (a) `OBSIDIAN_VAULT_PATH` is unset in this environment, so this
+live run's Architect MCP call exercised only the `connector_unavailable` /
+`not_applicable` path -- the bridge's `verified` and `hash_mismatch` SHA-comparison paths
+remain proven only by `TestRetainArchitectObsidianReads`'s deterministic tests, not by a
+real vault read; (b) no same-run logic-bug route-back was exercised live in this run (the
+Quality Engineer's first verdict was a genuine pass) -- that path remains proven only by
+`run-20260804-riskband-003`-era evidence and this milestone's own deterministic tests; (c)
+orchestrator-side token/cost usage remains unmeasured (`full_pipeline_total: null`),
+unchanged from every earlier milestone.
+
+*Is this milestone now ready to commit?* Yes, on the evidence gathered here: the retention
+bridge was already correctly implemented and is now independently re-verified (14/14
+focused tests, full harness suite green), a real four-phase `/work` run completed with a
+genuine, independently-confirmed `pass` verdict and exercised the bridge in-pipeline for
+the first time against a real (if unconfigured) Obsidian connector, demo-repo's own suite
+passes including the two new regression tests, and no commit or push has been made pending
+the user's own decision to do so.
+
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
 followed. Implementation should track this spec; if the two diverge, update this file first.

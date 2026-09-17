@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-HARDFAILBOUND",
+  "run_id": "run-20260916-hardfailbound-001",
+  "created_at": "2026-09-16T16:04:37Z",
+  "objective_summary": "COMPLETED -- a real, live four-phase Discovery -> Research -> Implementation -> Verification /work pipeline run against demo-repo/, exercising the newly-completed Architect direct-MCP Obsidian evidence-retention bridge (retain_architect_obsidian_reads) in-pipeline for the first time. Discovery: a read-only audit of demo-repo found that loanflow.config.Thresholds.__post_init__ validates dti_low_max<=dti_medium_max, ltv_low_max<=ltv_medium_max, and the credit-score range, but never validates max_dti_hard_fail against dti_medium_max or max_ltv_hard_fail against ltv_medium_max -- an inverted config would silently make the borderline/high-band DTI/LTV outcome unreachable (underwriting_rules.py's hard-fail check runs before its band-membership check). scope.json was authored and promoted with this objective, in_scope limited to demo-repo/src/loanflow/config.py and demo-repo/tests/unit/test_config.py. Research: a real, live-dispatched Architect (agent a8b4a130d3de2f3f7) returned clean unfenced JSON on the first attempt -- 6 findings (4 found, 2 honest not_found confirming the exact gap) -- promoted to findings.json, and made exactly one direct mcp__obsidian__read_note call for 'Harness Run Summaries/run-summary-run-20260908-obsidianlive-001.md' (no search_notes), which returned connector_unavailable since OBSIDIAN_VAULT_PATH is unset in this environment; retain_architect_obsidian_reads retained this as runs/run-20260916-hardfailbound-001/obsidian/read/architect-mcp-1.json, classified verification.result 'not_applicable' (the status was not an affirmative 'read', so no independent re-read was attempted -- an honest negative observation, never a manufactured verified read). Implementation: a real, live-dispatched Engineer (agent ac32d2ccbf1acc8b9) wrote two genuine failing regression tests first (independently confirmed via git status/diff -- only the in-scope test file changed, no production source touched yet), got the exact expected 'DID NOT RAISE ConfigError' pre-test failure via the real forked test-runner Skill (C-1, exit_code 1), then made the minimal rung-2 change: two new invariant checks in Thresholds.__post_init__ mirroring the existing pattern (config.py +4 lines), confirmed via C-2 (exit_code 0, 6 passed) and independently re-confirmed via git diff --stat matching the Engineer's own changed_files claim exactly (config.py +4/-0, test_config.py +16/-0), and promoted implementation-report.json with status ready_for_verification. Verification: a real, live-dispatched Quality Engineer (agent af3690abb68bcca8c) independently re-ran the narrow command (V-1, exit_code 0) and returned final_verdict: pass for all three acceptance criteria, promoted to verification-report.json. The orchestrator independently re-verified this pass verdict itself: re-ran the same narrow command through the real test-runner Skill (ORCH-1, exit_code 0), ran the full demo-repo suite as a health check (ORCH-3, exit_code 0, 108 passed -- 106 baseline + 2 new regression tests); an initial ORCH-2 attempt with a bare 'python -m pytest -q' was correctly command_rejected for missing a positional target, retained as evidence, and corrected under a fresh command id per this run's own appended lesson), and confirmed via git status/git diff --stat that exactly the two claimed files changed with no drift and no out-of-scope or Protected Path changes. No same-run logic-bug route-back was needed -- the Quality Engineer's first verdict was a genuine pass.",
+  "artifact_refs": {
+    "scope": "runs/run-20260916-hardfailbound-001/scope.json",
+    "findings": "runs/run-20260916-hardfailbound-001/findings.json",
+    "implementation_report": "runs/run-20260916-hardfailbound-001/implementation-report.json",
+    "verification_report": "runs/run-20260916-hardfailbound-001/verification-report.json"
+  },
+  "final_verdict": "pass",
+  "phases_completed": [
+    "discovery",
+    "research",
+    "implementation",
+    "verification"
+  ],
+  "memory_loaded": true,
+  "memory_influenced_run": false,
+  "memory_refs_used": [],
+  "lessons_learned_appended": [
+    "The orchestrator's own ad hoc ORCH-* test-runner health-check commands are bound by the exact same strict positional command grammar as agent-requested commands (e.g. a bare 'python -m pytest -q' with no positional target is command_rejected, not silently accepted). Unlike an agent's rejected command -- which halts the phase -- a rejection of the orchestrator's own authored command is the orchestrator's own authoring mistake: retain the rejection as evidence, then correct the command and reissue it under a fresh command_id rather than escalating or blocking the run.",
+    "An evidence-retention bridge that independently re-verifies an agent's self-reported affirmative observation (e.g. retain_architect_obsidian_reads re-reading an Architect's claimed mcp__obsidian__read_note) should classify a non-affirmative self-reported status (connector_unavailable, not_found, etc.) as a distinct 'not_applicable' outcome rather than attempting any independent re-check for it -- there is nothing affirmative to corroborate, and attempting one anyway would risk manufacturing evidence the original observation never made."
+  ],
+  "usage_summary_ref": "runs/run-20260916-hardfailbound-001/usage-summary.json",
+  "remaining_risks": [
+    "This run's usage-summary.json reports orchestrator usage as 'not_measured' (full_pipeline_total: null) -- the subagent_subtotal ($1.1221751 across 3 agents) is real accounting for the Architect/Engineer/Quality-Engineer dispatches only, never the run's total pipeline cost.",
+    "OBSIDIAN_VAULT_PATH is unset in this environment, so the Architect's required direct-MCP read returned connector_unavailable rather than a real vault read -- the retain_architect_obsidian_reads bridge's 'verified'/'hash_mismatch' SHA-comparison paths remain proven only by this milestone's own deterministic tests (tests/test_orchestrator_live_cli.py::TestRetainArchitectObsidianReads), not by this live run.",
+    "No same-run logic-bug route-back was exercised in this run (the Quality Engineer's first verdict was a genuine pass) -- that path remains proven only by this milestone's own prior evidence and deterministic tests, not by this specific run."
+  ]
+}

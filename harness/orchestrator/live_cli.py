@@ -1145,6 +1145,164 @@ def op_read_obsidian_note(req: dict) -> dict:
     return {"operation": "read_obsidian_note", "status": result.status, "path": _rel(path), **result.as_dict()}
 
 
+# ---------------------------------------------------------------------------
+# Architect direct-MCP Obsidian evidence retention bridge
+# ---------------------------------------------------------------------------
+#
+# architect.md's "Obsidian docs connector" section lets the Architect call its own
+# two mcp__obsidian__* tools directly during Research and echo what it used as a
+# validated top-level `obsidian_reads` array in findings.json (harness/schemas/
+# findings.schema.json's $defs.obsidianReadEntry). Until this bridge, nothing
+# downstream of promote_artifact(phase="research") ever consumed that array -- it
+# validated and promoted cleanly but was never retained as run evidence or
+# independently checked. This section closes exactly that gap, narrowly: it adds
+# no new agent capability and does not loosen the schema.
+#
+# Trust boundary: obsidian_reads is agent-reported metadata, not automatically
+# authoritative connector evidence. A `mcp__obsidian__read_note` entry reporting
+# `status: "read"` is independently re-read here via the same obsidian_reader
+# boundary the orchestrator-mediated search_obsidian/read_obsidian_note operations
+# already use, and its SHA-256 is compared against the Architect's own reported
+# content_sha256 -- "verified" only on an exact match, "hash_mismatch" otherwise, so
+# a mismatch is retained honestly and is never treated as corroborated evidence. A
+# `mcp__obsidian__search_notes` entry is never independently re-run (a vault-wide
+# search is not repeated merely to manufacture retention evidence -- least
+# privilege); it is retained as "architect_reported" metadata. A negative
+# connector outcome the Architect itself observed (connector_unavailable,
+# not_found, invalid_note_path, ...) is retained as an attempted-but-non-
+# affirmative observation, never upgraded into a manufactured affirmative read.
+
+
+def _verify_architect_obsidian_read(entry: dict) -> dict:
+    """Independently classifies one obsidian_reads entry. Returns
+    {"performed": bool, "result": str, "reason": str,
+    "independent_content_sha256": str | None}. `result` is one of "verified",
+    "hash_mismatch", "verification_unavailable", "not_found", "architect_reported",
+    "not_applicable" -- a distinct classification namespace from
+    obsidian_reader.READ_STATUSES/SEARCH_STATUSES, never conflated with it."""
+    tool = entry.get("tool")
+    status = entry.get("status")
+
+    if tool == "mcp__obsidian__search_notes":
+        return {
+            "performed": False, "result": "architect_reported", "independent_content_sha256": None,
+            "reason": "search observations are Architect-reported metadata only; a vault-wide search "
+                      "is never automatically repeated for evidence retention (least privilege)",
+        }
+
+    if tool != "mcp__obsidian__read_note" or status != "read":
+        return {
+            "performed": False, "result": "not_applicable", "independent_content_sha256": None,
+            "reason": f"Architect-reported status {status!r} for tool {tool!r} is not an affirmative "
+                      "read; the connector attempt and its status are retained honestly with no "
+                      "independent verification performed",
+        }
+
+    note_path = entry.get("note_path") or entry.get("query_or_note_path")
+    reported_sha = entry.get("content_sha256")
+    independent = obsidian_reader.read_note(note_path=note_path)
+
+    if independent.status == "read":
+        if reported_sha and independent.content_sha256 == reported_sha:
+            return {
+                "performed": True, "result": "verified",
+                "independent_content_sha256": independent.content_sha256,
+                "reason": "independent orchestrator-mediated read of the same vault-relative note "
+                          "produced a matching SHA-256",
+            }
+        return {
+            "performed": True, "result": "hash_mismatch",
+            "independent_content_sha256": independent.content_sha256,
+            "reason": f"independent SHA-256 {independent.content_sha256!r} does not match "
+                      f"Architect-reported content_sha256 {reported_sha!r}",
+        }
+    if independent.status == "not_found":
+        return {
+            "performed": True, "result": "not_found", "independent_content_sha256": None,
+            "reason": independent.reason,
+        }
+    # connector_unavailable / destination_unavailable / invalid_destination /
+    # invalid_note_path / read_failed -- the vault could not be independently
+    # re-consulted right now. Never a hash_mismatch -- there is nothing to compare.
+    return {
+        "performed": True, "result": "verification_unavailable", "independent_content_sha256": None,
+        "reason": f"independent verification unavailable ({independent.status}): {independent.reason}",
+    }
+
+
+def op_retain_architect_obsidian_reads(req: dict) -> dict:
+    """27. Consumes a promoted findings.json's optional `obsidian_reads` array (the
+    Architect's own direct mcp__obsidian__* tool echo) and retains one normalized,
+    independently-classified evidence record per entry under
+    runs/<run_id>/obsidian/read/architect-mcp-<n>.json (deterministic 1-based
+    index = array position; evidence_io.retain_obsidian_read_evidence,
+    collision-guarded) plus a matching `architect_obsidian_read` policy event. No
+    note body is ever retained -- obsidian_reads entries never carry one (the
+    schema has no such field), and this bridge does not add one.
+
+    Idempotent for checkpoint/resume: an index whose retained file already exists
+    on disk is reported `already_retained` and is neither re-verified nor
+    rewritten -- a resumed run never re-runs a personal-vault read, and never
+    produces a conflicting duplicate, merely because the process restarted.
+
+    Never fails Research: absent/empty `obsidian_reads` is a normal no-op
+    (`status: "retained"`, empty `entries`), and every per-entry outcome (an
+    affirmative verified read, a hash mismatch, an unavailable verification, a
+    not-found note, an architect-reported search, or a negative connector
+    attempt) is retained honestly, never raised as an error. run_id/task_id are
+    always the orchestrator's own request fields, never read from an entry --
+    obsidianReadEntry carries no identity fields for the schema to leak."""
+    run_id = _require_str(req, "run_id")
+    task_id = _require_str(req, "task_id")
+    findings_doc = _get_doc(req, "findings")
+    obsidian_reads = findings_doc.get("obsidian_reads") or []
+
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    evidence_io.ensure_run_dirs(run_directory)
+
+    entries = []
+    for index, entry in enumerate(obsidian_reads, start=1):
+        filename = f"architect-mcp-{index}.json"
+        target_path = run_directory / "obsidian" / "read" / filename
+        if target_path.exists():
+            entries.append(
+                {"index": index, "filename": filename, "status": "already_retained", "path": _rel(target_path)}
+            )
+            continue
+
+        verification = _verify_architect_obsidian_read(entry)
+        doc = {
+            "run_id": run_id, "task_id": task_id, "phase": "research",
+            "source": "architect_direct_mcp",
+            "tool": entry.get("tool"), "query_or_note_path": entry.get("query_or_note_path"),
+            "status": entry.get("status"), "note_path": entry.get("note_path"),
+            "content_sha256": entry.get("content_sha256"),
+            "retained_at": _utc_now_iso(), "verification": verification,
+        }
+        try:
+            path = evidence_io.retain_obsidian_read_evidence(run_directory, filename, doc)
+        except evidence_io.EvidenceCollisionError:
+            entries.append(
+                {"index": index, "filename": filename, "status": "already_retained", "path": _rel(target_path)}
+            )
+            continue
+        evidence_io.retain_policy_event(
+            run_directory, "architect_obsidian_read",
+            {"run_id": run_id, "task_id": task_id, "phase": "research", "tool": entry.get("tool"),
+             "status": entry.get("status"), "verification_result": verification["result"],
+             "retained_path": _rel(path)},
+        )
+        entries.append(
+            {"index": index, "filename": filename, "status": "retained", "path": _rel(path),
+             "verification_result": verification["result"]}
+        )
+
+    return {
+        "operation": "retain_architect_obsidian_reads", "status": "retained", "run_id": run_id,
+        "task_id": task_id, "count": len(obsidian_reads), "entries": entries,
+    }
+
+
 OPERATIONS = {
     "validate_scope": op_validate_scope,
     "retain_attempt": op_retain_attempt,
@@ -1173,6 +1331,7 @@ OPERATIONS = {
     "publish_run_summary": op_publish_run_summary,
     "search_obsidian": op_search_obsidian,
     "read_obsidian_note": op_read_obsidian_note,
+    "retain_architect_obsidian_reads": op_retain_architect_obsidian_reads,
 }
 
 

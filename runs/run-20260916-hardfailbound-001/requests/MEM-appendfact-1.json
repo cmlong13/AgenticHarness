@@ -1,0 +1,13 @@
+{
+  "operation": "append_memory",
+  "run_id": "run-20260916-hardfailbound-001",
+  "kind": "fact",
+  "fact": {
+    "id": "FACT-20260916-OBSIDIANUNCONFIGURED",
+    "content": "In this environment, OBSIDIAN_VAULT_PATH remains unset; a real in-pipeline Architect mcp__obsidian__read_note call for 'Harness Run Summaries/run-summary-run-20260908-obsidianlive-001.md' (run-20260916-hardfailbound-001, Research phase) returned connector_unavailable, and the orchestrator's retain_architect_obsidian_reads bridge correctly retained that negative observation (classified not_applicable) without performing an independent re-read or manufacturing a verified read.",
+    "evidence_ref": "runs/run-20260916-hardfailbound-001/obsidian/read/architect-mcp-1.json",
+    "source_run_id": "run-20260916-hardfailbound-001",
+    "recorded_at": "2026-09-16",
+    "status": "confirmed"
+  }
+}

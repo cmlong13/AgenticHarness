@@ -1,0 +1,23 @@
+{
+  "operation": "append_memory",
+  "run_id": "run-20260916-hardfailbound-001",
+  "kind": "lesson",
+  "candidates": [
+    {
+      "id": "L-20260916-ORCH-COMMAND-GRAMMAR",
+      "text": "The orchestrator's own ad hoc ORCH-* test-runner health-check commands are bound by the exact same strict positional command grammar as agent-requested commands (e.g. a bare 'python -m pytest -q' with no positional target is command_rejected, not silently accepted). Unlike an agent's rejected command -- which halts the phase -- a rejection of the orchestrator's own authored command is the orchestrator's own authoring mistake: retain the rejection as evidence, then correct the command and reissue it under a fresh command_id rather than escalating or blocking the run.",
+      "source_run_id": "run-20260916-hardfailbound-001",
+      "evidence_ref": "runs/run-20260916-hardfailbound-001/logs/ORCH-2.rejected.json",
+      "date": "2026-09-16",
+      "tags": ["test-runner", "command-grammar", "orchestrator", "verification"]
+    },
+    {
+      "id": "L-20260916-BRIDGE-NOT-APPLICABLE",
+      "text": "An evidence-retention bridge that independently re-verifies an agent's self-reported affirmative observation (e.g. retain_architect_obsidian_reads re-reading an Architect's claimed mcp__obsidian__read_note) should classify a non-affirmative self-reported status (connector_unavailable, not_found, etc.) as a distinct 'not_applicable' outcome rather than attempting any independent re-check for it -- there is nothing affirmative to corroborate, and attempting one anyway would risk manufacturing evidence the original observation never made.",
+      "source_run_id": "run-20260916-hardfailbound-001",
+      "evidence_ref": "runs/run-20260916-hardfailbound-001/obsidian/read/architect-mcp-1.json",
+      "date": "2026-09-16",
+      "tags": ["evidence-retention", "verification", "obsidian", "least-privilege"]
+    }
+  ]
+}
