@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LOGICREPAIR-DEMO",
+  "run_id": "run-20260917-logicrepair-002",
+  "created_at": "2026-09-17T17:27:13Z",
+  "scope_ref": { "path": "runs/run-20260917-logicrepair-002/scope.json" },
+  "implementation_ref": { "path": "runs/run-20260917-logicrepair-002/implementation-report.json" },
+  "attempts": [
+    {
+      "id": "V-3",
+      "command": "python -m pytest tests/unit/test_risk_bands.py::test_dti_at_low_max_boundary_is_low -v",
+      "exit_code": 0,
+      "classification": "pass",
+      "output_ref": "runs/run-20260917-logicrepair-002/logs/V-3.log",
+      "retried": false
+    },
+    {
+      "id": "V-4",
+      "command": "python -m pytest tests/unit/test_risk_bands.py -v",
+      "exit_code": 0,
+      "classification": "pass",
+      "output_ref": "runs/run-20260917-logicrepair-002/logs/V-4.log",
+      "retried": false
+    }
+  ],
+  "retry_policy": { "max_retries": 2 },
+  "acceptance_criteria_results": [
+    {
+      "criteria_id": "AC-1",
+      "result": "passed",
+      "attempt_refs": ["V-3"],
+      "evidence_summary": "python -m pytest tests/unit/test_risk_bands.py::test_dti_at_low_max_boundary_is_low -v (working_directory demo-repo) exited 0, test PASSED. This matches the implementation report's documented single-line fix (risk_bands.py line 23, classify_dti's LOW-boundary comparison changed from '<' to '<='), which was independently confirmed by reading both the source file and diff.patch before requesting this command."
+    },
+    {
+      "criteria_id": "AC-2",
+      "result": "blocked",
+      "attempt_refs": ["V-4"],
+      "evidence_summary": "python -m pytest tests/unit/test_risk_bands.py -v (working_directory demo-repo) exited 0, all 8 tests PASSED per runs/run-20260917-logicrepair-002/logs/V-4.log, including test_ltv_at_low_max_boundary_is_low. However this cannot be certified as validating the implementation under review: implementation-report.json's changed_files and diff.patch document ONLY a single-line fix to classify_dti (risk_bands.py line 23), and diff.patch explicitly states classify_ltv's identical, separately-planted regression 'remains visible' and untouched -- consistent with scope.json's own disclosure that AC-2 was expected to genuinely fail on this first pass. A Step-6 read of demo-repo/src/loanflow/risk_bands.py, performed before requesting any command, confirmed classify_ltv (line 31) still used the strict '<' regression at that time. After receiving the V-4 command_result, an identical re-read of the same file path showed classify_ltv's line 31 using '<=' (fixed) -- a change not reflected anywhere in implementation-report.json's changed_files, diff_ref, or any repair-cycle implementation report, and no 'implementation_updated' re-verification dispatch authorizing or documenting such a change was ever received. This is an undocumented, unattributed modification to in-scope source code that occurred between the two reads of the same file. AC-2 is not certified as passed despite the command's literal exit code."
+    }
+  ],
+  "final_verdict": "inconclusive",
+  "routed_back_to_engineer": { "routed": false }
+}

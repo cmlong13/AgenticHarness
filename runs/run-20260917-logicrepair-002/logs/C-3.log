@@ -1,0 +1,38 @@
+command: python -m pytest tests/unit/test_risk_bands.py::test_ltv_at_low_max_boundary_is_low -v
+executed_as: C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe -m pytest tests/unit/test_risk_bands.py::test_ltv_at_low_max_boundary_is_low -v
+working_directory: demo-repo
+timeout_seconds: 300
+real_pytest_exit_code: 1
+reported_exit_code: 1
+
+--- STDOUT ---
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo
+configfile: pyproject.toml
+collecting ... collected 1 item
+
+tests/unit/test_risk_bands.py::test_ltv_at_low_max_boundary_is_low FAILED [100%]
+
+================================== FAILURES ===================================
+_____________________ test_ltv_at_low_max_boundary_is_low _____________________
+
+default_thresholds = Thresholds(dti_low_max=Percentage(basis_points=3600), dti_medium_max=Percentage(basis_points=4300), ltv_low_max=Percen...000), max_ltv_hard_fail=Percentage(basis_points=10000), min_credit_score=580, effective_date=datetime.date(2026, 1, 1))
+
+    def test_ltv_at_low_max_boundary_is_low(default_thresholds) -> None:
+>       assert classify_ltv(default_thresholds.ltv_low_max, default_thresholds) is Band.LOW
+E       AssertionError: assert <Band.MEDIUM: 'medium'> is <Band.LOW: 'low'>
+E        +  where <Band.MEDIUM: 'medium'> = classify_ltv(Percentage(basis_points=8000), Thresholds(dti_low_max=Percentage(basis_points=3600), dti_medium_max=Percentage(basis_points=4300), ltv_low_max=Percentage(basis_points=8000), ltv_medium_max=Percentage(basis_points=9500), max_dti_hard_fail=Percentage(basis_points=5000), max_ltv_hard_fail=Percentage(basis_points=10000), min_credit_score=580, effective_date=datetime.date(2026, 1, 1)))
+E        +    where Percentage(basis_points=8000) = Thresholds(dti_low_max=Percentage(basis_points=3600), dti_medium_max=Percentage(basis_points=4300), ltv_low_max=Percentage(basis_points=8000), ltv_medium_max=Percentage(basis_points=9500), max_dti_hard_fail=Percentage(basis_points=5000), max_ltv_hard_fail=Percentage(basis_points=10000), min_credit_score=580, effective_date=datetime.date(2026, 1, 1)).ltv_low_max
+E        +  and   <Band.LOW: 'low'> = Band.LOW
+
+tests\unit\test_risk_bands.py:29: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_risk_bands.py::test_ltv_at_low_max_boundary_is_low - A...
+============================== 1 failed in 0.12s ==============================
+
+--- STDERR ---
+
+--- MUTATION CHECK ---
+no persistent non-cache file addition, deletion, or modification detected

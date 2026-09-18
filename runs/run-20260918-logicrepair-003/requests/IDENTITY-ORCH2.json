@@ -1,0 +1,20 @@
+{
+  "operation": "check_command_identity",
+  "request": {
+    "task_id": "T-LOGICREPAIR-DEMO-003",
+    "run_id": "run-20260918-logicrepair-003",
+    "command_id": "ORCH-2",
+    "command": "python -m pytest tests -q",
+    "working_directory": "demo-repo"
+  },
+  "result": {
+    "message_type": "command_result",
+    "task_id": "T-LOGICREPAIR-DEMO-003",
+    "run_id": "run-20260918-logicrepair-003",
+    "command_id": "ORCH-2",
+    "command": "python -m pytest tests -q",
+    "working_directory": "demo-repo",
+    "exit_code": 0,
+    "output_ref": "runs/run-20260918-logicrepair-003/logs/ORCH-2.log"
+  }
+}

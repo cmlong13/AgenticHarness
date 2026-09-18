@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LOGICREPAIR-DEMO-003",
+  "run_id": "run-20260918-logicrepair-003",
+  "created_at": "2026-09-18T18:06:47Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "Clean, authoritative retry of the same-run logic-repair route-back live proof (T-LOGICREPAIR-DEMO family), task T-LOGICREPAIR-DEMO-003, after fixing the production gap discovered in run-20260917-logicrepair-002: live_cli.py's promote_artifact operation had no way to promote a same-run logic-repair round's implementation or verification artifact to its own distinctly named path. That gap is now closed. This run re-plants the identical deterministic boundary regression in demo-repo/src/loanflow/risk_bands.py (classify_dti and classify_ltv's LOW-boundary comparisons changed from '<=' to '<'), scopes the first Implementation pass to the customer-reported classify_dti symptom only (AC-1), and expects the full-suite AC-2 to genuinely fail on classify_ltv's identical regression, triggering the harness's same-run logic-repair route-back loop, this time closing it cleanly end-to-end within one continuous process using the now-fixed repair-round artifact promotion."
+  },
+  "objective": "Demonstrate, live and end-to-end in a single continuous process, the harness's same-run Quality-Engineer logic-failure route-back loop against a genuinely planted, deterministic logic defect in demo-repo/src/loanflow/risk_bands.py, closing cleanly with both repair-round artifacts (implementation-report.repair-1.json, verification-report.repair-1.json) promoted through the now-fixed live bridge and a genuine final_verdict: pass.",
+  "in_scope": [
+    "demo-repo/src/loanflow/risk_bands.py",
+    "demo-repo/tests/unit/test_risk_bands.py"
+  ],
+  "out_of_scope": [
+    "demo-repo/src/loanflow/dti.py",
+    "demo-repo/src/loanflow/collateral.py",
+    "demo-repo/src/loanflow/config.py",
+    "demo-repo/src/loanflow/underwriting_rules.py",
+    "demo-repo/src/loanflow/underwriting_engine.py",
+    "demo-repo/src/loanflow/cli.py",
+    "demo-repo/src/loanflow/pipeline.py",
+    "demo-repo/src/loanflow/risk_profile.py"
+  ],
+  "constraints": [
+    "This is a controlled, fully disclosed harness demonstration task (T-LOGICREPAIR-DEMO-003) of the same-run Quality-Engineer logic-failure route-back loop, per ASSIGNMENT.md's acceptance criteria, run against the production fix for the artifact-promotion gap run-20260917-logicrepair-002 discovered.",
+    "Do not modify demo-repo/tests/unit/test_risk_bands.py -- it is a pre-existing, already-correct regression fixture; its 8 assertions (including test_ltv_at_low_max_boundary_is_low) define the real, unweakened acceptance bar for this task, not just the narrowly-reported DTI symptom.",
+    "For the FIRST implementation pass, fix only the specific reported classify_dti low-boundary regression, using the narrowest command that validates that specific fix as the TDD/verification command -- do not preemptively run or fix against the full test_risk_bands.py file in this first pass. This is intentional and disclosed: Verification's independent, broader check against the full file is expected to genuinely fail on classify_ltv's identical, untouched regression, triggering the same-run route-back loop, after which the resumed Engineer is explicitly authorized and directed to also fix classify_ltv during the repair round.",
+    "All test-runner commands (pre-test and post-test) must use working_directory: \"demo-repo\" (a relative path) and command targets relative to that working_directory (e.g. \"tests/unit/test_risk_bands.py::test_dti_at_low_max_boundary_is_low\") -- an absolute or drive-prefixed working_directory is rejected by the wrapper before any command runs (memory fact FACT-20260917-ENGINEER-ABSOLUTE-WORKDIR / lesson L-20260917-DISPATCH-RELATIVE-WORKDIR).",
+    "Standard library only; no new dependencies.",
+    "Minimal-change ladder: the fix is a single comparison-operator correction per function, restoring the pre-regression '<=' behavior -- no rewrite, no refactor, no new abstraction.",
+    "Protected Paths are unaffected by this task (risk_bands.py and test_risk_bands.py are not Protected Paths)."
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "loanflow.risk_bands.classify_dti(dti_low_max, thresholds) returns Band.LOW (the specific customer-reported case), verified narrowly by demo-repo/tests/unit/test_risk_bands.py::test_dti_at_low_max_boundary_is_low. This criterion is expected to pass on the first implementation pass."
+    },
+    {
+      "id": "AC-2",
+      "description": "The full, pre-existing demo-repo/tests/unit/test_risk_bands.py suite (all 8 tests, unmodified) passes with zero regressions -- including test_ltv_at_low_max_boundary_is_low, which independently pins classify_ltv's identical LOW-boundary comparison. This criterion is NOT expected to pass on the first implementation pass (classify_ltv's matching regression is deliberately out of the first pass's narrow fix target) -- it is expected to be satisfied only after a same-run repair cycle following a genuine Verification failure."
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-1",
+      "description": "Research the current, regressed behavior of classify_dti and classify_ltv in demo-repo/src/loanflow/risk_bands.py, cite the exact defective comparison line(s), confirm the pre-regression convention via adjacent comparisons in the same file, and confirm demo-repo/tests/unit/test_risk_bands.py's existing coverage for both boundaries.",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-2",
+      "description": "Implement the minimal, TDD-first correction to classify_dti's LOW-boundary comparison only, per this task's disclosed first-pass scope, using a relative working_directory (\"demo-repo\") for all test-runner commands.",
+      "phase": "implementation",
+      "depends_on": [
+        "N-1"
+      ]
+    },
+    {
+      "id": "N-3",
+      "description": "Verify AC-1 (the narrow, reported-symptom case) and AC-2 (the full pre-existing regression suite) independently; expect AC-2 to genuinely fail on this first pass (classify_ltv's identical, untouched regression) and trigger the harness's same-run logic-repair loop, after which the repair round also corrects classify_ltv and both criteria pass, with both repair-round artifacts promoted through the now-fixed live bridge.",
+      "phase": "verification",
+      "depends_on": [
+        "N-2"
+      ]
+    }
+  ],
+  "status": "approved"
+}

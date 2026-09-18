@@ -1,0 +1,11 @@
+{
+  "operation": "write_checkpoint",
+  "kind": "progress",
+  "run_id": "run-20260918-logicrepair-003",
+  "task_id": "T-LOGICREPAIR-DEMO-003",
+  "target_repo_path": "demo-repo",
+  "completed_phases": ["discovery"],
+  "artifact_refs": {
+    "discovery": "runs/run-20260918-logicrepair-003/scope.json"
+  }
+}

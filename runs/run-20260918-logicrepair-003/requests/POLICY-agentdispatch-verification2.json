@@ -1,0 +1,12 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260918-logicrepair-003",
+  "kind": "agent_dispatch",
+  "payload": {
+    "phase": "verification",
+    "subagent_type": "quality-engineer",
+    "agent_id": "af969b6b7bc0627f0",
+    "dispatch_sequence": 2,
+    "note": "Fresh dispatch after dispatch_sequence 1 (agent a66f9405490d3a67b) self-blocked with zero real verification work due to a session-transport interference (see continuity_broken policy event). Not a resume of that identity."
+  }
+}

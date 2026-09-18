@@ -1,0 +1,15 @@
+{
+  "operation": "append_memory",
+  "run_id": "run-20260917-logicrepair-001",
+  "kind": "lesson",
+  "candidates": [
+    {
+      "id": "L-20260917-DISPATCH-RELATIVE-WORKDIR",
+      "text": "When dispatching a live Engineer or Quality Engineer for a task that will request test-runner commands, state explicitly in the dispatch prompt that working_directory must be a relative path (e.g. 'demo-repo'), matching this repo's established convention -- engineer.md's own 'Command grammar' section documents the command string's grammar in detail but is silent on working_directory's relative/absolute requirement, so a live agent may reasonably supply an absolute path, producing an avoidable command_rejected that halts the phase outright (per the command_rejected escalation rule) rather than being repaired by the orchestrator.",
+      "source_run_id": "run-20260917-logicrepair-001",
+      "evidence_ref": "runs/run-20260917-logicrepair-001/logs/unknown.rejected.json",
+      "date": "2026-09-17",
+      "tags": ["test-runner", "engineer", "command-grammar", "dispatch-prompt"]
+    }
+  ]
+}

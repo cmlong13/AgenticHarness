@@ -259,3 +259,25 @@ def test_no_tmp_file_left_behind_after_a_successful_write(tmp_path):
 
     leftovers = [p.name for p in run_directory.iterdir() if p.name.endswith(".tmp")]
     assert leftovers == []
+
+
+def test_repair_artifact_filename_matches_core_convention():
+    assert evidence_io.repair_artifact_filename("implementation", 1) == "implementation-report.repair-1.json"
+    assert evidence_io.repair_artifact_filename("verification", 1) == "verification-report.repair-1.json"
+    assert evidence_io.repair_artifact_filename("implementation", 2) == "implementation-report.repair-2.json"
+
+
+@pytest.mark.parametrize("phase", ["discovery", "research", "bogus-phase"])
+def test_repair_artifact_filename_rejects_ineligible_phases(phase):
+    with pytest.raises(ValueError):
+        evidence_io.repair_artifact_filename(phase, 1)
+
+
+@pytest.mark.parametrize("bad_attempt", [0, -1, 1.5, "1", True])
+def test_repair_artifact_filename_rejects_invalid_attempt_numbers(bad_attempt):
+    with pytest.raises(ValueError):
+        evidence_io.repair_artifact_filename("implementation", bad_attempt)
+
+
+def test_repair_eligible_phases_is_exactly_implementation_and_verification():
+    assert evidence_io.REPAIR_ELIGIBLE_PHASES == {"implementation", "verification"}

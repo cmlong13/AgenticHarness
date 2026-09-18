@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LOGICREPAIR-DEMO",
+  "run_id": "run-20260917-logicrepair-001",
+  "created_at": "2026-09-17T16:59:57Z",
+  "objective_summary": "BLOCKED at Implementation -- a real, live /work pipeline attempt for the controlled planted-defect/route-back demonstration (T-LOGICREPAIR-DEMO). Discovery and Research completed cleanly and remain valid, reusable evidence: a genuine, deterministic logic regression was planted immediately before this run (both classify_dti and classify_ltv in demo-repo/src/loanflow/risk_bands.py had their LOW-boundary comparison changed from '<=' to '<', independently confirmed to cause exactly 2 real failures out of 108 demo-repo tests, no collateral damage -- see runs/run-20260917-logicrepair-001/planted-defect/). scope.json was authored and promoted, narrowly scoping the first implementation pass to the reported classify_dti symptom only, with a disclosed, transparent expectation that Verification's broader AC-2 (the full pre-existing test_risk_bands.py suite) would still fail on the untouched classify_ltv regression and trigger the harness's same-run logic-repair loop -- mirroring run-20260805-latefee-005's proven technique. A real, live-dispatched Architect (agent a791af9c6d867f5bf) returned 8 found + 1 inferred findings on its first attempt, correctly identifying the defective comparisons, the correct in-file convention to restore, and correctly warning that classify_credit_score's own boundary convention is the wrong model to copy. Implementation: a real, live-dispatched Engineer (agent abe70f4eef319978b) correctly planned the minimal rung-2 fix and requested a narrowly-targeted TDD pre-test command (C-1) -- but supplied an absolute, drive-prefixed working_directory, which the real test-runner Skill wrapper correctly rejected (request_value_invalid: working_directory must not be absolute or drive-prefixed) before any command executed. Per work/SKILL.md's escalation rule, a command_rejected halts the staged protocol outright rather than being retried with an orchestrator-corrected value; the Engineer was informed of the real rejection and returned a final status: blocked report, which was retained and promoted as this run's canonical implementation-report.json. No implementation edit was ever made; demo-repo/src/loanflow/risk_bands.py remains in its planted-defect state, unchanged by this run. This is a genuine, honest engineering/dispatch-mediation failure mode (not a fabricated one), retained in full per this milestone's own evidence-preservation requirements, and a new run (run-20260917-logicrepair-002, same task_id) was started immediately after to complete the demonstration with a dispatch prompt that explicitly specifies a relative working_directory.",
+  "artifact_refs": {
+    "scope": "runs/run-20260917-logicrepair-001/scope.json",
+    "findings": "runs/run-20260917-logicrepair-001/findings.json",
+    "implementation_report": "runs/run-20260917-logicrepair-001/implementation-report.json"
+  },
+  "final_verdict": "blocked",
+  "phases_completed": [
+    "discovery",
+    "research"
+  ],
+  "memory_loaded": true,
+  "memory_influenced_run": false,
+  "memory_refs_used": [],
+  "lessons_learned_appended": [
+    "When dispatching a live Engineer or Quality Engineer for a task that will request test-runner commands, state explicitly in the dispatch prompt that working_directory must be a relative path (e.g. 'demo-repo'), matching this repo's established convention -- engineer.md's own 'Command grammar' section documents the command string's grammar in detail but is silent on working_directory's relative/absolute requirement, so a live agent may reasonably supply an absolute path, producing an avoidable command_rejected that halts the phase outright (per the command_rejected escalation rule) rather than being repaired by the orchestrator."
+  ],
+  "usage_summary_ref": "runs/run-20260917-logicrepair-001/usage-summary.json",
+  "remaining_risks": [
+    "Implementation and Verification were never reached in this specific run; the same-run logic-bug route-back this milestone needs to demonstrate is proven, if at all, only by run-20260917-logicrepair-002 (or later), not by this run.",
+    "The planted regression in demo-repo/src/loanflow/risk_bands.py remains present and unfixed at the end of this run -- it must be restored (or fixed by a later successful run in this same milestone) before this milestone can be considered complete.",
+    "Verification was never dispatched in this run, so artifact_refs deliberately carries no verification_report key (the schema makes it optional) -- the real command_rejected evidence is instead cited directly in this document's objective_summary and remains retained at runs/run-20260917-logicrepair-001/logs/unknown.rejected.json."
+  ]
+}

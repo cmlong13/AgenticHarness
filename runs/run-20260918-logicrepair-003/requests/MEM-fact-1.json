@@ -1,0 +1,13 @@
+{
+  "operation": "append_memory",
+  "run_id": "run-20260918-logicrepair-003",
+  "kind": "fact",
+  "fact": {
+    "id": "FACT-20260918-REPAIR-PROMOTE-FIX-LIVE-PROVEN",
+    "content": "The production fix for the artifact-promotion gap (evidence_io.repair_artifact_filename; live_cli.py op_promote_artifact's new repair_attempt field, bounded by core.MAX_LOGIC_REPAIR_ATTEMPTS) works live: run-20260918-logicrepair-003 genuinely promoted implementation-report.repair-1.json and verification-report.repair-1.json through the real live bridge (not core.py's deterministic fakes), closing the same-run logic-repair route-back loop end-to-end for the first time with real dispatched Architect/Engineer/Quality-Engineer agents and a genuine final_verdict: pass.",
+    "source_run_id": "run-20260918-logicrepair-003",
+    "evidence_ref": "runs/run-20260918-logicrepair-003/verification-report.repair-1.json",
+    "recorded_at": "2026-09-18",
+    "status": "confirmed"
+  }
+}

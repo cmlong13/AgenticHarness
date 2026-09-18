@@ -1,0 +1,113 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LOGICREPAIR-DEMO-003",
+  "run_id": "run-20260918-logicrepair-003",
+  "created_at": "2026-09-18T18:06:47Z",
+  "scope_ref": { "path": "runs/run-20260918-logicrepair-003/scope.json" },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "classify_dti's LOW-boundary comparison (demo-repo/src/loanflow/risk_bands.py line 23) uses strict '<' instead of '<=' when comparing dti.basis_points to thresholds.dti_low_max.basis_points, so a dti value exactly equal to the low-max threshold fails the LOW check and falls through to the next (MEDIUM) branch instead of returning Band.LOW.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 22,
+          "end_line": 27,
+          "evidence_tier": "executable_code",
+          "excerpt": "def classify_dti(dti: Percentage, thresholds: Thresholds) -> Band:\n    if dti.basis_points < thresholds.dti_low_max.basis_points:\n        return Band.LOW\n    if dti.basis_points <= thresholds.dti_medium_max.basis_points:\n        return Band.MEDIUM\n    return Band.HIGH"
+        }
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "classify_ltv's LOW-boundary comparison (demo-repo/src/loanflow/risk_bands.py line 31) has the identical regression pattern as classify_dti: it uses strict '<' instead of '<=' when comparing ltv.basis_points to thresholds.ltv_low_max.basis_points, so a ltv value exactly equal to the low-max threshold fails the LOW check and falls through to the MEDIUM branch instead of returning Band.LOW.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 30,
+          "end_line": 35,
+          "evidence_tier": "executable_code",
+          "excerpt": "def classify_ltv(ltv: Percentage, thresholds: Thresholds) -> Band:\n    if ltv.basis_points < thresholds.ltv_low_max.basis_points:\n        return Band.LOW\n    if ltv.basis_points <= thresholds.ltv_medium_max.basis_points:\n        return Band.MEDIUM\n    return Band.HIGH"
+        }
+      ]
+    },
+    {
+      "id": "F-3",
+      "claim": "Within each of classify_dti and classify_ltv, the adjacent MEDIUM-boundary comparison (lines 25 and 33 respectively) is inclusive ('<=' against dti_medium_max/ltv_medium_max), establishing the file's own convention that a value exactly equal to a band's upper threshold belongs to that (lower) band. The LOW-boundary comparisons at lines 23 and 31 break this same-function convention by using strict '<' instead of '<=', confirming they are the regressed lines relative to the file's own established comparison style rather than an intentional asymmetry.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 22,
+          "end_line": 35,
+          "evidence_tier": "executable_code",
+          "excerpt": "if dti.basis_points < thresholds.dti_low_max.basis_points: return Band.LOW / if dti.basis_points <= thresholds.dti_medium_max.basis_points: return Band.MEDIUM ... if ltv.basis_points < thresholds.ltv_low_max.basis_points: return Band.LOW / if ltv.basis_points <= thresholds.ltv_medium_max.basis_points: return Band.MEDIUM"
+        }
+      ]
+    },
+    {
+      "id": "F-4",
+      "claim": "demo-repo/tests/unit/test_risk_bands.py already contains dedicated, pre-existing boundary tests pinning the intended LOW-boundary behavior for both functions: test_dti_at_low_max_boundary_is_low (lines 10-11) asserts classify_dti(default_thresholds.dti_low_max, default_thresholds) is Band.LOW, and test_ltv_at_low_max_boundary_is_low (lines 28-29) asserts classify_ltv(default_thresholds.ltv_low_max, default_thresholds) is Band.LOW -- an identical assertion shape for the untouched classify_ltv symptom.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 10,
+          "end_line": 11,
+          "evidence_tier": "test_assertion",
+          "excerpt": "def test_dti_at_low_max_boundary_is_low(default_thresholds) -> None:\n    assert classify_dti(default_thresholds.dti_low_max, default_thresholds) is Band.LOW"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 28,
+          "end_line": 29,
+          "evidence_tier": "test_assertion",
+          "excerpt": "def test_ltv_at_low_max_boundary_is_low(default_thresholds) -> None:\n    assert classify_ltv(default_thresholds.ltv_low_max, default_thresholds) is Band.LOW"
+        }
+      ]
+    },
+    {
+      "id": "F-5",
+      "claim": "demo-repo/tests/unit/test_risk_bands.py contains exactly 8 test functions covering DTI boundary classification (4 tests), LTV boundary classification (2 tests), and credit-score bucket classification (2 tests), matching the task's description of an unweakened 8-test acceptance bar for AC-2's full-suite pass.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 10,
+          "end_line": 51,
+          "evidence_tier": "test_assertion",
+          "excerpt": "test_dti_at_low_max_boundary_is_low / test_dti_just_above_low_max_is_medium / test_dti_at_medium_max_boundary_is_medium / test_dti_just_above_medium_max_is_high / test_ltv_at_low_max_boundary_is_low / test_ltv_just_above_medium_max_is_high / test_credit_bucket_boundaries / test_credit_score_out_of_range_is_rejected"
+        }
+      ]
+    },
+    {
+      "id": "F-6",
+      "claim": "The default_thresholds fixture used by both boundary tests (test_dti_at_low_max_boundary_is_low and test_ltv_at_low_max_boundary_is_low) resolves to loanflow.config.DEFAULT_THRESHOLDS, i.e. the boundary values exercised by the tests are the real, production-configured thresholds rather than test-local stand-ins.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/conftest.py",
+          "start_line": 20,
+          "end_line": 22,
+          "evidence_tier": "executable_code",
+          "excerpt": "@pytest.fixture\ndef default_thresholds() -> Thresholds:\n    return DEFAULT_THRESHOLDS"
+        }
+      ]
+    }
+  ],
+  "open_questions": [],
+  "obsidian_reads": [
+    {
+      "tool": "mcp__obsidian__search_notes",
+      "query_or_note_path": "logic-repair route-back promote_artifact risk_bands",
+      "status": "connector_unavailable"
+    },
+    {
+      "tool": "mcp__obsidian__search_notes",
+      "query_or_note_path": "risk_bands boundary regression classify_dti classify_ltv",
+      "status": "connector_unavailable"
+    }
+  ]
+}

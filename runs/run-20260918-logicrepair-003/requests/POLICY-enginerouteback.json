@@ -1,0 +1,10 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260918-logicrepair-003",
+  "kind": "engineer_route_back",
+  "payload": {
+    "repair_attempt": 1,
+    "engineer_handle": "adb4503ed5205e143",
+    "verification_ref": "runs/run-20260918-logicrepair-003/verification-report.json"
+  }
+}

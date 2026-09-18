@@ -1,0 +1,13 @@
+{
+  "operation": "append_memory",
+  "run_id": "run-20260917-logicrepair-002",
+  "kind": "fact",
+  "fact": {
+    "id": "FACT-20260918-PROMOTE-NO-REPAIR-PATH",
+    "content": "live_cli.py's promote_artifact operation has no distinctly-named-path parameter for the four canonical phase artifacts -- evidence_io.CANONICAL_FILENAMES is a fixed phase->filename map with no override, so it always writes to the plain canonical name (e.g. verification-report.json) and refuses (EvidenceCollisionError) if that path already exists. work/SKILL.md's 'Same-run logic-failure route-back to the Engineer' section documents promoting a repair round's artifacts to a distinctly-named path (e.g. implementation-report.repair-1.json / verification-report.repair-1.json), but this convention cannot currently be executed through the live bridge as implemented -- confirmed by a real EvidenceCollisionError when run-20260917-logicrepair-002's resumed process attempted to promote a second verification-report.json.",
+    "source_run_id": "run-20260917-logicrepair-002",
+    "evidence_ref": "runs/run-20260917-logicrepair-002/logs/policy-events.jsonl",
+    "recorded_at": "2026-09-18",
+    "status": "confirmed"
+  }
+}

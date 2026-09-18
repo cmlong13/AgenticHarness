@@ -1,0 +1,12 @@
+{
+  "message_type": "command_rejected",
+  "task_id": null,
+  "run_id": null,
+  "command_id": "V-1-resume2-take2",
+  "command": null,
+  "working_directory": null,
+  "rejection_reason": "path-derived run_id/command_id do not match the request body",
+  "rejection_category": "request_path_identifier_mismatch",
+  "requested_command_id": "V-1",
+  "original_request_ref": "runs/run-20260917-logicrepair-002/requests/V-1-resume2.json"
+}

@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pytest
 
-from harness.orchestrator import discovery, evidence_io, github, jira_connector, live_cli, paths
+from harness.orchestrator import core, discovery, evidence_io, github, jira_connector, live_cli, paths
 
 
 @pytest.fixture()
@@ -377,6 +377,320 @@ class TestValidateAndPromoteFindings:
         )
         assert exit_code == 0
         assert resp["status"] == "promoted"
+
+
+# ---------------------------------------------------------------------------
+# operation 4 (extended): promote_artifact -- same-run logic-repair round promotion
+# ---------------------------------------------------------------------------
+
+
+def _implementation_report_doc(*, blocked_reason="smoke test -- not a real implementation") -> dict:
+    return {
+        "schema_version": "1.0",
+        "task_id": "T-1",
+        "run_id": "run-1",
+        "created_at": "2026-08-03T12:00:00Z",
+        "scope_ref": {"path": "runs/run-1/scope.json"},
+        "status": "blocked",
+        "blocked_reason": blocked_reason,
+        "dependency_changes": [],
+    }
+
+
+def _verification_report_doc(*, blocked_reason="smoke test -- not a real verification") -> dict:
+    return {
+        "schema_version": "1.0",
+        "task_id": "T-1",
+        "run_id": "run-1",
+        "created_at": "2026-08-03T12:00:00Z",
+        "scope_ref": {"path": "runs/run-1/scope.json"},
+        "implementation_ref": {"path": "runs/run-1/implementation-report.json"},
+        "final_verdict": "blocked",
+        "blocked_reason": blocked_reason,
+    }
+
+
+def _seed_scope_and_findings(repo_root) -> None:
+    scope_path = repo_root / "runs" / "run-1" / "scope.json"
+    scope_path.parent.mkdir(parents=True, exist_ok=True)
+    scope_path.write_text(json.dumps(_SCOPE_BASE), encoding="utf-8")
+    findings_path = repo_root / "runs" / "run-1" / "findings.json"
+    findings_path.write_text(json.dumps(_findings_doc()), encoding="utf-8")
+
+
+class TestPromoteArtifactRepairRound:
+    """Covers op_promote_artifact's `repair_attempt` extension -- the production fix for
+    the gap discovered live in run-20260917-logicrepair-002: the live bridge had no way
+    to promote a same-run logic-repair round's implementation/verification artifact to
+    its own distinctly-named path, unlike core.py's already-tested
+    _handle_verification_failure (tests/test_orchestrator_core.py). See PROJECT_SPEC.md
+    for the full account of the gap and the fix."""
+
+    # 1. ordinary canonical promotions remain unchanged (omitting repair_attempt) -------
+
+    def test_ordinary_implementation_promotion_is_unaffected(self, repo_root, capsys) -> None:
+        _seed_scope_and_findings(repo_root)
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "promote_artifact", "run_id": "run-1", "phase": "implementation",
+                "doc": _implementation_report_doc(),
+                "context_refs": {"findings": "runs/run-1/findings.json"},
+            },
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "promoted"
+        assert resp["path"] == "runs/run-1/implementation-report.json"
+
+    def test_ordinary_verification_promotion_is_unaffected(self, repo_root, capsys) -> None:
+        _seed_scope_and_findings(repo_root)
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "promote_artifact", "run_id": "run-1", "phase": "verification",
+                "doc": _verification_report_doc(),
+                "context_refs": {"scope": "runs/run-1/scope.json"},
+            },
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "promoted"
+        assert resp["path"] == "runs/run-1/verification-report.json"
+
+    # 2/3. repair attempt 1 promotes the intended distinct repair artifact -------------
+
+    def test_implementation_repair_1_promotion_succeeds(self, repo_root, capsys) -> None:
+        _seed_scope_and_findings(repo_root)
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "promote_artifact", "run_id": "run-1", "phase": "implementation",
+                "doc": _implementation_report_doc(blocked_reason="repair round"),
+                "context_refs": {"findings": "runs/run-1/findings.json"},
+                "repair_attempt": 1,
+            },
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "promoted"
+        assert resp["path"] == "runs/run-1/implementation-report.repair-1.json"
+
+    def test_verification_repair_1_promotion_succeeds(self, repo_root, capsys) -> None:
+        _seed_scope_and_findings(repo_root)
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "promote_artifact", "run_id": "run-1", "phase": "verification",
+                "doc": _verification_report_doc(blocked_reason="repair round"),
+                "context_refs": {"scope": "runs/run-1/scope.json"},
+                "repair_attempt": 1,
+            },
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "promoted"
+        assert resp["path"] == "runs/run-1/verification-report.repair-1.json"
+
+    # 4. the original canonical artifact is never touched by a repair promotion --------
+
+    def test_original_canonical_artifact_untouched_by_repair_promotion(self, repo_root, capsys) -> None:
+        _seed_scope_and_findings(repo_root)
+        original = _implementation_report_doc(blocked_reason="original, pre-repair")
+        first_exit, _ = _run_main(
+            repo_root,
+            {
+                "operation": "promote_artifact", "run_id": "run-1", "phase": "implementation",
+                "doc": original, "context_refs": {"findings": "runs/run-1/findings.json"},
+            },
+            capsys,
+        )
+        assert first_exit == 0
+
+        repaired = _implementation_report_doc(blocked_reason="repaired")
+        second_exit, resp = _run_main(
+            repo_root,
+            {
+                "operation": "promote_artifact", "run_id": "run-1", "phase": "implementation",
+                "doc": repaired, "context_refs": {"findings": "runs/run-1/findings.json"},
+                "repair_attempt": 1,
+            },
+            capsys,
+        )
+        assert second_exit == 0
+
+        original_on_disk = json.loads(
+            (repo_root / "runs" / "run-1" / "implementation-report.json").read_text(encoding="utf-8")
+        )
+        assert original_on_disk == original
+        repair_on_disk = json.loads(
+            (repo_root / "runs" / "run-1" / "implementation-report.repair-1.json").read_text(encoding="utf-8")
+        )
+        assert repair_on_disk == repaired
+
+    # 5. duplicate promotion to the same repair-round artifact is collision-rejected ---
+
+    def test_duplicate_repair_promotion_is_collision_rejected(self, repo_root, capsys) -> None:
+        _seed_scope_and_findings(repo_root)
+        request = {
+            "operation": "promote_artifact", "run_id": "run-1", "phase": "implementation",
+            "doc": _implementation_report_doc(), "context_refs": {"findings": "runs/run-1/findings.json"},
+            "repair_attempt": 1,
+        }
+        first_exit, first = _run_main(repo_root, request, capsys)
+        assert first_exit == 0
+        assert first["status"] == "promoted"
+
+        second_exit, second = _run_main(repo_root, request, capsys)
+        assert second_exit == 1
+        assert second["status"] == "blocked"
+        on_disk = json.loads(
+            (repo_root / "runs" / "run-1" / "implementation-report.repair-1.json").read_text(encoding="utf-8")
+        )
+        assert on_disk == _implementation_report_doc()
+
+    # 6. invalid repair_attempt values are rejected as a caller usage error ------------
+
+    @pytest.mark.parametrize("bad_value", [0, -1, "1", 1.5, True])
+    def test_invalid_repair_attempt_values_are_rejected(self, repo_root, capsys, bad_value) -> None:
+        _seed_scope_and_findings(repo_root)
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "promote_artifact", "run_id": "run-1", "phase": "implementation",
+                "doc": _implementation_report_doc(), "context_refs": {"findings": "runs/run-1/findings.json"},
+                "repair_attempt": bad_value,
+            },
+            capsys,
+        )
+        assert exit_code == 2
+        assert resp["status"] == "error"
+        assert list((repo_root / "runs" / "run-1").glob("implementation-report*")) == []
+
+    def test_repair_attempt_above_max_logic_repair_attempts_is_rejected(self, repo_root, capsys) -> None:
+        _seed_scope_and_findings(repo_root)
+        too_high = core.MAX_LOGIC_REPAIR_ATTEMPTS + 1
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "promote_artifact", "run_id": "run-1", "phase": "implementation",
+                "doc": _implementation_report_doc(), "context_refs": {"findings": "runs/run-1/findings.json"},
+                "repair_attempt": too_high,
+            },
+            capsys,
+        )
+        assert exit_code == 2
+        assert resp["status"] == "error"
+        assert not (repo_root / "runs" / "run-1" / f"implementation-report.repair-{too_high}.json").exists()
+
+    # 7. no arbitrary filename/path can be injected through repair_attempt ------------
+
+    def test_repair_attempt_cannot_carry_a_path_fragment(self, repo_root, capsys) -> None:
+        _seed_scope_and_findings(repo_root)
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "promote_artifact", "run_id": "run-1", "phase": "implementation",
+                "doc": _implementation_report_doc(), "context_refs": {"findings": "runs/run-1/findings.json"},
+                "repair_attempt": "../../etc/passwd",
+            },
+            capsys,
+        )
+        assert exit_code == 2
+        assert resp["status"] == "error"
+        assert list((repo_root / "runs" / "run-1").glob("implementation-report*")) == []
+        assert not (repo_root.parent / "etc" / "passwd").exists()
+
+    def test_promote_artifact_ignores_any_caller_supplied_filename_field(self, repo_root, capsys) -> None:
+        """op_promote_artifact's request contract has no filename/path field at all --
+        even a caller that tries to smuggle one through has it silently ignored, since
+        the write path is always derived from `phase` (+ `repair_attempt`), never from
+        request content."""
+        _seed_scope_and_findings(repo_root)
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "promote_artifact", "run_id": "run-1", "phase": "implementation",
+                "doc": _implementation_report_doc(), "context_refs": {"findings": "runs/run-1/findings.json"},
+                "filename": "../../outside.json",
+                "path": "../../outside.json",
+            },
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["path"] == "runs/run-1/implementation-report.json"
+        assert not (repo_root.parent / "outside.json").exists()
+
+    # 8. repair_attempt is rejected for phases with no repair-round artifact -----------
+
+    def test_repair_attempt_rejected_for_discovery(self, repo_root, capsys) -> None:
+        (repo_root / "demo-repo").mkdir()
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "promote_artifact", "run_id": "run-1", "phase": "discovery",
+                "expected_task_id": "T-1", "expected_run_id": "run-1", "target_repo_path": "demo-repo",
+                "doc": _SCOPE_BASE, "repair_attempt": 1,
+            },
+            capsys,
+        )
+        assert exit_code == 2
+        assert resp["status"] == "error"
+        assert not (repo_root / "runs" / "run-1" / "scope.json").exists()
+
+    def test_repair_attempt_rejected_for_research(self, repo_root, capsys) -> None:
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "promote_artifact", "run_id": "run-1", "phase": "research",
+                "doc": _findings_doc(), "repair_attempt": 1,
+            },
+            capsys,
+        )
+        assert exit_code == 2
+        assert resp["status"] == "error"
+        assert not (repo_root / "runs" / "run-1" / "findings.json").exists()
+
+    # 10. the repair-attempt bound is core.MAX_LOGIC_REPAIR_ATTEMPTS, not a second limit
+
+    def test_repair_bound_matches_core_constant(self, repo_root, capsys) -> None:
+        assert core.MAX_LOGIC_REPAIR_ATTEMPTS == 1
+        _seed_scope_and_findings(repo_root)
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "promote_artifact", "run_id": "run-1", "phase": "implementation",
+                "doc": _implementation_report_doc(), "context_refs": {"findings": "runs/run-1/findings.json"},
+                "repair_attempt": core.MAX_LOGIC_REPAIR_ATTEMPTS,
+            },
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["path"] == "runs/run-1/implementation-report.repair-1.json"
+
+    def test_live_cli_reuses_core_constant_directly(self) -> None:
+        """Proves live_cli.py's bound is literally core.MAX_LOGIC_REPAIR_ATTEMPTS, not an
+        independently-maintained copy of the number -- bumping the real policy constant
+        changes what this operation accepts too, with no second place to update."""
+        assert live_cli.core.MAX_LOGIC_REPAIR_ATTEMPTS is core.MAX_LOGIC_REPAIR_ATTEMPTS
+
+    # 12. an ordinary (non-repair) request is entirely unaffected by this extension ----
+
+    def test_omitting_repair_attempt_is_identical_to_prior_behavior(self, repo_root, capsys) -> None:
+        _seed_scope_and_findings(repo_root)
+        doc = _verification_report_doc()
+        exit_code, resp = _run_main(
+            repo_root,
+            {
+                "operation": "promote_artifact", "run_id": "run-1", "phase": "verification",
+                "doc": doc, "context_refs": {"scope": "runs/run-1/scope.json"},
+            },
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "promoted"
+        assert resp["path"] == "runs/run-1/verification-report.json"
+        assert not (repo_root / "runs" / "run-1" / "verification-report.repair-1.json").exists()
 
 
 # ---------------------------------------------------------------------------

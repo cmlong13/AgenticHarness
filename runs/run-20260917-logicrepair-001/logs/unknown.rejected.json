@@ -1,0 +1,12 @@
+{
+  "message_type": "command_rejected",
+  "task_id": null,
+  "run_id": null,
+  "command_id": null,
+  "command": null,
+  "working_directory": null,
+  "rejection_reason": "working_directory must not be absolute or drive-prefixed",
+  "rejection_category": "request_value_invalid",
+  "requested_command_id": "C-1",
+  "original_request_ref": "runs/run-20260917-logicrepair-001/requests/C-1.json"
+}

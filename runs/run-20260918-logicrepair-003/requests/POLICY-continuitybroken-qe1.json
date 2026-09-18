@@ -1,0 +1,11 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260918-logicrepair-003",
+  "kind": "continuity_broken",
+  "payload": {
+    "phase": "verification",
+    "dispatch_sequence": 1,
+    "agent_id": "a66f9405490d3a67b",
+    "description": "The first Quality Engineer dispatch (agent a66f9405490d3a67b) requested V-1 (attempt_requested for AC-1) but never received a real command_result from the orchestrator before it self-blocked -- its own final report states three consecutive out-of-protocol '[handback-send-enforce]' messages arrived instead, none matching the required command_result envelope, and it correctly rejected each per its own rejected_reply rule, self-blocking after the third rejection per quality-engineer.md's own bounded rejection rule. The orchestrator had not yet sent any command_result at the time this occurred -- this is a dispatch/session-transport interference from the underlying Agent/SendMessage tooling, not a protocol violation by the orchestrator or a genuine product/verification finding. Zero test-runner commands were ever executed and zero acceptance criteria were ever evaluated. This dispatch's own final 'blocked' report (schema-valid) is retained as honest evidence (attempts/verification-1.raw.txt) but is not promoted as this run's canonical verification-report.json, since it carries no genuine verification content to promote -- a fresh Quality Engineer instance is dispatched next to actually perform Verification, never presented as a continuation of this one."
+  }
+}

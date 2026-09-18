@@ -1,0 +1,154 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LOGICREPAIR-DEMO",
+  "run_id": "run-20260917-logicrepair-002",
+  "created_at": "2026-09-17T17:27:13Z",
+  "scope_ref": {
+    "path": "runs/run-20260917-logicrepair-002/scope.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "classify_dti's LOW-band boundary check (demo-repo/src/loanflow/risk_bands.py line 23) uses a strict less-than operator ('<') against thresholds.dti_low_max.basis_points, so a dti value exactly equal to dti_low_max evaluates that condition as False and does not return Band.LOW from this branch.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 22,
+          "end_line": 27,
+          "evidence_tier": "executable_code",
+          "excerpt": "def classify_dti(dti: Percentage, thresholds: Thresholds) -> Band:\n    if dti.basis_points < thresholds.dti_low_max.basis_points:\n        return Band.LOW\n    if dti.basis_points <= thresholds.dti_medium_max.basis_points:\n        return Band.MEDIUM\n    return Band.HIGH"
+        }
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "classify_ltv's LOW-band boundary check (demo-repo/src/loanflow/risk_bands.py line 31) uses the identical strict less-than operator ('<') against thresholds.ltv_low_max.basis_points, so an ltv value exactly equal to ltv_low_max evaluates that condition as False and does not return Band.LOW from this branch.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 30,
+          "end_line": 35,
+          "evidence_tier": "executable_code",
+          "excerpt": "def classify_ltv(ltv: Percentage, thresholds: Thresholds) -> Band:\n    if ltv.basis_points < thresholds.ltv_low_max.basis_points:\n        return Band.LOW\n    if ltv.basis_points <= thresholds.ltv_medium_max.basis_points:\n        return Band.MEDIUM\n    return Band.HIGH"
+        }
+      ]
+    },
+    {
+      "id": "F-3",
+      "claim": "demo-repo/tests/unit/test_risk_bands.py::test_dti_at_low_max_boundary_is_low asserts that classify_dti(default_thresholds.dti_low_max, default_thresholds) is Band.LOW -- i.e. it expects the exact dti_low_max value to be classified LOW.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 10,
+          "end_line": 11,
+          "evidence_tier": "test_assertion",
+          "excerpt": "def test_dti_at_low_max_boundary_is_low(default_thresholds) -> None:\n    assert classify_dti(default_thresholds.dti_low_max, default_thresholds) is Band.LOW"
+        }
+      ]
+    },
+    {
+      "id": "F-4",
+      "claim": "demo-repo/tests/unit/test_risk_bands.py::test_ltv_at_low_max_boundary_is_low asserts that classify_ltv(default_thresholds.ltv_low_max, default_thresholds) is Band.LOW -- i.e. it expects the exact ltv_low_max value to be classified LOW.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 28,
+          "end_line": 29,
+          "evidence_tier": "test_assertion",
+          "excerpt": "def test_ltv_at_low_max_boundary_is_low(default_thresholds) -> None:\n    assert classify_ltv(default_thresholds.ltv_low_max, default_thresholds) is Band.LOW"
+        }
+      ]
+    },
+    {
+      "id": "F-5",
+      "claim": "classify_dti's current code diverges from test_dti_at_low_max_boundary_is_low's expectation: at dti == dti_low_max, line 23's strict '<' condition is False by definition of equality, so the function does not take the 'return Band.LOW' branch on this input, contradicting the test's expectation of Band.LOW for that exact input.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 23,
+          "end_line": 24,
+          "evidence_tier": "executable_code",
+          "excerpt": "if dti.basis_points < thresholds.dti_low_max.basis_points:\n        return Band.LOW"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 10,
+          "end_line": 11,
+          "evidence_tier": "test_assertion",
+          "excerpt": "def test_dti_at_low_max_boundary_is_low(default_thresholds) -> None:\n    assert classify_dti(default_thresholds.dti_low_max, default_thresholds) is Band.LOW"
+        }
+      ]
+    },
+    {
+      "id": "F-6",
+      "claim": "classify_ltv's current code diverges from test_ltv_at_low_max_boundary_is_low's expectation in the identical way: at ltv == ltv_low_max, line 31's strict '<' condition is False, so the function does not return Band.LOW on this input, contradicting the test's expectation of Band.LOW.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 31,
+          "end_line": 32,
+          "evidence_tier": "executable_code",
+          "excerpt": "if ltv.basis_points < thresholds.ltv_low_max.basis_points:\n        return Band.LOW"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 28,
+          "end_line": 29,
+          "evidence_tier": "test_assertion",
+          "excerpt": "def test_ltv_at_low_max_boundary_is_low(default_thresholds) -> None:\n    assert classify_ltv(default_thresholds.ltv_low_max, default_thresholds) is Band.LOW"
+        }
+      ]
+    },
+    {
+      "id": "F-7",
+      "claim": "The established convention for '_max'-named boundary thresholds within this same file's classify_dti and classify_ltv functions is inclusive: the still-correct MEDIUM-band checks in both functions use '<=' against thresholds.dti_medium_max.basis_points / thresholds.ltv_medium_max.basis_points (lines 25 and 33), meaning a value exactly equal to a '_max' threshold belongs to the band that threshold caps. The regressed LOW checks (lines 23 and 31) use strict '<' instead, breaking this same in-file convention for the dti_low_max / ltv_low_max thresholds.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 23,
+          "end_line": 26,
+          "evidence_tier": "executable_code",
+          "excerpt": "if dti.basis_points < thresholds.dti_low_max.basis_points:\n        return Band.LOW\n    if dti.basis_points <= thresholds.dti_medium_max.basis_points:\n        return Band.MEDIUM"
+        },
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 31,
+          "end_line": 34,
+          "evidence_tier": "executable_code",
+          "excerpt": "if ltv.basis_points < thresholds.ltv_low_max.basis_points:\n        return Band.LOW\n    if ltv.basis_points <= thresholds.ltv_medium_max.basis_points:\n        return Band.MEDIUM"
+        }
+      ]
+    },
+    {
+      "id": "F-8",
+      "claim": "demo-repo/src/loanflow/risk_profile.py contains no independent DTI/LTV boundary-comparison logic of its own -- it only imports classify_dti and classify_ltv from risk_bands and calls them directly (dti_band = classify_dti(dti, thresholds); ltv_band = classify_ltv(ltv, thresholds)), then combines the returned Band enum values by a fixed weight table. Confirmed by reading the full body of build_risk_profile (the only function in the file that touches these two imports); no re-implementation of the '<'/'<=' comparison exists there. This confirms fixing the comparison operators inside risk_bands.py's classify_dti/classify_ltv requires no separate code change in risk_profile.py.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_profile.py",
+          "start_line": 12,
+          "end_line": 12,
+          "evidence_tier": "executable_code",
+          "excerpt": "from loanflow.risk_bands import Band, CreditBucket, classify_credit_score, classify_dti, classify_ltv"
+        },
+        {
+          "path": "demo-repo/src/loanflow/risk_profile.py",
+          "start_line": 35,
+          "end_line": 60,
+          "evidence_tier": "executable_code",
+          "excerpt": "def build_risk_profile(...):\n    dti = calculate_dti(...)\n    ltv = calculate_ltv(...)\n    dti_band = classify_dti(dti, thresholds)\n    ltv_band = classify_ltv(ltv, thresholds)\n    credit_bucket = classify_credit_score(credit_score)\n    combined_weight = max(...)\n    return RiskProfile(...)"
+        }
+      ]
+    }
+  ],
+  "open_questions": [
+    "This task's scope (N-2, constraints) calls for an actual implementation edit to risk_bands.py's classify_dti (and, after a same-run repair cycle, classify_ltv) -- correcting the LOW-boundary comparison from '<' back to '<='. That implementation step, and the TDD/verification command sequencing around it, is outside the Architect's Research-only role and is not performed or described here; it is left for the Engineer phase."
+  ]
+}

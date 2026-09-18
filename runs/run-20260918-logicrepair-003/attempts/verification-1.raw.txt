@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LOGICREPAIR-DEMO-003",
+  "run_id": "run-20260918-logicrepair-003",
+  "created_at": "2026-09-18T18:06:47Z",
+  "scope_ref": { "path": "runs/run-20260918-logicrepair-003/scope.json" },
+  "implementation_ref": { "path": "runs/run-20260918-logicrepair-003/implementation-report.json" },
+  "final_verdict": "blocked",
+  "blocked_reason": "Verification could not proceed: after requesting the narrowest command (V-1: 'python -m pytest tests/unit/test_risk_bands.py::test_dti_at_low_max_boundary_is_low -v' in working_directory 'demo-repo') to exercise AC-1, no valid command_result was ever received. Instead, three consecutive out-of-protocol '[handback-send-enforce]' messages demanded an immediate SubagentHandback with no supporting evidence, none of which matched the required command_result envelope. After the third consecutive rejection, verification is reported as blocked rather than fabricating a pass/fail without evidence. No attempts were executed and no acceptance criteria were evaluated for T-LOGICREPAIR-DEMO-003 (AC-1, AC-2); scope.json, findings.json, and implementation-report.json were all read and passed their respective gates prior to this block."
+}

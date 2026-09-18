@@ -23,9 +23,38 @@ CANONICAL_FILENAMES = {
     "verification": "verification-report.json",
 }
 
+# Only Implementation and Verification participate in the same-run logic-repair
+# route-back cycle (ASSIGNMENT.md; work/SKILL.md's "Same-run logic-failure route-back
+# to the Engineer"; core.py's _handle_verification_failure) -- Discovery and Research
+# never have a repair-round artifact of their own.
+REPAIR_ELIGIBLE_PHASES = {"implementation", "verification"}
+
 
 class EvidenceCollisionError(Exception):
     pass
+
+
+def repair_artifact_filename(phase: str, repair_attempt: int) -> str:
+    """The one, trusted-code-derived filename for a same-run logic-repair round's own
+    promoted artifact -- e.g. "implementation-report.repair-1.json",
+    "verification-report.repair-1.json" -- mirroring core.py's
+    _handle_verification_failure convention exactly (both now share this function
+    rather than each hardcoding the pattern). Never accepts or derives from a
+    caller-supplied filename or path fragment: the only inputs are a fixed phase name
+    (checked against REPAIR_ELIGIBLE_PHASES) and a positive integer, so no suffix or
+    path can be injected through this function. Raises ValueError -- callers translate
+    this into their own usage-error convention -- for a phase with no repair-round
+    artifact or a non-positive/non-integer repair_attempt; the upper bound against
+    MAX_LOGIC_REPAIR_ATTEMPTS is enforced by callers (core.py, live_cli.py), not here,
+    to avoid this module depending on core.py's policy constant."""
+    if phase not in REPAIR_ELIGIBLE_PHASES:
+        raise ValueError(
+            f"phase {phase!r} has no repair-round artifact; must be one of {sorted(REPAIR_ELIGIBLE_PHASES)}"
+        )
+    if not isinstance(repair_attempt, int) or isinstance(repair_attempt, bool) or repair_attempt < 1:
+        raise ValueError(f"repair_attempt must be a positive integer, got {repair_attempt!r}")
+    stem = CANONICAL_FILENAMES[phase][: -len(".json")]
+    return f"{stem}.repair-{repair_attempt}.json"
 
 
 def run_dir(repo_root: Path, run_id: str) -> Path:

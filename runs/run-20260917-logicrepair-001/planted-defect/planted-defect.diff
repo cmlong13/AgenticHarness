@@ -1,0 +1,22 @@
+diff --git a/demo-repo/src/loanflow/risk_bands.py b/demo-repo/src/loanflow/risk_bands.py
+index f59dc1d..4ece1ce 100644
+--- a/demo-repo/src/loanflow/risk_bands.py
++++ b/demo-repo/src/loanflow/risk_bands.py
+@@ -20,7 +20,7 @@ class Band(str, Enum):
+
+
+ def classify_dti(dti: Percentage, thresholds: Thresholds) -> Band:
+-    if dti.basis_points <= thresholds.dti_low_max.basis_points:
++    if dti.basis_points < thresholds.dti_low_max.basis_points:
+         return Band.LOW
+     if dti.basis_points <= thresholds.dti_medium_max.basis_points:
+         return Band.MEDIUM
+@@ -28,7 +28,7 @@ def classify_dti(dti: Percentage, thresholds: Thresholds) -> Band:
+
+
+ def classify_ltv(ltv: Percentage, thresholds: Thresholds) -> Band:
+-    if ltv.basis_points <= thresholds.ltv_low_max.basis_points:
++    if ltv.basis_points < thresholds.ltv_low_max.basis_points:
+         return Band.LOW
+     if ltv.basis_points <= thresholds.ltv_medium_max.basis_points:
+         return Band.MEDIUM

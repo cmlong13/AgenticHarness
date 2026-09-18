@@ -1,0 +1,5 @@
+{
+  "operation": "load_memory",
+  "run_id": "run-20260917-logicrepair-002",
+  "raw_prompt": "Retry of run-20260917-logicrepair-001 (same task T-LOGICREPAIR-DEMO), which ended implementation_blocked before any code change: the live Engineer's first pre-test command used an absolute working_directory, which the real test-runner Skill wrapper correctly rejected, halting the phase per protocol before any test ran. This attempt: same customer-reported bug (an applicant whose DTI sits exactly at the configured low-risk threshold is being classified as MEDIUM risk instead of LOW by loanflow.risk_bands.classify_dti), same controlled harness verification/route-back demonstration, transplanting run-20260805-latefee-005's proven technique onto demo-repo/src/loanflow/risk_bands.py."
+}

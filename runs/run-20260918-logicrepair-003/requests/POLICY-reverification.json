@@ -1,0 +1,10 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260918-logicrepair-003",
+  "kind": "re_verification",
+  "payload": {
+    "repair_attempt": 1,
+    "qe_handle": "af969b6b7bc0627f0",
+    "implementation_ref": "runs/run-20260918-logicrepair-003/implementation-report.repair-1.json"
+  }
+}

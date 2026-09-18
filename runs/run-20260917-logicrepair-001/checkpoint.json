@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LOGICREPAIR-DEMO",
+  "run_id": "run-20260917-logicrepair-001",
+  "target_repo_path": "demo-repo",
+  "updated_at": "2026-09-17T17:24:41Z",
+  "completed_phases": [
+    "discovery",
+    "research"
+  ],
+  "current_phase": "implementation",
+  "next_phase": "verification",
+  "artifact_refs": {
+    "discovery": "runs/run-20260917-logicrepair-001/scope.json",
+    "research": "runs/run-20260917-logicrepair-001/findings.json"
+  },
+  "blockers": [
+    {
+      "description": "Implementation blocked: the real test-runner Skill wrapper rejected the Engineer's C-1 pre-test command (absolute, drive-prefixed working_directory), which halts the staged protocol per work/SKILL.md's escalation rule. No implementation edit was ever made; demo-repo/src/loanflow/risk_bands.py remains in its planted-defect state.",
+      "phase": "implementation"
+    }
+  ],
+  "next_resume_action": "none: run terminated during implementation (Implementation blocked: the real test-runner Skill wrapper rejected the Engineer's C-1 pre-test command (absolute, drive-prefixed working_directory), which halts the staged protocol per work/SKILL.md's escalation rule. No implementation edit was ever made; demo-repo/src/loanflow/risk_bands.py remains in its planted-defect state.); not resumable",
+  "status": "failed"
+}

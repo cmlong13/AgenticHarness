@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LOGICREPAIR-DEMO-003",
+  "run_id": "run-20260918-logicrepair-003",
+  "target_repo_path": "demo-repo",
+  "updated_at": "2026-09-18T18:29:38Z",
+  "completed_phases": [
+    "discovery",
+    "research",
+    "implementation",
+    "verification"
+  ],
+  "current_phase": null,
+  "next_phase": null,
+  "artifact_refs": {
+    "discovery": "runs/run-20260918-logicrepair-003/scope.json",
+    "research": "runs/run-20260918-logicrepair-003/findings.json",
+    "implementation": "runs/run-20260918-logicrepair-003/implementation-report.repair-1.json",
+    "verification": "runs/run-20260918-logicrepair-003/verification-report.repair-1.json"
+  },
+  "blockers": [],
+  "next_resume_action": null,
+  "status": "complete"
+}

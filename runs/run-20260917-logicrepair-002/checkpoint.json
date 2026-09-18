@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LOGICREPAIR-DEMO",
+  "run_id": "run-20260917-logicrepair-002",
+  "target_repo_path": "demo-repo",
+  "updated_at": "2026-09-18T17:34:15Z",
+  "completed_phases": [
+    "discovery",
+    "research",
+    "implementation"
+  ],
+  "current_phase": "verification",
+  "next_phase": null,
+  "artifact_refs": {
+    "discovery": "runs/run-20260917-logicrepair-002/scope.json",
+    "research": "runs/run-20260917-logicrepair-002/findings.json",
+    "implementation": "runs/run-20260917-logicrepair-002/implementation-report.json"
+  },
+  "blockers": [
+    {
+      "description": "Verification genuinely found a logic_bug (classify_ltv's untouched LOW-boundary regression, verification-report.json final_verdict: fail) and genuinely routed back to the Engineer (repair_attempt 1, policy events engineer_route_back/logic_failure_detected). The Engineer made the source edit and passed its own repair-round TDD commands (C-3 pre-repair failing, C-4 post-repair passing), but the interrupted prior process ended before the Engineer's final repair-round report was ever retained/validated/promoted to implementation-report.repair-1.json, and that Engineer agent identity (aba77c47032a3db5d) is not resumable in this resumed process (confirmed via ListAgents: no reachable agents) -- a genuine broken-continuity failure (policy event continuity_broken) for the repair cycle, which work/SKILL.md documents as same-run/same-process by construction and never resumable across a process restart. A fresh Quality Engineer dispatch (agent aa65e121f341c4240, this resumed process's legitimate fresh dispatch for next_phase=verification) independently re-verified against the still-canonical, unrepaired implementation-report.json and correctly refused to certify AC-2 as passed despite a literal exit_code 0, because it detected the classify_ltv source change was undocumented and unattributed to any implementation report it was given (final_verdict: inconclusive, retained as attempts/verification-3.raw.txt, not promotable to the canonical verification-report.json path due to the pre-existing fail verdict already occupying it -- promote_artifact correctly refused to overwrite it). Net effect: the underlying demo-repo source and test suite are genuinely fully repaired (independently confirmed: both classify_dti and classify_ltv now use '<=', and the full test_risk_bands.py suite passes), but this run's own canonical evidence chain cannot honestly certify a clean pass through the documented route-back mechanism, because the repair round's own promotion step was never completed before the process that started it ended.",
+      "phase": "verification"
+    }
+  ],
+  "next_resume_action": "none: run terminated during verification (Verification genuinely found a logic_bug (classify_ltv's untouched LOW-boundary regression, verification-report.json final_verdict: fail) and genuinely routed back to the Engineer (repair_attempt 1, policy events engineer_route_back/logic_failure_detected). The Engineer made the source edit and passed its own repair-round TDD commands (C-3 pre-repair failing, C-4 post-repair passing), but the interrupted prior process ended before the Engineer's final repair-round report was ever retained/validated/promoted to implementation-report.repair-1.json, and that Engineer agent identity (aba77c47032a3db5d) is not resumable in this resumed process (confirmed via ListAgents: no reachable agents) -- a genuine broken-continuity failure (policy event continuity_broken) for the repair cycle, which work/SKILL.md documents as same-run/same-process by construction and never resumable across a process restart. A fresh Quality Engineer dispatch (agent aa65e121f341c4240, this resumed process's legitimate fresh dispatch for next_phase=verification) independently re-verified against the still-canonical, unrepaired implementation-report.json and correctly refused to certify AC-2 as passed despite a literal exit_code 0, because it detected the classify_ltv source change was undocumented and unattributed to any implementation report it was given (final_verdict: inconclusive, retained as attempts/verification-3.raw.txt, not promotable to the canonical verification-report.json path due to the pre-existing fail verdict already occupying it -- promote_artifact correctly refused to overwrite it). Net effect: the underlying demo-repo source and test suite are genuinely fully repaired (independently confirmed: both classify_dti and classify_ltv now use '<=', and the full test_risk_bands.py suite passes), but this run's own canonical evidence chain cannot honestly certify a clean pass through the documented route-back mechanism, because the repair round's own promotion step was never completed before the process that started it ended.); not resumable",
+  "status": "failed"
+}

@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "record_kind": "agent_usage",
+  "agent_id": "a66f9405490d3a67b",
+  "identity": {
+    "match_status": "matched",
+    "run_id": "run-20260918-logicrepair-003",
+    "task_id": "T-LOGICREPAIR-DEMO-003",
+    "phase": "verification",
+    "subagent_type": "quality-engineer",
+    "dispatch_sequence": 1,
+    "candidate_run_ids": [
+      "run-20260918-logicrepair-003"
+    ]
+  },
+  "source": {
+    "hook_event_name": "SubagentStop",
+    "agent_transcript_path": "C:\\Users\\caleb\\.claude\\projects\\C--Users-caleb-Documents-Projects-AgenticHarness\\9b4c43dc-220a-4d99-ae85-a18ebd183f3d\\subagents\\agent-a66f9405490d3a67b.jsonl",
+    "agent_type": "quality-engineer"
+  },
+  "captured_at": "2026-09-18T18:17:18Z",
+  "message_count": 24,
+  "models_seen": [
+    "claude-sonnet-5"
+  ],
+  "primary_model": "claude-sonnet-5",
+  "token_usage": {
+    "input_tokens": 48,
+    "output_tokens": 7811,
+    "cache_creation_input_tokens": 96583,
+    "cache_read_input_tokens": 540491,
+    "cache_creation_breakdown": {
+      "ephemeral_5m_input_tokens": 96583,
+      "ephemeral_1h_input_tokens": 0
+    }
+  },
+  "skipped_transcript_lines": [],
+  "cost": {
+    "priced": true,
+    "amount": "0.4277617",
+    "currency": "USD",
+    "reason": null,
+    "pricing_source": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "pricing_verified_date": "2026-08-14"
+  }
+}

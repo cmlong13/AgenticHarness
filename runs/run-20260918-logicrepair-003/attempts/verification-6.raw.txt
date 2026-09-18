@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LOGICREPAIR-DEMO-003",
+  "run_id": "run-20260918-logicrepair-003",
+  "created_at": "2026-09-18T18:06:47Z",
+  "scope_ref": { "path": "runs/run-20260918-logicrepair-003/scope.json" },
+  "implementation_ref": { "path": "runs/run-20260918-logicrepair-003/implementation-report.repair-1.json" },
+  "attempts": [
+    {
+      "id": "V-3",
+      "command": "python -m pytest tests/unit/test_risk_bands.py -v",
+      "exit_code": 0,
+      "classification": "pass",
+      "output_ref": "runs/run-20260918-logicrepair-003/logs/V-3.log",
+      "retried": false
+    }
+  ],
+  "retry_policy": { "max_retries": 2 },
+  "acceptance_criteria_results": [
+    {
+      "criteria_id": "AC-1",
+      "result": "passed",
+      "attempt_refs": ["V-3"],
+      "evidence_summary": "python -m pytest tests/unit/test_risk_bands.py -v (V-3) exited 0, re-confirming test_dti_at_low_max_boundary_is_low still passes with no regression after the repair round's separate classify_ltv edit."
+    },
+    {
+      "criteria_id": "AC-2",
+      "result": "passed",
+      "attempt_refs": ["V-3"],
+      "evidence_summary": "python -m pytest tests/unit/test_risk_bands.py -v (V-3), the full unmodified 8-test suite, exited 0. Direct read of demo-repo/src/loanflow/risk_bands.py confirms classify_ltv's LOW-boundary comparison at line 31 is now '<=' (matching the repair report's diff.repair-1.patch), resolving the logic_bug reported against V-2 in the prior verification pass. test_ltv_at_low_max_boundary_is_low and all other 7 tests now pass with zero regressions."
+    }
+  ],
+  "final_verdict": "pass",
+  "routed_back_to_engineer": { "routed": false }
+}

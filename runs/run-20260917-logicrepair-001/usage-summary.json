@@ -1,0 +1,129 @@
+{
+  "schema_version": "1.0",
+  "record_kind": "run_usage_summary",
+  "run_id": "run-20260917-logicrepair-001",
+  "generated_at": "2026-09-17T17:25:21Z",
+  "agents": [
+    {
+      "schema_version": "1.0",
+      "record_kind": "agent_usage",
+      "agent_id": "a791af9c6d867f5bf",
+      "identity": {
+        "match_status": "matched",
+        "run_id": "run-20260917-logicrepair-001",
+        "task_id": "T-LOGICREPAIR-DEMO",
+        "phase": "research",
+        "subagent_type": "architect",
+        "dispatch_sequence": 1,
+        "candidate_run_ids": [
+          "run-20260917-logicrepair-001"
+        ]
+      },
+      "source": {
+        "hook_event_name": "SubagentStop",
+        "agent_transcript_path": "C:\\Users\\caleb\\.claude\\projects\\C--Users-caleb-Documents-Projects-AgenticHarness\\a8489d9d-9fd3-43c0-92a5-6d9d877af99e\\subagents\\agent-a791af9c6d867f5bf.jsonl",
+        "agent_type": "architect"
+      },
+      "captured_at": "2026-09-17T17:05:52Z",
+      "message_count": 26,
+      "models_seen": [
+        "claude-sonnet-5"
+      ],
+      "primary_model": "claude-sonnet-5",
+      "token_usage": {
+        "input_tokens": 52,
+        "output_tokens": 15089,
+        "cache_creation_input_tokens": 107593,
+        "cache_read_input_tokens": 489860,
+        "cache_creation_breakdown": {
+          "ephemeral_5m_input_tokens": 107593,
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "skipped_transcript_lines": [],
+      "cost": {
+        "priced": true,
+        "amount": "0.5179485",
+        "currency": "USD",
+        "reason": null,
+        "pricing_source": "https://platform.claude.com/docs/en/about-claude/pricing",
+        "pricing_verified_date": "2026-08-14"
+      }
+    },
+    {
+      "schema_version": "1.0",
+      "record_kind": "agent_usage",
+      "agent_id": "abe70f4eef319978b",
+      "identity": {
+        "match_status": "matched",
+        "run_id": "run-20260917-logicrepair-001",
+        "task_id": "T-LOGICREPAIR-DEMO",
+        "phase": "implementation",
+        "subagent_type": "engineer",
+        "dispatch_sequence": 1,
+        "candidate_run_ids": [
+          "run-20260917-logicrepair-001"
+        ]
+      },
+      "source": {
+        "hook_event_name": "SubagentStop",
+        "agent_transcript_path": "C:\\Users\\caleb\\.claude\\projects\\C--Users-caleb-Documents-Projects-AgenticHarness\\a8489d9d-9fd3-43c0-92a5-6d9d877af99e\\subagents\\agent-abe70f4eef319978b.jsonl",
+        "agent_type": "engineer"
+      },
+      "captured_at": "2026-09-17T17:23:44Z",
+      "message_count": 21,
+      "models_seen": [
+        "claude-sonnet-5"
+      ],
+      "primary_model": "claude-sonnet-5",
+      "token_usage": {
+        "input_tokens": 42,
+        "output_tokens": 7632,
+        "cache_creation_input_tokens": 178826,
+        "cache_read_input_tokens": 448180,
+        "cache_creation_breakdown": {
+          "ephemeral_5m_input_tokens": 178826,
+          "ephemeral_1h_input_tokens": 0
+        }
+      },
+      "skipped_transcript_lines": [],
+      "cost": {
+        "priced": true,
+        "amount": "0.613105",
+        "currency": "USD",
+        "reason": null,
+        "pricing_source": "https://platform.claude.com/docs/en/about-claude/pricing",
+        "pricing_verified_date": "2026-08-14"
+      }
+    }
+  ],
+  "subagent_subtotal": {
+    "agent_count": 2,
+    "token_usage": {
+      "input_tokens": 94,
+      "output_tokens": 22721,
+      "cache_creation_input_tokens": 286419,
+      "cache_read_input_tokens": 938040,
+      "cache_creation_breakdown": {
+        "ephemeral_5m_input_tokens": 286419,
+        "ephemeral_1h_input_tokens": 0
+      }
+    },
+    "cost": {
+      "priced": true,
+      "amount": "1.1310535",
+      "currency": "USD",
+      "unpriced_agent_ids": [],
+      "note": "complete over captured agents"
+    }
+  },
+  "orchestrator": {
+    "status": "not_measured",
+    "reason": "The main orchestrator session's own token usage is not observable while this run's own artifacts are still being written -- the Stop hook that would reveal it fires only at the very end of the turn, after any run-summary this milestone writes. Not captured this milestone; see PROJECT_SPEC.md.",
+    "token_usage": null,
+    "cost": null
+  },
+  "coverage_status": "partial",
+  "full_pipeline_total": null,
+  "full_pipeline_total_reason": "orchestrator usage was not captured this milestone -- a subagent subtotal is never reported as the full pipeline cost"
+}

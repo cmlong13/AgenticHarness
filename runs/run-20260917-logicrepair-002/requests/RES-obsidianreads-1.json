@@ -1,0 +1,6 @@
+{
+  "operation": "retain_architect_obsidian_reads",
+  "run_id": "run-20260917-logicrepair-002",
+  "task_id": "T-LOGICREPAIR-DEMO",
+  "findings_ref": "runs/run-20260917-logicrepair-002/findings.json"
+}

@@ -1,0 +1,11 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260917-logicrepair-002",
+  "kind": "artifact_promotion_collision",
+  "payload": {
+    "phase": "verification",
+    "attempted_doc_ref": "runs/run-20260917-logicrepair-002/qe-raw-2-resume.json",
+    "existing_canonical_path": "runs/run-20260917-logicrepair-002/verification-report.json",
+    "reason": "The canonical verification-report.json already exists for this run, promoted by the interrupted prior process's own first-pass Verification (final_verdict: fail, routed_back_to_engineer: true). live_cli.py's promote_artifact operation has no distinctly-named-path parameter for the four canonical phase artifacts (evidence_io.CANONICAL_FILENAMES is a fixed phase->filename map with no override), so the 'verification-report.repair-1.json' convention work/SKILL.md's 'Same-run logic-failure route-back to the Engineer' section documents cannot actually be executed through the live bridge as currently implemented -- a genuine gap between the documented protocol and the live_cli.py implementation, discovered here rather than assumed. Per work/SKILL.md's 'Resuming an interrupted run' step 7, this collision is treated as a hard stop: the fresh Quality Engineer's own report (attempts/verification-3.raw.txt, final_verdict inconclusive) is retained as attempt evidence only, and the original verification-report.json remains this run's sole canonical Verification artifact, untouched."
+  }
+}

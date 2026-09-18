@@ -1,0 +1,8 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260917-logicrepair-002",
+  "kind": "qe_dispatch_input_incomplete",
+  "payload": {
+    "reason": "Orchestrator's initial dispatch prompt omitted path_validation, target_repo_path, and findings_ref -- a real orchestrator dispatch-composition mistake, not a Quality Engineer defect. The Quality Engineer correctly self-blocked at its own Step 1 precondition check rather than proceeding without a verifiable path-validation attestation; no test command was run and no evidence was fabricated. The same agent id (a233fa6540dee3e71) is being resumed with the complete Input, not replaced -- this is not a fresh dispatch."
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "task_id": "T-LOGICREPAIR-DEMO-003",
+  "run_id": "run-20260918-logicrepair-003",
+  "command_id": "ORCH-1",
+  "command": "python -m pytest tests/unit/test_risk_bands.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Orchestrator's own independent re-verification of the repair round's claimed pass, per work/SKILL.md Phase 4 -- never trust the Quality Engineer's word alone."
+}

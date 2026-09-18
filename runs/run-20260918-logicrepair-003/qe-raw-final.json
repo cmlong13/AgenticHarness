@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LOGICREPAIR-DEMO-003",
+  "run_id": "run-20260918-logicrepair-003",
+  "created_at": "2026-09-18T18:06:47Z",
+  "scope_ref": { "path": "runs/run-20260918-logicrepair-003/scope.json" },
+  "implementation_ref": { "path": "runs/run-20260918-logicrepair-003/implementation-report.json" },
+  "attempts": [
+    {
+      "id": "V-1",
+      "command": "python -m pytest tests/unit/test_risk_bands.py::test_dti_at_low_max_boundary_is_low -v",
+      "exit_code": 0,
+      "classification": "pass",
+      "output_ref": "runs/run-20260918-logicrepair-003/logs/V-1.log",
+      "retried": false
+    },
+    {
+      "id": "V-2",
+      "command": "python -m pytest tests/unit/test_risk_bands.py -v",
+      "exit_code": 1,
+      "classification": "logic_bug",
+      "output_ref": "runs/run-20260918-logicrepair-003/logs/V-2.log",
+      "retried": false
+    }
+  ],
+  "retry_policy": { "max_retries": 2 },
+  "acceptance_criteria_results": [
+    {
+      "criteria_id": "AC-1",
+      "result": "passed",
+      "attempt_refs": ["V-1"],
+      "evidence_summary": "python -m pytest tests/unit/test_risk_bands.py::test_dti_at_low_max_boundary_is_low -v (V-1) exited 0, confirming classify_dti's restored '<=' LOW-boundary comparison returns Band.LOW for the customer-reported case."
+    },
+    {
+      "criteria_id": "AC-2",
+      "result": "failed",
+      "attempt_refs": ["V-2"],
+      "evidence_summary": "python -m pytest tests/unit/test_risk_bands.py -v (V-2), the full unmodified 8-test suite, exited 1. This is a genuine, reproducible logic_bug: classify_ltv's LOW-boundary comparison at demo-repo/src/loanflow/risk_bands.py line 31 still uses strict '<' instead of '<=' (confirmed by direct read of the file), an identical untouched regression to the one fixed for classify_dti, so test_ltv_at_low_max_boundary_is_low deterministically fails. This matches the scope's disclosed expectation that AC-2 would genuinely fail on the first implementation pass."
+    }
+  ],
+  "final_verdict": "fail",
+  "routed_back_to_engineer": {
+    "routed": true,
+    "reason": "AC-2 failed via attempt V-2, classified logic_bug: the full test_risk_bands.py suite fails because classify_ltv's LOW-boundary comparison (demo-repo/src/loanflow/risk_bands.py line 31) still uses '<' instead of '<=', an identical untouched regression to the one already fixed for classify_dti in this first implementation pass. Per scope.json's disclosed design, the Engineer is authorized to also fix classify_ltv during a repair round."
+  }
+}

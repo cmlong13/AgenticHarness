@@ -1,0 +1,10 @@
+{
+  "operation": "promote_artifact",
+  "run_id": "run-20260918-logicrepair-003",
+  "phase": "implementation",
+  "doc_ref": "runs/run-20260918-logicrepair-003/engineer-raw-repair-1.json",
+  "context_refs": {
+    "findings": "runs/run-20260918-logicrepair-003/findings.json"
+  },
+  "repair_attempt": 1
+}

@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LOGICREPAIR-DEMO",
+  "run_id": "run-20260917-logicrepair-002",
+  "created_at": "2026-09-17T17:27:13Z",
+  "scope_ref": { "path": "runs/run-20260917-logicrepair-002/scope.json" },
+  "implementation_ref": { "path": "runs/run-20260917-logicrepair-002/implementation-report.json" },
+  "final_verdict": "blocked",
+  "blocked_reason": "The caller's path-validation attestation is missing: this dispatch supplied task_id, run_id, created_at, scope_ref, and implementation_ref, but no path_validation object (with validated_by=\"controlled_caller\" and symlink_escape_checked=true) and no target_repo_path or findings_ref.path were provided. Per Step 1 of my protocol, I must verify a present and true path_validation attestation before touching anything else, including reading scope.json -- I have no tool capable of independently confirming that any working_directory I might later request resolves inside the intended repository without such an attestation from the controlled caller, so I cannot proceed with any part of this verification, including the AC-1/AC-2 test execution requested in the task message."
+}

@@ -1,0 +1,7 @@
+{
+  "operation": "validate_scope",
+  "candidate_ref": "runs/run-20260917-logicrepair-002/scope-candidate.json",
+  "expected_task_id": "T-LOGICREPAIR-DEMO",
+  "expected_run_id": "run-20260917-logicrepair-002",
+  "target_repo_path": "demo-repo"
+}

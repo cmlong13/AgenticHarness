@@ -1,0 +1,17 @@
+{
+  "operation": "check_command_identity",
+  "request": {
+    "task_id": "T-LOGICREPAIR-DEMO",
+    "run_id": "run-20260917-logicrepair-002",
+    "command_id": "C-4",
+    "command": "python -m pytest tests/unit/test_risk_bands.py::test_ltv_at_low_max_boundary_is_low -v",
+    "working_directory": "demo-repo"
+  },
+  "result": {
+    "task_id": "T-LOGICREPAIR-DEMO",
+    "run_id": "run-20260917-logicrepair-002",
+    "command_id": "C-4",
+    "command": "python -m pytest tests/unit/test_risk_bands.py::test_ltv_at_low_max_boundary_is_low -v",
+    "working_directory": "demo-repo"
+  }
+}

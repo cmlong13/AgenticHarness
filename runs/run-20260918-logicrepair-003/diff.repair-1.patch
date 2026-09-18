@@ -1,0 +1,35 @@
+Cumulative diff for demo-repo/src/loanflow/risk_bands.py across BOTH edits in this run
+(the first pass's classify_dti fix, plus this repair round's classify_ltv fix),
+run-20260918-logicrepair-003. Reflects the file's state at the start of this run (the
+planted-defect regression, both LOW-boundary comparisons using '<') vs. its current state
+(both restored to '<=') -- which is now byte-identical to the original, pre-regression
+git HEAD (confirmed: `git diff` against HEAD for this file is now empty).
+
+--- a/demo-repo/src/loanflow/risk_bands.py (run start: planted-defect state)
++++ b/demo-repo/src/loanflow/risk_bands.py (current: fully restored)
+@@ -20,7 +20,7 @@ class Band(str, Enum):
+
+
+ def classify_dti(dti: Percentage, thresholds: Thresholds) -> Band:
+-    if dti.basis_points < thresholds.dti_low_max.basis_points:
++    if dti.basis_points <= thresholds.dti_low_max.basis_points:
+         return Band.LOW
+     if dti.basis_points <= thresholds.dti_medium_max.basis_points:
+         return Band.MEDIUM
+@@ -28,7 +28,7 @@ def classify_dti(dti: Percentage, thresholds: Thresholds) -> Band:
+
+
+ def classify_ltv(ltv: Percentage, thresholds: Thresholds) -> Band:
+-    if ltv.basis_points < thresholds.ltv_low_max.basis_points:
++    if ltv.basis_points <= thresholds.ltv_low_max.basis_points:
+         return Band.LOW
+     if ltv.basis_points <= thresholds.ltv_medium_max.basis_points:
+         return Band.MEDIUM
+
+Note on reconstruction method: this repair round's own edit (the second hunk above, to
+classify_ltv) exactly restores the original pre-regression line (a round trip: HEAD had
+'<=', the planted defect changed it to '<', this edit changed it back to '<='), so a
+literal `git diff` against HEAD does not show it either -- the working tree's
+risk_bands.py is now byte-identical to HEAD. The counts below (1 line added, 1 line
+removed) reflect this repair round's actual edit -- the file content immediately before
+this turn's edit vs. immediately after -- not a git-against-HEAD diff.

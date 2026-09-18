@@ -1,0 +1,23 @@
+{
+  "operation": "append_memory",
+  "run_id": "run-20260918-logicrepair-003",
+  "kind": "lesson",
+  "candidates": [
+    {
+      "id": "L-20260918-HANDBACK-ENFORCE-PHANTOM-MESSAGES",
+      "text": "When dispatching a staged subagent (Engineer/Quality Engineer) via the Agent/SendMessage tooling, a background '[handback-send-enforce]' mechanism can inject forced-handback messages into the agent's own turn sequence before the orchestrator's real reply arrives, causing the agent to correctly self-block per its own bounded-rejection rule even though neither the orchestrator nor the agent violated the documented protocol. Treat a resulting self-blocked report with zero real command evidence as a continuity_broken event (not a product/verification verdict), retain it honestly, and dispatch a genuinely fresh agent instance for that phase rather than trying to resume or promote the phantom-caused blocked report as canonical.",
+      "source_run_id": "run-20260918-logicrepair-003",
+      "evidence_ref": "runs/run-20260918-logicrepair-003/logs/policy-events.jsonl",
+      "date": "2026-09-18",
+      "tags": ["continuity", "dispatch", "verification", "tooling"]
+    },
+    {
+      "id": "L-20260918-CHECK-CORE-BEFORE-DESIGNING-LIVE-CLI-FEATURE",
+      "text": "Before designing a new mechanism for live_cli.py (the live orchestrator bridge), check whether harness/orchestrator/core.py's deterministic engine already solved the same problem -- it often has, since core.py is deterministically tested first and its own internal helpers (e.g. _validate_and_promote's filename override, driving the repair-round f'{stem}.repair-{n}.json' convention) can usually be extracted into a shared evidence_io.py function and reused by both, rather than inventing a parallel design. This closed the run-20260917-logicrepair-002 gap (FACT-20260918-PROMOTE-NO-REPAIR-PATH) cleanly: core.py already had the exact convention, live_cli.py just needed to expose it.",
+      "source_run_id": "run-20260918-logicrepair-003",
+      "evidence_ref": "runs/run-20260918-logicrepair-003/verification-report.repair-1.json",
+      "date": "2026-09-18",
+      "tags": ["architecture", "live_cli", "core", "reuse"]
+    }
+  ]
+}

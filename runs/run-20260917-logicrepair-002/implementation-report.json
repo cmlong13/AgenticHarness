@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LOGICREPAIR-DEMO",
+  "run_id": "run-20260917-logicrepair-002",
+  "created_at": "2026-09-17T17:27:13Z",
+  "scope_ref": {
+    "path": "runs/run-20260917-logicrepair-002/scope.json"
+  },
+  "findings_ref": {
+    "path": "runs/run-20260917-logicrepair-002/findings.json",
+    "finding_ids": [
+      "F-1",
+      "F-3",
+      "F-5",
+      "F-7"
+    ]
+  },
+  "minimal_change_rung": 2,
+  "minimal_change_rationale": "Reused the existing in-file convention (the MEDIUM-band checks already use '<=' for '_max'-named thresholds, per finding F-7) by changing classify_dti's LOW-band comparison from '<' to '<=' -- a single operator restoration, no new code, no refactor, no new abstraction, and classify_ltv/test_risk_bands.py were left untouched per this pass's scope.",
+  "changed_files": [
+    {
+      "path": "demo-repo/src/loanflow/risk_bands.py",
+      "change_type": "modified",
+      "lines_added": 1,
+      "lines_removed": 1
+    }
+  ],
+  "diff_ref": "runs/run-20260917-logicrepair-002/diff.patch",
+  "commands": [
+    {
+      "id": "C-1",
+      "stage": "pre_implementation",
+      "command": "python -m pytest tests/unit/test_risk_bands.py::test_dti_at_low_max_boundary_is_low -v",
+      "exit_code": 1,
+      "output_ref": "runs/run-20260917-logicrepair-002/logs/C-1.log"
+    },
+    {
+      "id": "C-2",
+      "stage": "post_implementation",
+      "command": "python -m pytest tests/unit/test_risk_bands.py::test_dti_at_low_max_boundary_is_low -v",
+      "exit_code": 0,
+      "output_ref": "runs/run-20260917-logicrepair-002/logs/C-2.log"
+    }
+  ],
+  "test_first_evidence": {
+    "pre_implementation_command_id": "C-1",
+    "post_implementation_command_id": "C-2"
+  },
+  "tests": [
+    {
+      "test_file": "demo-repo/tests/unit/test_risk_bands.py",
+      "test_name": "test_dti_at_low_max_boundary_is_low",
+      "status": "modified"
+    }
+  ],
+  "dependency_changes": [],
+  "status": "ready_for_verification"
+}

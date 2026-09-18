@@ -1,0 +1,31 @@
+{
+  "operation": "append_memory",
+  "run_id": "run-20260917-logicrepair-002",
+  "kind": "lesson",
+  "candidates": [
+    {
+      "id": "L-20260918-CHECKPOINT-UNDERSTATES-PROGRESS",
+      "text": "A checkpoint.json's own next_resume_action (e.g. 'dispatch the verification phase') can understate real prior progress: checkpoints are only written at fixed progress-boundary points (after a phase's canonical artifact promotes), never after every staged turn or mid-route-back-cycle. Before resuming a run, inspect the full retained evidence directory (attempts/, logs/, requests/, policy-events.jsonl) rather than trusting the checkpoint's own narrative of what has already been attempted -- run-20260917-logicrepair-002's checkpoint said Verification was untouched, but real retained evidence showed a full first-pass Verification (fail), a genuine route-back, and a partially-completed Engineer repair had already happened before the process that wrote that checkpoint was interrupted.",
+      "source_run_id": "run-20260917-logicrepair-002",
+      "evidence_ref": "runs/run-20260917-logicrepair-002/logs/policy-events.jsonl",
+      "date": "2026-09-18",
+      "tags": ["resume", "checkpoint", "evidence-audit"]
+    },
+    {
+      "id": "L-20260918-REPAIR-CYCLE-NOT-RESUMABLE-ACROSS-PROCESS",
+      "text": "A same-run logic-repair route-back cycle is same-process by construction (work/SKILL.md: 'never itself resumed across a process restart'). If the process that started a repair cycle (post-verification-fail route-back to the Engineer) is interrupted before the Engineer's repair-round report is retained/validated/promoted, that cycle cannot be closed by any later resumed process: the orphaned Engineer agent identity is not resumable, and Implementation cannot be redispatched once it is already in a checkpoint's completed_phases. The correct, honest classification is a genuine continuity_broken terminal failure for that repair cycle -- never a fresh Engineer redispatch disguised as a continuation, and never silently treating the underlying source's already-fixed state as equivalent to a closed evidence chain, even when independent re-testing shows the code and full test suite are genuinely green.",
+      "source_run_id": "run-20260917-logicrepair-002",
+      "evidence_ref": "runs/run-20260917-logicrepair-002/logs/policy-events.jsonl",
+      "date": "2026-09-18",
+      "tags": ["route-back", "continuity", "resume", "repair-cycle"]
+    },
+    {
+      "id": "L-20260918-FRESH-DISPATCH-COMMAND-ID-COLLISION",
+      "text": "When a checkpoint-resumed run dispatches a fresh subagent instance for a phase that a prior, interrupted process already made real (but uncheckpointed) progress on, the fresh agent's own command_id numbering restarts from its own examples (e.g. 'V-1') and can collide with that prior process's already-retained request/log evidence for the same command_id. The test-runner wrapper requires the request filename to exactly equal the command_id (no collision-avoidance suffix trick works), so the orchestrator must explicitly instruct the fresh agent to continue the run's real command_id sequence (e.g. start at 'V-3' when 'V-1'/'V-2' are already retained) rather than reusing its own default numbering, in order to avoid overwriting existing evidence.",
+      "source_run_id": "run-20260917-logicrepair-002",
+      "evidence_ref": "runs/run-20260917-logicrepair-002/logs/policy-events.jsonl",
+      "date": "2026-09-18",
+      "tags": ["resume", "command-grammar", "test-runner", "evidence-retention"]
+    }
+  ]
+}

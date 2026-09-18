@@ -1,0 +1,21 @@
+{
+  "task_id": "T-LOGICREPAIR-DEMO-003",
+  "run_id": "run-20260918-logicrepair-003",
+  "connector": "filesystem_vault",
+  "attempted_at": "2026-09-18T18:31:00Z",
+  "note_name": "run-summary-run-20260918-logicrepair-003.md",
+  "destination": {
+    "configured": false,
+    "vault_path": null,
+    "summary_dir": null,
+    "note_relpath": null,
+    "raw_env_value": null
+  },
+  "content_bytes": 3950,
+  "status": "connector_unavailable",
+  "note_relpath": "run-summary-run-20260918-logicrepair-003.md",
+  "reason": "no Obsidian vault is configured in this environment (OBSIDIAN_VAULT_PATH is not set)",
+  "absolute_path": null,
+  "content_sha256": null,
+  "bytes_written": null
+}

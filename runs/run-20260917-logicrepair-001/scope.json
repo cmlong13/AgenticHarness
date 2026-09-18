@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LOGICREPAIR-DEMO",
+  "run_id": "run-20260917-logicrepair-001",
+  "created_at": "2026-09-17T16:59:57Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "Customer-reported bug (controlled harness demonstration T-LOGICREPAIR-DEMO): an applicant whose DTI sits exactly at the configured low-risk threshold is being classified as MEDIUM risk instead of LOW by loanflow.risk_bands.classify_dti, triggering unnecessary manual review. Fix the regression in classify_dti's low-boundary comparison. This is a controlled, fully disclosed harness verification/route-back demonstration, transplanting the same technique run-20260805-latefee-005 used for late_fee_tier.py onto demo-repo/src/loanflow/risk_bands.py per demo-repo/README.md's own pre-designated 'Future demonstration readiness' plan (item 1: a boundary-comparison change in risk_bands.py classify_dti/classify_ltv). The customer report and this ticket's acceptance criteria (AC-1) cover only the specific DTI low-boundary symptom; a broader acceptance criterion (AC-2) requires the full pre-existing demo-repo/tests/unit/test_risk_bands.py suite to pass with zero regressions -- that suite also independently and correctly pins classify_ltv's own identical low-boundary comparison (test_ltv_at_low_max_boundary_is_low), which the same regression separately and independently affects. AC-2 is disclosed to be not expected to pass on the first implementation pass, which is scoped narrowly to the reported DTI symptom; Verification is expected to genuinely fail AC-2 and trigger the harness's bounded same-run logic-repair loop, at which point the repair pass will also correct classify_ltv."
+  },
+  "objective": "This is a controlled, fully disclosed harness milestone (T-LOGICREPAIR-DEMO) proving the harness's real verification/failure-classification and same-run Quality-Engineer logic-failure route-back behavior against a genuinely planted, deterministic logic defect in demo-repo/src/loanflow/risk_bands.py -- the exact module demo-repo/README.md's own 'Future demonstration readiness' section (item 1) pre-designates for this purpose ('a boundary-comparison change in risk_bands.py (classify_dti / classify_ltv)'). A real regression was planted immediately before this run started (independently confirmed: demo-repo/tests/unit/test_risk_bands.py -- pre-existing and unmodified for this task -- currently shows exactly 2 genuine failures out of 8 collected in that file, and exactly 2 failures out of 108 collected across the whole demo-repo suite, all other tests passing; see runs/run-20260917-logicrepair-001/planted-defect/ for the diff and the pre-pipeline failing-command evidence): both classify_dti and classify_ltv had their LOW-band boundary comparison changed from '<=' to '<', so an applicant exactly at dti_low_max or ltv_low_max is now misclassified as MEDIUM instead of LOW. The customer-facing bug report names only the DTI symptom. The first implementation pass is scoped to fix only the reported classify_dti regression, verified narrowly (AC-1); the full, pre-existing test_risk_bands.py suite (AC-2) is the real, binding, undiminished regression bar and is disclosed here to be expected to still fail after the first pass, because the identical classify_ltv regression is not yet addressed -- this is intentional and transparent, exactly mirroring how run-20260805-latefee-005 (task T-LATEFEE2) proved the same route-back loop for late_fee_tier.py, so Verification can genuinely fail for real and the harness's bounded same-run logic-repair loop can be exercised live, end to end, against real dispatched agents and real test execution -- never a fabricated or hand-written failure log.",
+  "in_scope": [
+    "demo-repo/src/loanflow/risk_bands.py",
+    "demo-repo/tests/unit/test_risk_bands.py"
+  ],
+  "out_of_scope": [
+    "demo-repo/src/loanflow/dti.py",
+    "demo-repo/src/loanflow/collateral.py",
+    "demo-repo/src/loanflow/config.py",
+    "demo-repo/src/loanflow/underwriting_rules.py",
+    "demo-repo/src/loanflow/underwriting_engine.py",
+    "demo-repo/src/loanflow/cli.py",
+    "demo-repo/src/loanflow/pipeline.py"
+  ],
+  "constraints": [
+    "This is a controlled, fully disclosed harness demonstration task (T-LOGICREPAIR-DEMO) of the same-run Quality-Engineer logic-failure route-back loop, per ASSIGNMENT.md's acceptance criteria and PROJECT_SPEC.md's own documented, still-open live-proof gap.",
+    "Do not modify demo-repo/tests/unit/test_risk_bands.py -- it is a pre-existing, already-correct regression fixture; its assertions (all 8, including test_ltv_at_low_max_boundary_is_low) define the real, unweakened acceptance bar for this task, not just the narrowly-reported DTI symptom.",
+    "For this FIRST implementation pass, fix only the specific reported classify_dti low-boundary regression, using the narrowest command that validates that specific fix (e.g. a single-test pytest -k selection or the equivalent) as your own TDD/verification command -- do not preemptively run or fix against the full test_risk_bands.py file in this first pass. This is intentional and disclosed: it is expected that Verification's independent, broader check against the full file will still fail on classify_ltv's identical regression, which is not yet in scope for this first pass, and that the resumed Engineer will be explicitly authorized and directed to also fix classify_ltv during the repair round that follows a genuine Verification failure.",
+    "Standard library only; no new dependencies.",
+    "Minimal-change ladder: the fix is a single comparison-operator correction per function, restoring the pre-regression '<=' behavior -- no rewrite, no refactor, no new abstraction.",
+    "Protected Paths are unaffected by this task (risk_bands.py and test_risk_bands.py are not Protected Paths)."
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "loanflow.risk_bands.classify_dti(dti_low_max, thresholds) returns Band.LOW (the specific customer-reported case), verified narrowly by demo-repo/tests/unit/test_risk_bands.py::test_dti_at_low_max_boundary_is_low. This criterion is expected to pass on the first implementation pass."
+    },
+    {
+      "id": "AC-2",
+      "description": "The full, pre-existing demo-repo/tests/unit/test_risk_bands.py suite (all 8 tests, unmodified) passes with zero regressions -- including test_ltv_at_low_max_boundary_is_low, which independently pins classify_ltv's identical LOW-boundary comparison. Per this task's disclosed constraints, this criterion is NOT expected to pass on the first implementation pass (classify_ltv's matching regression is deliberately out of the first pass's narrow fix target) -- it is expected to be satisfied only after a same-run repair cycle following a genuine Verification failure."
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-1",
+      "description": "Research the current, regressed behavior of classify_dti and classify_ltv in demo-repo/src/loanflow/risk_bands.py, cite the exact defective comparison line(s), confirm the pre-regression convention via git history/adjacent comparisons in the same file, and confirm demo-repo/tests/unit/test_risk_bands.py's existing coverage for both boundaries.",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-2",
+      "description": "Implement the minimal, TDD-first correction to classify_dti's LOW-boundary comparison only, per this task's disclosed first-pass scope.",
+      "phase": "implementation",
+      "depends_on": [
+        "N-1"
+      ]
+    },
+    {
+      "id": "N-3",
+      "description": "Verify AC-1 (the narrow, reported-symptom case) and AC-2 (the full pre-existing regression suite) independently; expect AC-2 to genuinely fail on this first pass (classify_ltv's identical, untouched regression) and trigger the harness's same-run logic-repair loop, after which the repair round also corrects classify_ltv and both criteria pass.",
+      "phase": "verification",
+      "depends_on": [
+        "N-2"
+      ]
+    }
+  ],
+  "status": "approved"
+}

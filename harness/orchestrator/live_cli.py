@@ -50,6 +50,7 @@ from harness.evidence import (
 from . import (
     checkpoint,
     connector_router,
+    core,
     discovery,
     evidence_io,
     github,
@@ -297,7 +298,27 @@ def op_promote_artifact(req: dict) -> dict:
     promote something invalid on its own -- callers are not trusted to have
     remembered to validate first. Covers all four canonical phases
     (discovery/research/implementation/verification); the canonical filename
-    is looked up from evidence_io.CANONICAL_FILENAMES, never re-derived here."""
+    is looked up from evidence_io.CANONICAL_FILENAMES, never re-derived here.
+
+    Optional `repair_attempt` (a positive integer) promotes to the same-run
+    logic-repair round's own distinctly-named artifact instead -- e.g.
+    "implementation-report.repair-1.json" -- mirroring core.py's
+    _handle_verification_failure, which already exercises this exact mechanism
+    against the deterministic AgentAdapter/TestRunnerAdapter fakes
+    (tests/test_orchestrator_core.py, tests/test_route_back_protocol.py). The
+    filename is derived entirely by evidence_io.repair_artifact_filename from the
+    already-validated `phase` and this integer -- never from a caller-supplied
+    filename or path fragment, so no suffix or path can be injected here. Valid
+    only for `phase in evidence_io.REPAIR_ELIGIBLE_PHASES` ("implementation"/
+    "verification" -- Discovery and Research never have a repair-round artifact)
+    and only for `1 <= repair_attempt <= core.MAX_LOGIC_REPAIR_ATTEMPTS` -- the
+    same bound core.py's route-back loop itself enforces, not a second,
+    independently-maintained limit. The existing collision guard on
+    evidence_io.promote_canonical applies identically to a repair-round filename,
+    so a second promotion to the same repair attempt's artifact is rejected
+    exactly like any other collision, and the original (pre-repair) canonical
+    artifact is never touched by this path -- omitting `repair_attempt` keeps the
+    prior, unchanged behavior exactly."""
     run_id = _require_str(req, "run_id")
     phase = _require_str(req, "phase")
     doc = _get_doc(req, "doc")
@@ -318,9 +339,27 @@ def op_promote_artifact(req: dict) -> dict:
     if errors:
         return {"operation": "promote_artifact", "status": "invalid", "errors": errors}
 
+    repair_attempt = req.get("repair_attempt")
+    if repair_attempt is None:
+        filename = evidence_io.CANONICAL_FILENAMES[phase]
+    else:
+        if phase not in evidence_io.REPAIR_ELIGIBLE_PHASES:
+            raise LiveCliUsageError(
+                f"'repair_attempt' is only valid for phase in {sorted(evidence_io.REPAIR_ELIGIBLE_PHASES)}, "
+                f"got phase {phase!r}"
+            )
+        if not isinstance(repair_attempt, int) or isinstance(repair_attempt, bool):
+            raise LiveCliUsageError(f"'repair_attempt' must be an integer, got {repair_attempt!r}")
+        if not (1 <= repair_attempt <= core.MAX_LOGIC_REPAIR_ATTEMPTS):
+            raise LiveCliUsageError(
+                f"'repair_attempt' must be between 1 and {core.MAX_LOGIC_REPAIR_ATTEMPTS} "
+                f"(core.MAX_LOGIC_REPAIR_ATTEMPTS, the same bound core.py's route-back loop enforces), "
+                f"got {repair_attempt!r}"
+            )
+        filename = evidence_io.repair_artifact_filename(phase, repair_attempt)
+
     run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
     evidence_io.ensure_run_dirs(run_directory)
-    filename = evidence_io.CANONICAL_FILENAMES[phase]
     try:
         path = evidence_io.promote_canonical(run_directory, filename, doc)
     except evidence_io.EvidenceCollisionError as exc:

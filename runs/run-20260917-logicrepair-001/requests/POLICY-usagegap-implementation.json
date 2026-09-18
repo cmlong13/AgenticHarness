@@ -1,0 +1,11 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260917-logicrepair-001",
+  "kind": "usage_accounting_gap",
+  "payload": {
+    "phase": "implementation",
+    "agent_id": "abe70f4eef319978b",
+    "status": "no_quarantine_record",
+    "reason": "no_quarantine_record"
+  }
+}

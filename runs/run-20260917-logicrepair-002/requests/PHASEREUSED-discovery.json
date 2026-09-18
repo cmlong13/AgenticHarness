@@ -1,0 +1,9 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260917-logicrepair-002",
+  "kind": "phase_reused",
+  "payload": {
+    "phase": "discovery",
+    "artifact_ref": "runs/run-20260917-logicrepair-002/scope.json"
+  }
+}

@@ -1,0 +1,22 @@
+Reconstructed diff for this Engineer's own edit to demo-repo/src/loanflow/risk_bands.py
+(classify_dti's LOW-boundary comparison only), run-20260918-logicrepair-003.
+
+Note on reconstruction method: a literal `git diff` against the original pre-regression
+HEAD does not show this edit, because it exactly restores the original line (a round
+trip: HEAD had '<=', the planted defect changed it to '<', and this edit changed it back
+to '<='), while classify_ltv's still-untouched, separately-planted regression on the
+same-shaped line remains visible in `git diff` against HEAD. The counts below
+(1 line added, 1 line removed) reflect this Engineer's actual edit -- the file content
+immediately before this turn's edit vs. immediately after -- not a git-against-HEAD diff.
+
+--- a/demo-repo/src/loanflow/risk_bands.py (before this Engineer's edit, run start state)
++++ b/demo-repo/src/loanflow/risk_bands.py (after this Engineer's edit)
+@@ -20,7 +20,7 @@ class Band(str, Enum):
+
+
+ def classify_dti(dti: Percentage, thresholds: Thresholds) -> Band:
+-    if dti.basis_points < thresholds.dti_low_max.basis_points:
++    if dti.basis_points <= thresholds.dti_low_max.basis_points:
+         return Band.LOW
+     if dti.basis_points <= thresholds.dti_medium_max.basis_points:
+         return Band.MEDIUM

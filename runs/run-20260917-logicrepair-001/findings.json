@@ -1,0 +1,172 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-LOGICREPAIR-DEMO",
+  "run_id": "run-20260917-logicrepair-001",
+  "created_at": "2026-09-17T16:59:57Z",
+  "scope_ref": {
+    "path": "runs/run-20260917-logicrepair-001/scope.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "classify_dti's LOW-band boundary comparison currently uses the strict '<' operator against thresholds.dti_low_max.basis_points, so a dti value exactly equal to dti_low_max does NOT satisfy the LOW branch and falls through to the MEDIUM check.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 22,
+          "end_line": 27,
+          "evidence_tier": "executable_code",
+          "excerpt": "def classify_dti(dti: Percentage, thresholds: Thresholds) -> Band:\n    if dti.basis_points < thresholds.dti_low_max.basis_points:\n        return Band.LOW\n    if dti.basis_points <= thresholds.dti_medium_max.basis_points:\n        return Band.MEDIUM\n    return Band.HIGH"
+        }
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "classify_ltv's LOW-band boundary comparison currently uses the strict '<' operator against thresholds.ltv_low_max.basis_points, so an ltv value exactly equal to ltv_low_max does NOT satisfy the LOW branch and falls through to the MEDIUM check.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 30,
+          "end_line": 35,
+          "evidence_tier": "executable_code",
+          "excerpt": "def classify_ltv(ltv: Percentage, thresholds: Thresholds) -> Band:\n    if ltv.basis_points < thresholds.ltv_low_max.basis_points:\n        return Band.LOW\n    if ltv.basis_points <= thresholds.ltv_medium_max.basis_points:\n        return Band.MEDIUM\n    return Band.HIGH"
+        }
+      ]
+    },
+    {
+      "id": "F-3",
+      "claim": "demo-repo/tests/unit/test_risk_bands.py::test_dti_at_low_max_boundary_is_low (lines 10-11) asserts classify_dti(default_thresholds.dti_low_max, default_thresholds) is Band.LOW -- i.e. it expects the boundary value to be inclusive of LOW. The current code (F-1) diverges from this: it returns Band.MEDIUM for that exact input, and the test genuinely fails against the current code.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 10,
+          "end_line": 11,
+          "evidence_tier": "test_assertion",
+          "excerpt": "def test_dti_at_low_max_boundary_is_low(default_thresholds) -> None:\n    assert classify_dti(default_thresholds.dti_low_max, default_thresholds) is Band.LOW"
+        },
+        {
+          "path": "runs/run-20260917-logicrepair-001/planted-defect/baseline-failure.log",
+          "start_line": 18,
+          "end_line": 29,
+          "evidence_tier": "test_assertion",
+          "excerpt": "test_dti_at_low_max_boundary_is_low ... AssertionError: assert <Band.MEDIUM: 'medium'> is <Band.LOW: 'low'> ... classify_dti(Percentage(basis_points=3600), ...dti_low_max=Percentage(basis_points=3600)...)"
+        }
+      ]
+    },
+    {
+      "id": "F-4",
+      "claim": "demo-repo/tests/unit/test_risk_bands.py::test_ltv_at_low_max_boundary_is_low (lines 28-29) asserts classify_ltv(default_thresholds.ltv_low_max, default_thresholds) is Band.LOW. The current code (F-2) diverges from this: it returns Band.MEDIUM for that exact input, and the test genuinely fails against the current code.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 28,
+          "end_line": 29,
+          "evidence_tier": "test_assertion",
+          "excerpt": "def test_ltv_at_low_max_boundary_is_low(default_thresholds) -> None:\n    assert classify_ltv(default_thresholds.ltv_low_max, default_thresholds) is Band.LOW"
+        },
+        {
+          "path": "runs/run-20260917-logicrepair-001/planted-defect/baseline-failure.log",
+          "start_line": 30,
+          "end_line": 41,
+          "evidence_tier": "test_assertion",
+          "excerpt": "test_ltv_at_low_max_boundary_is_low ... AssertionError: assert <Band.MEDIUM: 'medium'> is <Band.LOW: 'low'> ... classify_ltv(Percentage(basis_points=8000), ...ltv_low_max=Percentage(basis_points=8000)...)"
+        }
+      ]
+    },
+    {
+      "id": "F-5",
+      "claim": "The established convention within classify_dti and classify_ltv themselves (their own MEDIUM-boundary comparisons, which are not regressed) is: a value exactly equal to a band's own upper threshold belongs to that (lower-numbered) band, expressed with the '<=' operator against that threshold. This is confirmed both by the current, correct MEDIUM-band lines in the same functions and by the pre-regression diff, which shows the LOW-band comparisons originally used '<=' in exactly the same style before being changed to '<'.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 25,
+          "end_line": 25,
+          "evidence_tier": "executable_code",
+          "excerpt": "if dti.basis_points <= thresholds.dti_medium_max.basis_points:"
+        },
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 33,
+          "end_line": 33,
+          "evidence_tier": "executable_code",
+          "excerpt": "if ltv.basis_points <= thresholds.ltv_medium_max.basis_points:"
+        },
+        {
+          "path": "runs/run-20260917-logicrepair-001/planted-defect/planted-defect.diff",
+          "start_line": 8,
+          "end_line": 20,
+          "evidence_tier": "metadata",
+          "excerpt": "-    if dti.basis_points <= thresholds.dti_low_max.basis_points:\n+    if dti.basis_points < thresholds.dti_low_max.basis_points:\n ...\n-    if ltv.basis_points <= thresholds.ltv_low_max.basis_points:\n+    if ltv.basis_points < thresholds.ltv_low_max.basis_points:"
+        }
+      ]
+    },
+    {
+      "id": "F-6",
+      "claim": "classify_credit_score, in the same file, follows a different (but internally consistent) boundary style from classify_dti/classify_ltv: it uses strict '<' comparisons at each ascending threshold (300<=score<=850 validated first; then score<580 POOR, score<670 FAIR, score<740 GOOD, else EXCELLENT), under which a boundary value (e.g. exactly 580 or 670 or 740) belongs to the NEXT/higher bucket rather than the lower one. This is the opposite inclusion direction from classify_dti/classify_ltv's own MEDIUM-boundary convention (F-5), so classify_credit_score is not the correct model to copy for the LOW-boundary comparisons in classify_dti/classify_ltv -- the correct model is those two functions' own existing MEDIUM-boundary lines (F-5).",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 45,
+          "end_line": 54,
+          "evidence_tier": "executable_code",
+          "excerpt": "def classify_credit_score(score: int) -> CreditBucket:\n    if not (300 <= score <= 850):\n        raise ValidationError(...)\n    if score < 580:\n        return CreditBucket.POOR\n    if score < 670:\n        return CreditBucket.FAIR\n    if score < 740:\n        return CreditBucket.GOOD\n    return CreditBucket.EXCELLENT"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 37,
+          "end_line": 44,
+          "evidence_tier": "test_assertion",
+          "excerpt": "boundary_cases = {579: POOR, 580: FAIR, 669: FAIR, 670: GOOD, 739: GOOD, 740: EXCELLENT}"
+        }
+      ]
+    },
+    {
+      "id": "F-7",
+      "claim": "demo-repo/src/loanflow/risk_profile.py's build_risk_profile() calls classify_dti and classify_ltv directly and folds their returned Band values into the aggregate overall_band via a weight table, so it depends on classify_dti's/classify_ltv's exact boundary behavior. risk_profile.py is not listed in this task's in_scope (only risk_bands.py and test_risk_bands.py are) and is not listed in out_of_scope either.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_profile.py",
+          "start_line": 44,
+          "end_line": 51,
+          "evidence_tier": "executable_code",
+          "excerpt": "dti_band = classify_dti(dti, thresholds)\n    ltv_band = classify_ltv(ltv, thresholds)\n    credit_bucket = classify_credit_score(credit_score)\n    combined_weight = max(_BAND_WEIGHT[dti_band], _BAND_WEIGHT[ltv_band], _BUCKET_WEIGHT[credit_bucket])"
+        }
+      ]
+    },
+    {
+      "id": "F-8",
+      "claim": "demo-repo/tests/unit/test_risk_profile.py exercises build_risk_profile with dti/ltv inputs that are not exactly equal to dti_low_max or ltv_low_max (e.g. income $10,000/debt $500, loan $150,000/collateral $300,000), so none of its three tests independently exercise or currently fail on the LOW-boundary regression in classify_dti/classify_ltv.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_risk_profile.py",
+          "start_line": 10,
+          "end_line": 22,
+          "evidence_tier": "test_assertion",
+          "excerpt": "def test_low_risk_inputs_produce_low_overall_band(default_thresholds) -> None: ... income_sources=[...Money.from_dollars(10_000)], debt_obligations=[...Money.from_dollars(500)], loan_amount=Money.from_dollars(150_000) ..."
+        }
+      ]
+    },
+    {
+      "id": "F-9",
+      "claim": "build_risk_profile's overall_band is susceptible to the same LOW-boundary misclassification as classify_dti/classify_ltv themselves: because build_risk_profile directly consumes classify_dti's and classify_ltv's return values with no additional boundary logic of its own, an applicant whose computed dti or ltv lands exactly at dti_low_max or ltv_low_max would have overall_band incorrectly elevated to MEDIUM under the current regressed code -- but no existing test in test_risk_profile.py currently exercises or catches that exact-boundary case.",
+      "classification": "inferred",
+      "supporting_finding_ids": [
+        "F-7",
+        "F-8"
+      ],
+      "reasoning": "F-7 establishes that build_risk_profile's overall_band is a direct, unmodified function of classify_dti's and classify_ltv's Band outputs (via _BAND_WEIGHT) with no independent boundary re-check. F-8 establishes that none of test_risk_profile.py's existing tests use inputs that land exactly on dti_low_max/ltv_low_max. Combining these: the LOW-boundary regression in classify_dti/classify_ltv would propagate into overall_band for an applicant at that exact boundary, but this propagation is not directly observed in any test evidence, so it is inferred rather than found."
+    }
+  ],
+  "open_questions": [
+    "risk_profile.py (demo-repo/src/loanflow/risk_profile.py) calls classify_dti/classify_ltv and therefore inherits their boundary behavior (F-7, F-9), but it is not named in this task's in_scope or out_of_scope lists. This task's own scope (in_scope: risk_bands.py, test_risk_bands.py only; constraints: minimal single-operator fix per function) does not direct any change to risk_profile.py or its test file, and fixing risk_bands.py's two functions in place will automatically correct risk_profile.py's downstream behavior with no separate edit needed there -- so no action beyond risk_bands.py appears required, but this is a scope-boundary observation for the orchestrator/Engineer to confirm rather than something the Architect can resolve.",
+    "This task's remaining phases (N-2 implementation of the minimal operator fix, and N-3 verification/repair-loop exercise) are implementation and verification work explicitly outside the Architect's read-only role; the Architect can confirm what the code currently does and what the tests expect (done above) but cannot propose or perform the code change itself."
+  ]
+}

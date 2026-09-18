@@ -1,0 +1,9 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260917-logicrepair-002",
+  "kind": "logic_failure_detected",
+  "payload": {
+    "repair_attempt": 1,
+    "verification_ref": "runs/run-20260917-logicrepair-002/verification-report.json"
+  }
+}

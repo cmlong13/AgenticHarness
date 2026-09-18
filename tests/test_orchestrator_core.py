@@ -1169,6 +1169,47 @@ def test_logic_bug_routes_back_to_the_same_engineer_and_repairs_successfully(tmp
     assert summary["artifact_refs"]["verification_report"].endswith("verification-report.repair-1.json")
 
 
+def test_checkpoint_after_successful_repair_round_references_repair_artifacts(tmp_path):
+    """Closes the same-run route-back checkpoint-coherence gap discovered live in
+    run-20260917-logicrepair-002: the terminal checkpoint written after a repair round
+    must point artifact_refs at the repair round's own promoted paths, never the
+    original pre-repair implementation/verification reports, so a hypothetical later
+    reader of checkpoint.json (or a resume attempt against a still-non-terminal
+    checkpoint) never treats a completed repair as if only the original,
+    since-superseded implementation/verification existed."""
+    _make_fixture_repo(tmp_path)
+    discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())
+    agent_adapter = ScriptedAgentAdapter(
+        {
+            "architect": [json.dumps(_findings_dict())],
+            "engineer": _engineer_sequence() + _engineer_repair_sequence(),
+            "quality_engineer": _qe_sequence(verdict="fail") + _qe_repair_sequence(verdict="pass"),
+        }
+    )
+    command_results = dict(_happy_command_results())
+    command_results.update(_repair_command_results())
+    test_runner_adapter = ScriptedTestRunnerAdapter(command_results=command_results, diff_stats=DIFF_STATS)
+
+    result = _run(tmp_path, discovery_adapter, agent_adapter, test_runner_adapter)
+    assert result.state == State.COMPLETED
+
+    final_checkpoint = _read_json(result.run_dir / "checkpoint.json")
+    assert final_checkpoint["status"] == "complete"
+    assert final_checkpoint["artifact_refs"]["implementation"].endswith(
+        "implementation-report.repair-1.json"
+    )
+    assert final_checkpoint["artifact_refs"]["verification"].endswith("verification-report.repair-1.json")
+    # The original, pre-repair paths are never referenced by the terminal checkpoint,
+    # even though they remain retained on disk as evidence.
+    assert final_checkpoint["artifact_refs"]["implementation"] != IMPLEMENTATION_REF
+    assert final_checkpoint["artifact_refs"]["verification"] != f"runs/{RUN_ID}/verification-report.json"
+
+    # Both the original and repair-round artifacts survive on disk -- the repair never
+    # overwrote or deleted the pre-repair evidence.
+    assert (result.run_dir / "implementation-report.json").exists()
+    assert (result.run_dir / "verification-report.json").exists()
+
+
 def test_logic_bug_repair_count_is_bounded_and_exhaustion_ends_honestly(tmp_path):
     _make_fixture_repo(tmp_path)
     discovery_adapter = ScriptedDiscoveryAdapter(_scope_dict())

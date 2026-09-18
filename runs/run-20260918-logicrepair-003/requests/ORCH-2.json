@@ -1,0 +1,9 @@
+{
+  "task_id": "T-LOGICREPAIR-DEMO-003",
+  "run_id": "run-20260918-logicrepair-003",
+  "command_id": "ORCH-2",
+  "command": "python -m pytest tests -q",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Orchestrator's own full demo-repo suite health check after the repair round, per scope.json's task graph and work/SKILL.md Phase 4."
+}

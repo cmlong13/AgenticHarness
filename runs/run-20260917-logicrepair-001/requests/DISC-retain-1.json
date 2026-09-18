@@ -1,0 +1,7 @@
+{
+  "operation": "retain_attempt",
+  "run_id": "run-20260917-logicrepair-001",
+  "phase": "discovery",
+  "attempt_n": 1,
+  "raw_text_ref": "runs/run-20260917-logicrepair-001/scope-candidate.json"
+}

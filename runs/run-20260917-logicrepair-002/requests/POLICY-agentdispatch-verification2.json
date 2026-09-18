@@ -1,0 +1,12 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260917-logicrepair-002",
+  "kind": "agent_dispatch",
+  "payload": {
+    "phase": "verification",
+    "subagent_type": "quality-engineer",
+    "agent_id": "aa65e121f341c4240",
+    "dispatch_sequence": 2,
+    "note": "Fresh dispatch for a checkpoint-resumed process (evaluate_resume next_phase=verification); this is a new, distinct agent_id, not a resume of dispatch_sequence 1's agent_id (a233fa6540dee3e71) from the interrupted prior process, per 'Resuming an interrupted run' step 6."
+  }
+}

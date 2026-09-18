@@ -1,0 +1,9 @@
+{
+  "operation": "promote_artifact",
+  "run_id": "run-20260918-logicrepair-003",
+  "phase": "discovery",
+  "expected_task_id": "T-LOGICREPAIR-DEMO-003",
+  "expected_run_id": "run-20260918-logicrepair-003",
+  "target_repo_path": "demo-repo",
+  "doc_ref": "runs/run-20260918-logicrepair-003/scope-candidate.json"
+}

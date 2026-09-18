@@ -1,0 +1,7 @@
+{
+  "operation": "retain_attempt",
+  "run_id": "run-20260918-logicrepair-003",
+  "phase": "implementation",
+  "attempt_n": 5,
+  "raw_text_ref": "runs/run-20260918-logicrepair-003/engineer-repair-turn-1-pretest.json"
+}

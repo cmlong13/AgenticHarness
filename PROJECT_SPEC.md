@@ -3684,6 +3684,277 @@ validated artifact reference from a retained error-evidence reference; that dist
 carried only by convention (the path and the file's own prose), not by the contract. Schema
 revision to close this gap is deferred and was not performed in this milestone.
 
+#### Live planted-defect logic-repair demonstration (`run-20260917-logicrepair-001`/`-002`, 2026-09-17/18)
+
+The first live attempt at `ASSIGNMENT.md`'s combined acceptance-criterion item ("a deliberately
+planted logic bug is classified as logic, not retried, and routed back to the engineer — who
+fixes it in the same run") against a genuinely planted regression in
+`demo-repo/src/loanflow/risk_bands.py` (`classify_dti`/`classify_ltv`'s LOW-boundary comparison
+changed from `<=` to `<`), task `T-LOGICREPAIR-DEMO`. Two runs exist; they are **not** two
+attempts at the same evidence — one is a rejected diagnostic, the other the authoritative record.
+
+**`run-20260917-logicrepair-001` — failed diagnostic, retained as negative evidence, not
+resumable.** The live Engineer's first pre-test command (`C-1`) used an absolute,
+drive-prefixed `working_directory`; the real test-runner wrapper correctly rejected it
+(`request_value_invalid: working_directory must not be absolute or drive-prefixed`) before any
+test ran, per its own strict command-grammar contract. This is the harness's command-policy
+boundary working as designed, not a defect — nothing was silently patched or retried with a
+corrected value; the phase blocked honestly (`implementation_blocked`). Its checkpoint is
+`status: "failed"`, `not resumable`. Retained unmodified as `runs/run-20260917-logicrepair-001/`,
+including the rejection evidence (`logs/unknown.rejected.json`) and a memory fact/lesson pair
+(`FACT-20260917-ENGINEER-ABSOLUTE-WORKDIR`, `L-20260917-DISPATCH-RELATIVE-WORKDIR`) captured for
+the retry.
+
+**`run-20260917-logicrepair-002` — the authoritative clean retry.** Discovery/Research/
+Implementation (first pass: `classify_dti`'s comparison restored to `<=` only, `classify_ltv`
+deliberately left untouched per the task's disclosed first-pass scope) completed and were
+checkpointed (`completed_phases: [discovery, research, implementation]`, `next_resume_action:
+"dispatch the verification phase"`). What happened next spanned **two separate orchestrator
+processes** against this same `run_id`:
+
+1. **First Verification (interrupted process, real dispatch, real evidence).** The live Quality
+   Engineer ran the narrow AC-1 command (`V-1`, exit 0, pass) and the full-suite AC-2 command
+   (`V-2`, exit 1: 7 passed, 1 failed — `test_ltv_at_low_max_boundary_is_low`), correctly
+   classified the AC-2 failure as a genuine `logic_bug` (not retried), and produced a
+   schema-valid `verification-report.json` with `final_verdict: "fail"`,
+   `routed_back_to_engineer.routed: true`. The orchestrator classified this per
+   `classify_verification_outcome`'s three-part rule (`fail` + `routed: true` + a `logic_bug`
+   attempt), retained `logic_failure_detected` and `engineer_route_back` (repair_attempt 1), and
+   resumed the *same* Engineer agent. That Engineer made the real source edit
+   (`classify_ltv`'s comparison restored to `<=`) and passed its own repair-round TDD commands
+   (`C-3`: pre-repair, confirmed still failing; `C-4`: post-repair, confirmed passing) — but the
+   process ended **before** the Engineer's own final repair-round report was ever retained,
+   validated, or promoted to a canonical `implementation-report.repair-1.json`. This is the one
+   genuine gap in this milestone's evidence chain, not a fabrication: the source edit and its
+   passing TDD commands are real and independently retained (`diff.repair-1.patch`, `logs/C-3.log`,
+   `logs/C-4.log`); only the closing promotion step never ran.
+2. **Resumed process (this session).** `evaluate_resume` correctly reported `status: "resumable"`,
+   `next_phase: "verification"` (Discovery/Research/Implementation reused unchanged, per
+   predecessor-order revalidation). Per the checkpoint-resume protocol, a **fresh** Quality
+   Engineer agent identity was dispatched (never a resume of the orphaned first instance — no
+   agent from the interrupted process was reachable). This fresh Quality Engineer independently
+   re-planned its own commands against the still-canonical (pre-repair-round)
+   `implementation-report.json`, requested a fresh command_id sequence (`V-3`/`V-4`, since `V-1`/
+   `V-2` already belonged to retained evidence from the interrupted process and could not be
+   overwritten), and received real `command_result`s: `V-3` (AC-1) exit 0, `V-4` (the full suite)
+   exit 0 — because the source already carried both the documented `classify_dti` fix and the
+   undocumented `classify_ltv` fix left over from the orphaned repair round. Rather than
+   certifying a pass on the literal exit code, this fresh Quality Engineer's own Step-6
+   before/after source reads caught that `classify_ltv`'s fix was **not** reflected in the
+   implementation report it was given, could not attribute the change to any reviewed
+   implementation, and correctly reported `final_verdict: "inconclusive"` (AC-1 `passed`, AC-2
+   `blocked`) rather than rubber-stamping a suspicious pass — exactly the discipline
+   `quality-engineer.md` requires and exactly the audit this milestone's own dispatch
+   instructions called for on an unexpected pass.
+3. **Promotion collision, not silently routed around.** Promoting this second verification report
+   to the canonical `verification-report.json` path was correctly refused
+   (`EvidenceCollisionError`) — the interrupted process's genuine `fail` verdict already occupies
+   it, and `live_cli.py`'s `promote_artifact` operation has **no distinctly-named-path parameter**
+   for any of the four canonical phase artifacts (`evidence_io.CANONICAL_FILENAMES` is a fixed,
+   unparameterized phase→filename map). This means the `implementation-report.repair-1.json` /
+   `verification-report.repair-1.json` convention this document's own "Same-run logic-failure
+   route-back to the Engineer" section (`work/SKILL.md`) describes **cannot currently be executed
+   through the live bridge as implemented** — a real gap between documented protocol and live code,
+   discovered here rather than assumed, and recorded as `FACT-20260918-PROMOTE-NO-REPAIR-PATH`.
+4. **Terminal classification.** The orphaned repair-round Engineer agent identity is confirmed
+   unresumable in the resumed process (`ListAgents`: no reachable agents). Per `work/SKILL.md`'s
+   own broken-continuity rule ("If the same agent id cannot be resumed... this is a broken agent
+   continuity failure... block the run"), this repair cycle is retained as a genuine
+   `continuity_broken` terminal failure, not forward progress to build on and not something a
+   fresh Engineer redispatch may silently paper over (Implementation is already in
+   `completed_phases` and must be reused, never redispatched, once a checkpoint resume is in
+   progress). `run-20260917-logicrepair-002`'s terminal checkpoint (`status: "failed"`,
+   `current_phase: "verification"`) and `run-summary.json` (`final_verdict: "fail"`,
+   `phases_completed: [discovery, research, implementation]`) reflect this honestly.
+
+**What this run did and did not prove.** It **did** genuinely exercise, live, with real dispatched
+agents and real test execution: a genuine `logic_bug` classification (never fabricated), a genuine
+same-run route-back to the Engineer, a genuine Engineer repair with its own TDD-first evidence, and
+a genuine checkpoint-resume dispatching a correctly-fresh Quality Engineer identity that
+independently caught an unattributed source change rather than trusting a suspicious passing exit
+code. It did **not** produce a single, clean, canonically-promoted repair-round artifact pair
+proving the loop's *closing* step end-to-end, because the process that started the repair cycle
+was interrupted before that promotion — the loop's *first three* stages (fail → classify → route
+back → repair) are live-proven with real evidence; the *closing* re-verification-and-promotion
+stage is proven only in the deterministic `core.py`/`tests/test_route_back_protocol.py` suite
+(see "Part 2 — bounded same-run logic-failure route-back" above), same as before this run. This is
+**not** a flaky-test demonstration and is not claimed as one — `ASSIGNMENT.md`'s planted-flaky-test
+half of this combined acceptance item remains entirely open; nothing in `T-LOGICREPAIR-DEMO`
+touched infrastructure-flake classification or retry.
+
+**Independently confirmed after this session's own work (`ORCH-*`-equivalent re-checks, run
+against real `demo-repo` source, not asserted):** `demo-repo/src/loanflow/risk_bands.py` now
+reads `<=` for both `classify_dti` and `classify_ltv`'s LOW-boundary checks — the planted defect
+is, in fact, fully repaired in the working tree, independent of the canonical-artifact gap above.
+`python -m pytest demo-repo/tests -q` and the full harness suite (`python -m pytest tests -q`) were
+both re-run clean as part of this session's own closing verification (see the session's final
+report for exact counts) — no repository state was left broken by this milestone. No commit or
+push was performed.
+
+Evidence: `runs/run-20260917-logicrepair-002/{checkpoint.json,run-summary.json,verification-report.json,logs/policy-events.jsonl,logs/{V-3,V-4}.log,attempts/verification-3.raw.txt,diff.repair-1.patch,logs/{C-3,C-4}.log}`;
+memory: `FACT-20260918-PROMOTE-NO-REPAIR-PATH`, `FACT-20260918-WRAPPER-FILENAME-EQUALS-COMMANDID`,
+`L-20260918-CHECKPOINT-UNDERSTATES-PROGRESS`, `L-20260918-REPAIR-CYCLE-NOT-RESUMABLE-ACROSS-PROCESS`,
+`L-20260918-FRESH-DISPATCH-COMMAND-ID-COLLISION`.
+
+#### Repair-round artifact-promotion fix and clean live proof (`run-20260918-logicrepair-003`, 2026-09-18)
+
+Closes the exact gap `run-20260917-logicrepair-002` discovered and documented above
+(`FACT-20260918-PROMOTE-NO-REPAIR-PATH`): `live_cli.py`'s `promote_artifact` operation had
+no way to promote a same-run logic-repair round's implementation or verification artifact
+to its own distinctly-named path, so a live route-back cycle could reach a genuine repair
+but could never canonically close it.
+
+**Part A — the exact gap, re-audited.** `harness/orchestrator/core.py`'s deterministic
+engine already had the correct, fully bounded mechanism: `_validate_and_promote` accepts
+an optional `filename` override (default: the phase's fixed canonical name), and
+`_handle_verification_failure` drives the repair round's `_drive_staged_protocol` calls
+with `canonical_filename=f"implementation-report.repair-{repair_attempt}.json"` /
+`f"verification-report.repair-{repair_attempt}.json"`, bounded by `MAX_LOGIC_REPAIR_ATTEMPTS
+= 1`. This is deterministically tested
+(`test_logic_bug_routes_back_to_the_same_engineer_and_repairs_successfully`,
+`test_logic_bug_repair_count_is_bounded_and_exhaustion_ends_honestly`,
+`tests/test_orchestrator_checkpoint.py`). The gap was narrowly that `live_cli.py`'s
+`op_promote_artifact` never exposed this same capability -- it always resolved
+`evidence_io.CANONICAL_FILENAMES[phase]` with no override, so any attempt to promote a
+second implementation/verification report for the same run raised
+`EvidenceCollisionError`, confirmed live when `run-20260917-logicrepair-002`'s resumed
+process tried it.
+
+**Part B — the fix, narrowly scoped.**
+- `harness/orchestrator/evidence_io.py`: added `REPAIR_ELIGIBLE_PHASES =
+  {"implementation", "verification"}` and `repair_artifact_filename(phase,
+  repair_attempt)` -- a pure function taking only a fixed phase name (checked against
+  `REPAIR_ELIGIBLE_PHASES`) and a positive integer, returning
+  `f"{stem}.repair-{repair_attempt}.json"`. No caller-supplied filename or path fragment
+  is ever accepted; the only inputs are a closed enum and an integer, so no path
+  injection is reachable through this function. The upper bound against
+  `MAX_LOGIC_REPAIR_ATTEMPTS` is deliberately left to callers (this module cannot import
+  `core.py` without a circular dependency).
+- `harness/orchestrator/core.py`: `_handle_verification_failure`'s two hardcoded
+  `canonical_filename=f"...repair-{repair_attempt}.json"` f-strings were replaced with
+  calls to `evidence_io.repair_artifact_filename(...)` -- a pure DRY refactor producing
+  byte-identical filenames; all existing deterministic route-back tests pass unchanged.
+- `harness/orchestrator/live_cli.py`: `op_promote_artifact` gained an optional
+  `repair_attempt` (positive integer) request field. Omitted, behavior is byte-identical
+  to before. Present: validates `phase in evidence_io.REPAIR_ELIGIBLE_PHASES` and `1 <=
+  repair_attempt <= core.MAX_LOGIC_REPAIR_ATTEMPTS` (imported directly from `core.py` --
+  never a second, independently-maintained limit), then derives the filename via
+  `evidence_io.repair_artifact_filename`. The existing collision guard on
+  `evidence_io.promote_canonical` applies unchanged, so a duplicate promotion to the same
+  repair attempt's artifact is rejected exactly like any other collision, and the
+  original (pre-repair) canonical artifact is never touched by this path. `live_cli.py`
+  now imports `core` (safe -- `core.py`'s own dependency graph never imports
+  `live_cli.py`, so no circular import).
+- No path-safety rule was loosened anywhere: the promoted filename is always derived
+  entirely by trusted code from a closed phase enum plus a small bounded integer, never
+  from a caller-supplied string.
+
+**Checkpoint/resume audit.** No checkpoint redesign was needed. `core.py`'s existing
+`_handle_verification_failure` already mutates its own `artifact_refs` dict to the
+repair round's promoted paths *before* calling `finalize()`, so the terminal checkpoint
+(`record_completion`/`record_terminal_failure`) and `run-summary.json` already correctly
+cite the repair-round artifacts, never the pre-repair ones -- confirmed by a new focused
+test (below) that reads the actual `checkpoint.json` after a successful repair round.
+`checkpoint.py`'s `_revalidate_artifact` is filename-agnostic (it revalidates whatever
+`artifact_refs` points at against the phase's schema, never assuming the plain canonical
+name), so a checkpoint whose `artifact_refs.implementation` names a `...repair-1.json`
+path revalidates correctly on a hypothetical resume. `work/SKILL.md`'s own documented
+route-back section already correctly instructs the live orchestrator to update its
+working `artifact_refs.implementation_report`/`verification_report` to the repair round's
+paths for the rest of the run -- no documentation change was needed there either. The
+repair cycle remains same-run/same-process by construction, exactly as before
+(`ASSIGNMENT.md`, `work/SKILL.md`); this milestone did not add, and was not asked to add,
+any capability to resume an orphaned repair cycle across a process restart -- the existing
+same-agent continuity rule (`work/SKILL.md`'s "Staged continuation protocol") is
+unchanged.
+
+**Focused tests added (all passing, 30 new tests: 19 in
+`tests/test_orchestrator_live_cli.py::TestPromoteArtifactRepairRound`, 1 in
+`tests/test_orchestrator_core.py`, 10 in `tests/test_orchestrator_evidence_io.py`):**
+ordinary Discovery/Research/Implementation/Verification promotion is provably unchanged
+when `repair_attempt` is omitted; `implementation`/`verification` repair-1 promotion
+succeeds and produces the exact expected path; the original canonical artifact survives
+byte-for-byte after a repair promotion; a duplicate repair-1 promotion is
+collision-rejected; every invalid `repair_attempt` value (`0`, negative, float, string,
+bool) is rejected as a usage error (exit 2), never silently coerced; a value above
+`core.MAX_LOGIC_REPAIR_ATTEMPTS` is rejected; no caller-supplied filename/path field of
+any kind (including a `../../` traversal attempt inside `repair_attempt` itself) can
+reach the filesystem; `repair_attempt` is rejected for `discovery`/`research` (phases with
+no repair-round artifact); `live_cli.core.MAX_LOGIC_REPAIR_ATTEMPTS is core.
+MAX_LOGIC_REPAIR_ATTEMPTS` (the same object, not a copy); and a new
+`test_checkpoint_after_successful_repair_round_references_repair_artifacts` reads a real
+post-repair `checkpoint.json` and confirms `artifact_refs.implementation`/`verification`
+both end in `.repair-1.json`, never the original paths, while both original files remain
+on disk. Baseline harness suite: 1135 passed, 2 skipped, before this milestone's changes;
+final: **1165 passed, 2 skipped** (exactly +30, matching the new tests added, zero
+regressions). `demo-repo/tests`: 108 passed, unaffected.
+
+**Part C — clean live proof (`run-20260918-logicrepair-003`, task
+`T-LOGICREPAIR-DEMO-003`).** A fresh run, never reusing `run-20260917-logicrepair-001`'s
+or `-002`'s evidence. The identical deterministic regression was re-planted in
+`demo-repo/src/loanflow/risk_bands.py` (`classify_dti`/`classify_ltv`'s LOW-boundary
+comparisons changed `<=` -> `<`). Discovery (main session) -> Research (real Architect
+dispatch, 6 findings, `found`, zero `open_questions`) -> Implementation (real Engineer
+dispatch, first pass: `classify_dti` only, TDD-ordered `C-1` fail -> `C-2` pass,
+`implementation-report.json` promoted) -> Verification (real Quality Engineer dispatch):
+`V-1` (AC-1) passed; `V-2` (AC-2, full 8-test suite) genuinely failed (`7 passed, 1
+failed` -- `test_ltv_at_low_max_boundary_is_low`), classified `logic_bug` (never
+retried), `final_verdict: "fail"`, `routed_back_to_engineer.routed: true` -- promoted as
+the run's canonical `verification-report.json`. Route-back: `logic_failure_detected` and
+`engineer_route_back` (repair_attempt 1) retained; the *same* Engineer agent identity was
+resumed (never a replacement) with the real QE failure evidence; repaired `classify_ltv`
+with TDD-first evidence (`C-3` fail -> `C-4` pass, full suite); its final report was
+promoted through the **now-fixed** live bridge to
+`implementation-report.repair-1.json` (`repair_attempt: 1`) -- the first live proof this
+production fix actually works, not just deterministically tested. The *same* Quality
+Engineer agent identity was then resumed with an `implementation_updated` message; it
+re-ran the full suite (`V-3`, exit 0), independently confirmed `classify_ltv`'s source
+now reads `<=`, and returned a genuine `final_verdict: "pass"` (both AC-1 and AC-2
+`passed`) -- promoted to `verification-report.repair-1.json`. The orchestrator
+independently re-verified with its own `ORCH-1`/`ORCH-2` commands (both exit 0,
+identity-checked) and confirmed `git status`/`git diff` show `demo-repo` byte-identical
+to `HEAD` -- the planted defect is genuinely, fully repaired in the real working tree,
+not merely claimed. Terminal checkpoint: `kind: "completion"`, `artifact_refs`
+correctly citing the `.repair-1.json` paths for both implementation and verification
+(the checkpoint-coherence property the new focused test above also proves
+deterministically). `run-summary.json`: `final_verdict: "pass"`,
+`phases_completed: [discovery, research, implementation, verification]`. One genuine
+`MAX_LOGIC_REPAIR_ATTEMPTS`-bounded repair cycle (repair_attempt 1 of 1), never a second.
+
+**One honestly-handled anomaly, unrelated to the production fix.** The *first* Quality
+Engineer dispatch for this run (a distinct agent identity, before the one described
+above) self-blocked with a schema-valid `blocked` report after receiving three
+consecutive out-of-protocol `[handback-send-enforce]` messages instead of the
+`command_result` it was owed -- a session/dispatch-tooling artifact, not a protocol
+violation by the orchestrator or the agent, and not a genuine finding about the code
+(zero commands executed, zero acceptance criteria evaluated). This was retained honestly
+as a `continuity_broken` policy event and as raw evidence
+(`attempts/verification-1.raw.txt`), explicitly *not* promoted as the run's canonical
+verification result, and a genuinely fresh Quality Engineer instance was dispatched to
+perform the real verification work described above -- never presented as a continuation
+of the blocked instance. See `memory/lessons-learned.md`
+(`L-20260918-HANDBACK-ENFORCE-PHANTOM-MESSAGES`).
+
+**What this closes vs. what remains open.** The same-run logic-repair route-back loop is
+now live-proven end-to-end, including its previously-untested closing step (repair-round
+artifact promotion through the real live bridge) -- `run-20260917-logicrepair-002`
+remains valuable negative evidence of *why* this fix was necessary and is preserved
+unmodified; `run-20260918-logicrepair-003` is the authoritative clean proof.
+`ASSIGNMENT.md`'s planted-**flaky-test** half of the same combined acceptance item
+(infrastructure-flake classification + evidence-supported retry) is a **separate,
+still-open milestone** -- nothing in this session exercised it, and nothing here claims
+it. No commit or push was performed in this session.
+
+Evidence: `runs/run-20260918-logicrepair-003/{checkpoint.json,run-summary.json,
+verification-report.repair-1.json,implementation-report.repair-1.json,
+logs/policy-events.jsonl,logs/{V-1,V-2,V-3,C-1,C-2,C-3,C-4,ORCH-1,ORCH-2}.log,
+diff.repair-1.patch}`; production diff:
+`harness/orchestrator/{evidence_io,core,live_cli}.py`; tests:
+`tests/test_orchestrator_{evidence_io,core,live_cli}.py`; memory:
+`FACT-20260918-REPAIR-PROMOTE-FIX-LIVE-PROVEN`,
+`L-20260918-HANDBACK-ENFORCE-PHANTOM-MESSAGES`,
+`L-20260918-CHECK-CORE-BEFORE-DESIGNING-LIVE-CLI-FEATURE`.
+
 ### Demo repository (`demo-repo/loanflow`)
 
 The controlled target application for live Agentic Harness demonstrations.

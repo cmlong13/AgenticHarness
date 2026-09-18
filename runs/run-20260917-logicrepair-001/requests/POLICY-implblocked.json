@@ -1,0 +1,10 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260917-logicrepair-001",
+  "kind": "implementation_blocked",
+  "payload": {
+    "reason": "Engineer's C-1 pre_test_requested command used an absolute, drive-prefixed working_directory (engineer.md documents the 'Command grammar' for the command string itself but does not explicitly require working_directory to be relative); the real test-runner Skill wrapper correctly rejected it (request_value_invalid: working_directory must not be absolute or drive-prefixed) before any test executed. Per work/SKILL.md, a command_rejected halts the staged protocol rather than being retried with an orchestrator-corrected value.",
+    "rejection_ref": "runs/run-20260917-logicrepair-001/logs/unknown.rejected.json",
+    "engineer_agent_id": "abe70f4eef319978b"
+  }
+}

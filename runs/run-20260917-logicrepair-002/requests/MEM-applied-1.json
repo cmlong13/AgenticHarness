@@ -1,0 +1,11 @@
+{
+  "operation": "record_memory_applied",
+  "run_id": "run-20260917-logicrepair-002",
+  "entry_id": "L-20260917-DISPATCH-RELATIVE-WORKDIR",
+  "entry_type": "lesson",
+  "source_run_id": "run-20260917-logicrepair-001",
+  "current_run_id": "run-20260917-logicrepair-002",
+  "phase": "discovery",
+  "decision": "scope.json's constraints explicitly require every test-runner command in this run to use a relative working_directory (\"demo-repo\"), directly applying the lesson learned from run-20260917-logicrepair-001's command_rejected failure, instead of leaving working_directory unspecified as the first attempt's dispatch did.",
+  "evidence_path": "runs/run-20260917-logicrepair-002/scope.json"
+}

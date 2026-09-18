@@ -1,0 +1,13 @@
+{
+  "operation": "append_memory",
+  "run_id": "run-20260917-logicrepair-001",
+  "kind": "fact",
+  "fact": {
+    "id": "FACT-20260917-ENGINEER-ABSOLUTE-WORKDIR",
+    "content": "engineer.md documents an explicit 'Command grammar' contract for requested_command.command but does not explicitly state that working_directory must be a relative path; the real test-runner Skill wrapper rejects an absolute or drive-prefixed working_directory (rejection_category: request_value_invalid). A live Engineer dispatch (agent abe70f4eef319978b, run-20260917-logicrepair-001, task T-LOGICREPAIR-DEMO) supplied an absolute Windows path as working_directory for its C-1 pre_test_requested command, and the wrapper correctly rejected it, halting Implementation before any test ran.",
+    "evidence_ref": "runs/run-20260917-logicrepair-001/logs/unknown.rejected.json",
+    "source_run_id": "run-20260917-logicrepair-001",
+    "recorded_at": "2026-09-17",
+    "status": "confirmed"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "operation": "validate_artifact",
+  "phase": "verification",
+  "doc_ref": "runs/run-20260918-logicrepair-003/qe-raw-final.json",
+  "context_refs": {
+    "scope": "runs/run-20260918-logicrepair-003/scope.json"
+  }
+}
