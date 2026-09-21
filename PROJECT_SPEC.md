@@ -2507,8 +2507,13 @@ AgenticHarness/
 │                                          # run against real agents is not yet written (§10)
 │
 ├── docs/
-│   └── WRITEUP.md                 # assignment §5 deliverable (architecture diagram, MCP-vs-REST
-│                                   # decision, surprise + guardrail, what was deleted and why)
+│   ├── architecture.md            # [DONE] (2026-09-21) assignment §5.1 architecture diagram
+│   │                               #        (Mermaid) -- orchestrator, agents, skills, hooks,
+│   │                               #        connectors, evidence layer, and phase data flow,
+│   │                               #        including the logic route-back vs. flaky-retry paths
+│   └── WRITEUP.md                 # assignment §5 remaining deliverable (MCP-vs-REST decision,
+│                                   # surprise + guardrail, what was deleted and why) -- embeds or
+│                                   # links architecture.md for §5.1 rather than duplicating it
 │
 ├── README.md                      # [DONE]
 ├── .gitignore                     # [DONE]
