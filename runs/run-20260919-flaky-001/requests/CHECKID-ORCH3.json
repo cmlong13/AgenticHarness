@@ -1,0 +1,17 @@
+{
+  "operation": "check_command_identity",
+  "request": {
+    "task_id": "T-FLAKY-DEMO",
+    "run_id": "run-20260919-flaky-001",
+    "command_id": "ORCH-3",
+    "command": "python -m pytest -v tests/",
+    "working_directory": "demo-repo"
+  },
+  "result": {
+    "task_id": "T-FLAKY-DEMO",
+    "run_id": "run-20260919-flaky-001",
+    "command_id": "ORCH-3",
+    "command": "python -m pytest -v tests/",
+    "working_directory": "demo-repo"
+  }
+}

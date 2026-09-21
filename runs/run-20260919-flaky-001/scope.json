@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-FLAKY-DEMO",
+  "run_id": "run-20260919-flaky-001",
+  "created_at": "2026-09-19T15:26:12Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "Demonstrate, live and end-to-end, ASSIGNMENT.md's planted-flaky-test acceptance criterion for task T-FLAKY-DEMO (run-20260919-flaky-001): add a decision-batch-size sanity health check to loanflow's existing health-check surface (demo-repo/src/loanflow/health.py), and verify it alongside the pre-existing demo-repo/tests/integration/test_calibration_feed_connectivity.py regression test, which simulates the calibration feed's real cold-start connection reset -- a controlled, one-shot, deterministic infrastructure flake planted for this milestone and documented in PROJECT_SPEC.md. The Quality Engineer must classify the flake honestly from real command evidence and retry it per quality-engineer.md's own evidence-supported infrastructure_flake retry policy (max 2), never treating it as a logic bug and never routing it back to the Engineer."
+  },
+  "objective": "Add a decision-batch-size sanity health check (a genuine health signal per ASSIGNMENT.md section 3.4: a check that would catch a silently-oversized decision batch, e.g. a data-pipeline duplication bug, rather than a formula/config change with no accompanying safeguard) to loanflow.health's existing HealthResult/build_health_report surface, then independently verify it live -- alongside this milestone's deliberately planted, controlled, temporary flaky integration test -- to demonstrate the harness's real infrastructure_flake classification and evidence-supported retry policy (quality-engineer.md Step 10, max_retries 2) end-to-end, never routing a genuine transient failure back to the Engineer as a logic_bug.",
+  "in_scope": [
+    "demo-repo/src/loanflow/health.py",
+    "demo-repo/tests/unit/test_health.py"
+  ],
+  "out_of_scope": [
+    "demo-repo/src/loanflow/decisions.py",
+    "demo-repo/src/loanflow/config.py",
+    "demo-repo/src/loanflow/config_loader.py",
+    "demo-repo/src/loanflow/cli.py",
+    "demo-repo/src/loanflow/pipeline.py",
+    "demo-repo/scripts/health_check.py",
+    "demo-repo/tests/integration/test_calibration_feed_connectivity.py"
+  ],
+  "constraints": [
+    "This is a controlled, fully disclosed harness demonstration task (T-FLAKY-DEMO) of ASSIGNMENT.md's planted-flaky-test acceptance criterion, run under PROJECT_SPEC.md's documented milestone plan.",
+    "demo-repo/tests/integration/test_calibration_feed_connectivity.py is a PRE-EXISTING, temporary, disclosed demonstration fixture for this same milestone (see PROJECT_SPEC.md) -- it is deliberately out_of_scope for the Engineer (no code change is needed to make it pass; it already exercises real, existing loanflow.config_loader.load_thresholds behavior) and its own one-shot transient-failure simulation must not be triggered or consumed during Implementation. AC-2 below is verified independently during the Verification phase only.",
+    "Per memory lesson L-20260917-DISPATCH-RELATIVE-WORKDIR: every test-runner command's working_directory must be the relative path \"demo-repo\", never an absolute or drive-prefixed path.",
+    "Standard library only; no new dependencies.",
+    "Minimal-change ladder: reuse the existing HealthResult/HealthReport/build_health_report pattern already in demo-repo/src/loanflow/health.py (rung 2) -- no rewrite, no refactor, no new abstraction, no change to build_health_report's existing call sites (demo-repo/scripts/health_check.py, demo-repo/tests/unit/test_health.py) beyond wiring in the new check.",
+    "Protected Paths are unaffected by this task (health.py and test_health.py are not Protected Paths)."
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "loanflow.health gains a decision-batch-size sanity check (e.g. check_batch_size(decisions)), wired into build_health_report, that returns an unhealthy HealthResult when the batch of decisions exceeds a documented sanity threshold and a healthy HealthResult otherwise, verified by new tests in demo-repo/tests/unit/test_health.py covering both the oversized-batch and normal-batch cases."
+    },
+    {
+      "id": "AC-2",
+      "description": "The pre-existing demo-repo/tests/integration/test_calibration_feed_connectivity.py regression test passes, confirming the health-check surface's adjacent calibration-feed connectivity dependency remains healthy. This test simulates a genuine one-shot transient connection reset on its first cold invocation within this run's Verification phase and is expected to pass on an identical, evidence-supported retry -- it requires no Engineer code change."
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-1",
+      "description": "Research the existing HealthResult/HealthReport/build_health_report pattern in demo-repo/src/loanflow/health.py, confirm build_health_report's real call sites, and confirm no existing batch-size sanity check exists anywhere in the repository.",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-2",
+      "description": "Implement the minimal, TDD-first decision-batch-size sanity check in demo-repo/src/loanflow/health.py, wired into build_health_report, extending the existing HealthResult pattern.",
+      "phase": "implementation",
+      "depends_on": [
+        "N-1"
+      ]
+    },
+    {
+      "id": "N-3",
+      "description": "Verify AC-1 (the new batch-size check) and AC-2 (the pre-existing calibration-feed connectivity test) independently. AC-2 is expected to genuinely fail once, be classified infrastructure_flake on real evidence, and pass on an identical evidence-supported retry (max 2), per quality-engineer.md Step 10 -- never routed back to the Engineer.",
+      "phase": "verification",
+      "depends_on": [
+        "N-2"
+      ]
+    }
+  ],
+  "status": "approved"
+}

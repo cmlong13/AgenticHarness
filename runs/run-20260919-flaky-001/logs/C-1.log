@@ -1,0 +1,38 @@
+command: python -m pytest tests/unit/test_health.py::test_oversized_decision_batch_is_unhealthy tests/unit/test_health.py::test_normal_decision_batch_size_is_healthy -v
+executed_as: C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe -m pytest tests/unit/test_health.py::test_oversized_decision_batch_is_unhealthy tests/unit/test_health.py::test_normal_decision_batch_size_is_healthy -v
+working_directory: demo-repo
+timeout_seconds: 300
+real_pytest_exit_code: 4
+reported_exit_code: 4
+
+--- STDOUT ---
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo
+configfile: pyproject.toml
+collecting ... collected 0 items / 1 error
+
+=================================== ERRORS ====================================
+_________________ ERROR collecting tests/unit/test_health.py __________________
+ImportError while importing test module 'C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo\tests\unit\test_health.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\..\..\AppData\Local\Python\pythoncore-3.14-64\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\test_health.py:6: in <module>
+    from loanflow.health import (
+E   ImportError: cannot import name 'check_batch_size' from 'loanflow.health' (C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo\src\loanflow\health.py)
+=========================== short test summary info ===========================
+ERROR tests/unit/test_health.py
+============================== 1 error in 0.17s ===============================
+
+--- STDERR ---
+ERROR: found no collectors for C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo\tests\unit\test_health.py::test_oversized_decision_batch_is_unhealthy
+
+ERROR: found no collectors for C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo\tests\unit\test_health.py::test_normal_decision_batch_size_is_healthy
+
+
+--- MUTATION CHECK ---
+no persistent non-cache file addition, deletion, or modification detected

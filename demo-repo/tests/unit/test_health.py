@@ -3,7 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from loanflow.decisions import Decision, DecisionOutcome
-from loanflow.health import build_health_report, check_config_freshness, check_decision_distribution
+from loanflow.health import (
+    build_health_report,
+    check_batch_size,
+    check_config_freshness,
+    check_decision_distribution,
+)
 from loanflow.primitives import FixedClock
 
 
@@ -30,6 +35,19 @@ def test_empty_decision_batch_is_healthy() -> None:
     assert result.healthy
 
 
+def test_oversized_decision_batch_is_unhealthy() -> None:
+    decisions = [_decision(DecisionOutcome.APPROVE) for _ in range(1001)]
+    result = check_batch_size(decisions)
+    assert not result.healthy
+    assert "1001" in result.detail
+
+
+def test_normal_decision_batch_size_is_healthy() -> None:
+    decisions = [_decision(DecisionOutcome.APPROVE) for _ in range(4)]
+    result = check_batch_size(decisions)
+    assert result.healthy
+
+
 def test_fresh_configuration_is_healthy(default_thresholds) -> None:
     clock = FixedClock(datetime(2026, 2, 1, tzinfo=timezone.utc))
     result = check_config_freshness(default_thresholds, clock)
@@ -43,9 +61,9 @@ def test_stale_configuration_is_unhealthy(default_thresholds) -> None:
     assert "days old" in result.detail
 
 
-def test_build_health_report_combines_both_checks(default_thresholds) -> None:
+def test_build_health_report_combines_all_checks(default_thresholds) -> None:
     clock = FixedClock(datetime(2026, 2, 1, tzinfo=timezone.utc))
     report = build_health_report([_decision(DecisionOutcome.APPROVE)], default_thresholds, clock)
-    assert len(report.results) == 2
+    assert len(report.results) == 3
     assert report.healthy
     assert "HEALTHY" in report.summary()

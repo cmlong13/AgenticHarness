@@ -1,0 +1,9 @@
+{
+  "task_id": "T-FLAKY-DEMO",
+  "run_id": "run-20260919-flaky-001",
+  "command_id": "ORCH-3",
+  "command": "python -m pytest -v tests/",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Orchestrator full demo-repo suite health check (corrected command grammar after ORCH-2's rejection), per scope.json's task graph, independently re-confirming AC-2's calibration-feed connectivity test's current real state alongside the rest of the suite."
+}

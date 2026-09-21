@@ -1,0 +1,164 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-FLAKY-DEMO",
+  "run_id": "run-20260919-flaky-001",
+  "created_at": "2026-09-19T15:26:12Z",
+  "scope_ref": {
+    "path": "runs/run-20260919-flaky-001/scope.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "demo-repo/src/loanflow/health.py currently defines a frozen-dataclass HealthResult(check_name, healthy, detail) and a HealthReport/build_health_report pattern that combines exactly two existing checks (check_decision_distribution, check_config_freshness) into a single tuple of HealthResult objects.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/health.py",
+          "start_line": 16,
+          "end_line": 20,
+          "evidence_tier": "executable_code",
+          "excerpt": "@dataclass(frozen=True)\nclass HealthResult:\n    check_name: str\n    healthy: bool\n    detail: str"
+        },
+        {
+          "path": "demo-repo/src/loanflow/health.py",
+          "start_line": 49,
+          "end_line": 69,
+          "evidence_tier": "executable_code",
+          "excerpt": "class HealthReport: ... def build_health_report(decisions, thresholds, clock) -> HealthReport: return HealthReport((check_decision_distribution(decisions), check_config_freshness(thresholds, clock)))"
+        }
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "No decision-batch-size sanity check (by any of the plausible names batch_size, batch size, MAX_BATCH, check_batch) exists anywhere in the repository, and no duplicate or legacy copy of the HealthResult/HealthReport pattern exists outside demo-repo/src/loanflow/health.py.",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "grep",
+          "query": "batch_size|batch size|MAX_BATCH|check_batch (case-insensitive)",
+          "scope": "demo-repo/ (whole tree)",
+          "result": "No matches found"
+        },
+        {
+          "method": "grep",
+          "query": "HealthResult|HealthReport",
+          "scope": "demo-repo/ (whole tree)",
+          "result": "Only demo-repo/src/loanflow/health.py matched -- no duplicate/legacy definition elsewhere"
+        }
+      ]
+    },
+    {
+      "id": "F-3",
+      "claim": "build_health_report has exactly two real call sites in the repository outside health.py itself -- demo-repo/scripts/health_check.py:32 and demo-repo/tests/unit/test_health.py:48 -- and both call it positionally as build_health_report(decisions, thresholds, clock) with no keyword arguments, so build_health_report's own signature already receives the full decisions list each call site needs for a batch-size check; neither call site's own arguments would need to change to add an internal check that only inspects decisions.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/scripts/health_check.py",
+          "start_line": 22,
+          "end_line": 34,
+          "evidence_tier": "executable_code",
+          "excerpt": "sample_decisions = [...]\n    report = build_health_report(sample_decisions, thresholds, SystemClock())\n    print(report.summary())\n    return 0 if report.healthy else 1"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_health.py",
+          "start_line": 46,
+          "end_line": 51,
+          "evidence_tier": "test_assertion",
+          "excerpt": "def test_build_health_report_combines_both_checks(default_thresholds) -> None:\n    ...\n    report = build_health_report([_decision(DecisionOutcome.APPROVE)], default_thresholds, clock)\n    assert len(report.results) == 2"
+        }
+      ]
+    },
+    {
+      "id": "F-4",
+      "claim": "demo-repo/tests/conftest.py (the shared fixture module for the whole demo-repo test suite) provides a default_thresholds fixture returning loanflow.config.DEFAULT_THRESHOLDS, which the existing demo-repo/tests/unit/test_health.py suite already consumes for its config-freshness and build_health_report tests -- confirming the fixture new unit tests in test_health.py would also have available.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/conftest.py",
+          "start_line": 20,
+          "end_line": 22,
+          "evidence_tier": "executable_code",
+          "excerpt": "@pytest.fixture\ndef default_thresholds() -> Thresholds:\n    return DEFAULT_THRESHOLDS"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_health.py",
+          "start_line": 33,
+          "end_line": 36,
+          "evidence_tier": "test_assertion",
+          "excerpt": "def test_fresh_configuration_is_healthy(default_thresholds) -> None:"
+        }
+      ]
+    },
+    {
+      "id": "F-5",
+      "claim": "ASSIGNMENT.md's Non-Negotiable Principles (section 3), principle 4 ('Health signals'), documents the requirement that any change to a formula, config value, or data path must leave behind a check that would catch it silently breaking later, explicitly stating that 'the tests passed at merge time' is not itself a health signal.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "ASSIGNMENT.md",
+          "start_line": 126,
+          "end_line": 126,
+          "evidence_tier": "metadata",
+          "excerpt": "4. **Health signals.** Any change to a formula, config value, or data path must leave behind a check that would catch it silently breaking later (a CI sanity test, a distribution check, a freshness timestamp). \"The tests passed at merge time\" is not a health signal."
+        }
+      ]
+    },
+    {
+      "id": "F-6",
+      "claim": "PROJECT_SPEC.md documents that this project has previously implemented and live-verified an analogous, deliberately planted, one-shot infrastructure-flake simulation (a marker-file-backed cold connection that fails once with real ConnectionError evidence and passes on a real, unmodified-source retry), with the Quality Engineer classifying the first attempt infrastructure_flake, retrying the identical command once within retry_policy.max_retries: 2, marking only the retry attempt retried: true, and producing a pass once the retry succeeded -- reserved exclusively for infrastructure_flake, never logic_bug or environment.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "PROJECT_SPEC.md",
+          "start_line": 2837,
+          "end_line": 2838,
+          "evidence_tier": "metadata",
+          "excerpt": "retry_policy.max_retries is fixed at 2, reserved exclusively for evidence-supported infrastructure_flake classifications -- never for logic_bug or environment failures."
+        },
+        {
+          "path": "PROJECT_SPEC.md",
+          "start_line": 2852,
+          "end_line": 2859,
+          "evidence_tier": "metadata",
+          "excerpt": "Infrastructure-flake retry ... against a genuine reproducible transient failure (a marker-file-backed cold connection that fails once with real ConnectionError evidence and passes on a real, unmodified-source retry) ... The Quality Engineer classified the first infrastructure_flake, retried the identical command once (within max_retries: 2), marked only the retry retried: true, and produced a schema-valid pass report once the retry genuinely passed."
+        }
+      ]
+    },
+    {
+      "id": "F-7",
+      "claim": ".claude/agents/quality-engineer.md Step 10 fixes retry_policy.max_retries at 2, permits a retry only for an attempt classified infrastructure_flake with genuine supporting evidence (never for logic_bug, never for environment, never merely because a test failed), and Step 12 sets routed_back_to_engineer.routed = true if and only if at least one attempt is classified logic_bug -- so an infrastructure_flake-classified attempt, resolved or not, never by itself triggers a route-back to the Engineer.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": ".claude/agents/quality-engineer.md",
+          "start_line": 190,
+          "end_line": 201,
+          "evidence_tier": "runtime_config",
+          "excerpt": "retry_policy.max_retries is fixed at 2 for this role. A retry is permitted only for an attempt you classified infrastructure_flake with genuine supporting evidence per Step 9 -- never for logic_bug, never for environment, and never merely because a test failed."
+        },
+        {
+          "path": ".claude/agents/quality-engineer.md",
+          "start_line": 239,
+          "end_line": 241,
+          "evidence_tier": "runtime_config",
+          "excerpt": "routed_back_to_engineer.routed must be true if and only if at least one attempt is classified logic_bug, with a reason naming the criterion and attempt. It must be false, with no fabricated reason, whenever no logic_bug attempt exists."
+        }
+      ]
+    },
+    {
+      "id": "F-8",
+      "claim": "A new decision-batch-size check wired into build_health_report as a third HealthResult-returning function appended to the existing results tuple would fit the repository's established minimal-change health-check pattern without requiring a signature change to build_health_report or either of its two real call sites, since both call sites already pass the full decisions list positionally and neither destructures or counts the report's results tuple length in a way that assumes exactly two entries beyond test_health.py's own existing assertion.",
+      "classification": "inferred",
+      "supporting_finding_ids": [
+        "F-1",
+        "F-3"
+      ],
+      "reasoning": "F-1 establishes that build_health_report currently returns HealthReport((check_a(...), check_b(...))) -- a tuple literal that can structurally accept a third element without changing the function's parameter list, since decisions is already an available parameter. F-3 establishes that both real call sites pass (decisions, thresholds, clock) positionally and health_check.py's call site only reads report.healthy/report.summary(), not a fixed results length -- so adding a third check inside build_health_report's own body would not require either call site's own code to change. (test_health.py's existing len(report.results) == 2 assertion would need updating, but that file is itself in-scope for this task.)"
+    }
+  ],
+  "open_questions": [
+    "Implementation of check_batch_size(decisions) itself -- including the exact sanity threshold value and its wiring into build_health_report -- is Engineer/Implementation-phase work outside the Architect's Research-only role; this report intentionally provides no code or patch for it.",
+    "Live execution and evidence-based infrastructure_flake classification/retry of demo-repo/tests/integration/test_calibration_feed_connectivity.py (AC-2) is Verification-phase work (quality-engineer.md Steps 8-12) outside the Architect's Research-only role. That file is also explicitly out_of_scope in scope.json's out_of_scope list, so its internal test logic was deliberately not inspected here -- only its existence, out-of-scope status, and the general retry-policy rules governing it (F-6, F-7) were researched.",
+    "No Obsidian vault consultation was performed for this task. The orchestrator judged the vault unlikely to materially help (a small, additive health-check function, not a formula/threshold/calibration change), and nothing encountered during repository research (a well-precedented, self-documented additive pattern already fully described in PROJECT_SPEC.md/ASSIGNMENT.md/quality-engineer.md) surfaced a need to check prior design notes -- so this judgment was not revisited."
+  ]
+}

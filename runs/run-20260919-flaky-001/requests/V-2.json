@@ -1,0 +1,9 @@
+{
+  "task_id": "T-FLAKY-DEMO",
+  "run_id": "run-20260919-flaky-001",
+  "command_id": "V-2",
+  "command": "python -m pytest tests/integration/test_calibration_feed_connectivity.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Quality Engineer independent verification of AC-2 (pre-existing calibration-feed connectivity regression test)."
+}

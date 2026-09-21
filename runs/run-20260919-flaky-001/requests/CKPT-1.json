@@ -1,0 +1,9 @@
+{
+  "operation": "write_checkpoint",
+  "kind": "progress",
+  "run_id": "run-20260919-flaky-001",
+  "task_id": "T-FLAKY-DEMO",
+  "target_repo_path": "demo-repo",
+  "completed_phases": ["discovery"],
+  "artifact_refs": {"discovery": "runs/run-20260919-flaky-001/scope.json"}
+}

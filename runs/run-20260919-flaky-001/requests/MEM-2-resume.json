@@ -1,0 +1,5 @@
+{
+  "operation": "load_memory",
+  "run_id": "run-20260919-flaky-001",
+  "raw_prompt": "Demonstrate, live and end-to-end, ASSIGNMENT.md's planted-flaky-test acceptance criterion for task T-FLAKY-DEMO (run-20260919-flaky-001): add a decision-batch-size sanity health check to loanflow's existing health-check surface (demo-repo/src/loanflow/health.py), and verify it alongside the pre-existing demo-repo/tests/integration/test_calibration_feed_connectivity.py regression test, which simulates the calibration feed's real cold-start connection reset -- a controlled, one-shot, deterministic infrastructure flake planted for this milestone and documented in PROJECT_SPEC.md. The Quality Engineer must classify the flake honestly from real command evidence and retry it per quality-engineer.md's own evidence-supported infrastructure_flake retry policy (max 2), never treating it as a logic bug and never routing it back to the Engineer."
+}

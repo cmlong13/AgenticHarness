@@ -1,0 +1,9 @@
+{
+  "task_id": "T-FLAKY-DEMO",
+  "run_id": "run-20260919-flaky-001",
+  "command_id": "V-1",
+  "command": "python -m pytest tests/unit/test_health.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Quality Engineer independent verification of AC-1 (decision-batch-size health check)."
+}

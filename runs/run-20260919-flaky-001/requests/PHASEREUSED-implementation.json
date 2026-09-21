@@ -1,0 +1,9 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260919-flaky-001",
+  "kind": "phase_reused",
+  "payload": {
+    "phase": "implementation",
+    "artifact_ref": "runs/run-20260919-flaky-001/implementation-report.json"
+  }
+}

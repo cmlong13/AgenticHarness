@@ -1,0 +1,9 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260919-flaky-001",
+  "kind": "resume_completed",
+  "payload": {
+    "final_verdict": "pass",
+    "phases_completed": ["discovery", "research", "implementation", "verification"]
+  }
+}

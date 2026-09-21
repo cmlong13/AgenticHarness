@@ -1,0 +1,23 @@
+command: python -m pytest tests/integration/test_calibration_feed_connectivity.py -v
+executed_as: C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe -m pytest tests/integration/test_calibration_feed_connectivity.py -v
+working_directory: demo-repo
+timeout_seconds: 300
+real_pytest_exit_code: 0
+reported_exit_code: 0
+
+--- STDOUT ---
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo
+configfile: pyproject.toml
+collecting ... collected 1 item
+
+tests/integration/test_calibration_feed_connectivity.py::test_calibration_feed_connectivity_survives_a_cold_start_reset PASSED [100%]
+
+============================== 1 passed in 0.02s ==============================
+
+--- STDERR ---
+
+--- MUTATION CHECK ---
+no persistent non-cache file addition, deletion, or modification detected

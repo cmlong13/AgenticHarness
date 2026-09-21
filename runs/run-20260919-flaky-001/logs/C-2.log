@@ -1,0 +1,30 @@
+command: python -m pytest tests/unit/test_health.py -v
+executed_as: C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe -m pytest tests/unit/test_health.py -v
+working_directory: demo-repo
+timeout_seconds: 300
+real_pytest_exit_code: 0
+reported_exit_code: 0
+
+--- STDOUT ---
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo
+configfile: pyproject.toml
+collecting ... collected 8 items
+
+tests/unit/test_health.py::test_balanced_decision_distribution_is_healthy PASSED [ 12%]
+tests/unit/test_health.py::test_all_declines_is_unhealthy PASSED         [ 25%]
+tests/unit/test_health.py::test_empty_decision_batch_is_healthy PASSED   [ 37%]
+tests/unit/test_health.py::test_oversized_decision_batch_is_unhealthy PASSED [ 50%]
+tests/unit/test_health.py::test_normal_decision_batch_size_is_healthy PASSED [ 62%]
+tests/unit/test_health.py::test_fresh_configuration_is_healthy PASSED    [ 75%]
+tests/unit/test_health.py::test_stale_configuration_is_unhealthy PASSED  [ 87%]
+tests/unit/test_health.py::test_build_health_report_combines_all_checks PASSED [100%]
+
+============================== 8 passed in 0.06s ==============================
+
+--- STDERR ---
+
+--- MUTATION CHECK ---
+no persistent non-cache file addition, deletion, or modification detected

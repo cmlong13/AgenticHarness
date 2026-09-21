@@ -1,0 +1,41 @@
+command: python -m pytest tests/integration/test_calibration_feed_connectivity.py -v
+executed_as: C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe -m pytest tests/integration/test_calibration_feed_connectivity.py -v
+working_directory: demo-repo
+timeout_seconds: 300
+real_pytest_exit_code: 1
+reported_exit_code: 1
+
+--- STDOUT ---
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo
+configfile: pyproject.toml
+collecting ... collected 1 item
+
+tests/integration/test_calibration_feed_connectivity.py::test_calibration_feed_connectivity_survives_a_cold_start_reset FAILED [100%]
+
+================================== FAILURES ===================================
+_______ test_calibration_feed_connectivity_survives_a_cold_start_reset ________
+
+    def test_calibration_feed_connectivity_survives_a_cold_start_reset() -> None:
+        if not _SENTINEL.exists():
+            _SENTINEL.parent.mkdir(parents=True, exist_ok=True)
+            _SENTINEL.write_text('{"attempted": true}', encoding="utf-8")
+>           raise ConnectionResetError(
+                "Simulated transient reset while establishing the calibration-feed "
+                "connection on cold process start (controlled flaky-test demo fixture, "
+                "run-20260919-flaky-001 / T-FLAKY-DEMO) -- an identical retry is expected "
+                "to succeed once the connection re-establishes."
+            )
+E           ConnectionResetError: Simulated transient reset while establishing the calibration-feed connection on cold process start (controlled flaky-test demo fixture, run-20260919-flaky-001 / T-FLAKY-DEMO) -- an identical retry is expected to succeed once the connection re-establishes.
+
+tests\integration\test_calibration_feed_connectivity.py:39: ConnectionResetError
+=========================== short test summary info ===========================
+FAILED tests/integration/test_calibration_feed_connectivity.py::test_calibration_feed_connectivity_survives_a_cold_start_reset
+============================== 1 failed in 0.17s ==============================
+
+--- STDERR ---
+
+--- MUTATION CHECK ---
+no persistent non-cache file addition, deletion, or modification detected

@@ -1,0 +1,10 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260919-flaky-001",
+  "kind": "usage_accounting_gap",
+  "payload": {
+    "phase": "implementation",
+    "agent_id": "a18e788dd0024f20a",
+    "reason": "no_quarantine_record"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-FLAKY-DEMO",
+  "run_id": "run-20260919-flaky-001",
+  "created_at": "2026-09-19T15:26:12Z",
+  "scope_ref": { "path": "runs/run-20260919-flaky-001/scope.json" },
+  "implementation_ref": { "path": "runs/run-20260919-flaky-001/implementation-report.json" },
+  "attempts": [
+    {
+      "id": "V-1",
+      "command": "python -m pytest tests/unit/test_health.py -v",
+      "exit_code": 0,
+      "classification": "pass",
+      "output_ref": "runs/run-20260919-flaky-001/logs/V-1.log",
+      "retried": false
+    },
+    {
+      "id": "V-2",
+      "command": "python -m pytest tests/integration/test_calibration_feed_connectivity.py -v",
+      "exit_code": 1,
+      "classification": "infrastructure_flake",
+      "output_ref": "runs/run-20260919-flaky-001/logs/V-2.log",
+      "retried": false
+    },
+    {
+      "id": "V-3",
+      "command": "python -m pytest tests/integration/test_calibration_feed_connectivity.py -v",
+      "exit_code": 0,
+      "classification": "pass",
+      "output_ref": "runs/run-20260919-flaky-001/logs/V-3.log",
+      "retried": true
+    }
+  ],
+  "retry_policy": { "max_retries": 2 },
+  "acceptance_criteria_results": [
+    {
+      "criteria_id": "AC-1",
+      "result": "passed",
+      "attempt_refs": ["V-1"],
+      "evidence_summary": "V-1 (python -m pytest tests/unit/test_health.py -v, exit_code 0): all 8 tests passed, including the two new tests required by AC-1 (test_oversized_decision_batch_is_unhealthy, test_normal_decision_batch_size_is_healthy) and the updated test_build_health_report_combines_all_checks confirming check_batch_size is wired into build_health_report's results tuple alongside the two pre-existing checks."
+    },
+    {
+      "criteria_id": "AC-2",
+      "result": "passed",
+      "attempt_refs": ["V-2", "V-3"],
+      "evidence_summary": "V-2 (same command, exit_code 1) failed with a named ConnectionResetError whose message and the test file's own docstring explicitly describe a deterministic, one-shot, marker-file-backed cold-start connection reset simulation that is expected to succeed on an identical retry -- this is concrete, specific evidence of a transient condition, not a bare 'retry might help' guess, so it meets the infrastructure_flake bar rather than logic_bug or environment. Per the evidence-supported retry policy, V-3 (identical command, fresh command_id, retried: true) was requested and genuinely passed, exit_code 0, 1 passed in 0.02s -- the most recent attempt targeting AC-2 is a pass and no attempt targeting AC-2 is logic_bug, so AC-2 is resolved as passed."
+    }
+  ],
+  "final_verdict": "pass",
+  "routed_back_to_engineer": { "routed": false }
+}

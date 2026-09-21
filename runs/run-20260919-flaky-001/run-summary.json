@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-FLAKY-DEMO",
+  "run_id": "run-20260919-flaky-001",
+  "created_at": "2026-09-19T15:26:12Z",
+  "objective_summary": "Live end-to-end demonstration of ASSIGNMENT.md's planted-flaky-test acceptance criterion: added a decision-batch-size sanity health check (check_batch_size) to loanflow.health's existing HealthResult/build_health_report pattern (AC-1), and independently verified it alongside the pre-existing, deliberately planted demo-repo/tests/integration/test_calibration_feed_connectivity.py regression test (AC-2), which simulates a genuine one-shot cold-start ConnectionResetError. The process that completed all four phases was interrupted before run-summary.json was written; this run's terminal artifacts were finished from an independent audit of the retained checkpoint/attempts/logs/policy-events evidence, which fully corroborated the checkpoint's status: complete, rather than by re-running verification or re-triggering the already-consumed flake.",
+  "artifact_refs": {
+    "scope": "runs/run-20260919-flaky-001/scope.json",
+    "findings": "runs/run-20260919-flaky-001/findings.json",
+    "implementation_report": "runs/run-20260919-flaky-001/implementation-report.json",
+    "verification_report": "runs/run-20260919-flaky-001/verification-report.json",
+    "checkpoint": "runs/run-20260919-flaky-001/checkpoint.json"
+  },
+  "final_verdict": "pass",
+  "phases_completed": [
+    "discovery",
+    "research",
+    "implementation",
+    "verification"
+  ],
+  "phases_reused": [
+    "discovery",
+    "research",
+    "implementation"
+  ],
+  "phases_restarted": [
+    "verification"
+  ],
+  "lessons_learned_appended": [
+    "L-20260921-RECONSTRUCT-BEFORE-RERUN",
+    "L-20260921-STALL-RESUME-SAME-AGENT"
+  ],
+  "memory_loaded": true,
+  "memory_influenced_run": false,
+  "memory_refs_used": [],
+  "remaining_risks": [
+    "OBSIDIAN_VAULT_PATH is unset in this environment, so the run-summary note publication (if attempted) is expected to return connector_unavailable -- no vault delivery can be confirmed, only local publication evidence.",
+    "The main orchestrator/reconstruction session's own token usage is not measured this milestone (usage-summary.json's orchestrator status: not_measured); only the four dispatched subagents' usage/cost is captured.",
+    "The Quality Engineer's very first verification turn (attempts/verification-1.raw.txt) was a transport/parse failure (prose-wrapped JSON), retained as evidence but not promoted as canonical -- the genuine verification evidence is the subsequent V-1/V-2/V-3 attempts from the checkpoint-resumed dispatch (agent ac2d67eb21c7caa59)."
+  ],
+  "follow_up_actions": [],
+  "usage_summary_ref": "runs/run-20260919-flaky-001/usage-summary.json"
+}

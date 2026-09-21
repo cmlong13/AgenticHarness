@@ -1,0 +1,89 @@
+diff --git a/demo-repo/src/loanflow/health.py b/demo-repo/src/loanflow/health.py
+index 20cc404..7ad7b8b 100644
+--- a/demo-repo/src/loanflow/health.py
++++ b/demo-repo/src/loanflow/health.py
+@@ -11,6 +11,7 @@ from loanflow.primitives import Clock
+
+ _MAX_DECLINE_SHARE = 0.90
+ _MAX_CONFIG_AGE_DAYS = 180
++_MAX_BATCH_SIZE = 1000
+
+
+ @dataclass(frozen=True)
+@@ -46,6 +47,20 @@ def check_config_freshness(thresholds: Thresholds, clock: Clock) -> HealthResult
+     return HealthResult("config_freshness", True, f"threshold configuration is {age.days} days old")
+
+
++def check_batch_size(decisions: List[Decision]) -> HealthResult:
++    batch_size = len(decisions)
++    if batch_size > _MAX_BATCH_SIZE:
++        return HealthResult(
++            "batch_size",
++            False,
++            f"batch of {batch_size} decisions exceeds the {_MAX_BATCH_SIZE}-decision sanity "
++            f"threshold (e.g. a data-pipeline duplication bug)",
++        )
++    return HealthResult(
++        "batch_size", True, f"batch of {batch_size} decisions is within the {_MAX_BATCH_SIZE}-decision sanity threshold"
++    )
++
++
+ @dataclass(frozen=True)
+ class HealthReport:
+     results: tuple
+@@ -66,4 +81,5 @@ def build_health_report(decisions: List[Decision], thresholds: Thresholds, clock
+     return HealthReport((
+         check_decision_distribution(decisions),
+         check_config_freshness(thresholds, clock),
++        check_batch_size(decisions),
+     ))
+diff --git a/demo-repo/tests/unit/test_health.py b/demo-repo/tests/unit/test_health.py
+index 271fe50..f8a6745 100644
+--- a/demo-repo/tests/unit/test_health.py
++++ b/demo-repo/tests/unit/test_health.py
+@@ -3,7 +3,12 @@ from __future__ import annotations
+ from datetime import datetime, timezone
+
+ from loanflow.decisions import Decision, DecisionOutcome
+-from loanflow.health import build_health_report, check_config_freshness, check_decision_distribution
++from loanflow.health import (
++    build_health_report,
++    check_batch_size,
++    check_config_freshness,
++    check_decision_distribution,
++)
+ from loanflow.primitives import FixedClock
+
+
+@@ -30,6 +35,19 @@ def test_empty_decision_batch_is_healthy() -> None:
+     assert result.healthy
+
+
++def test_oversized_decision_batch_is_unhealthy() -> None:
++    decisions = [_decision(DecisionOutcome.APPROVE) for _ in range(1001)]
++    result = check_batch_size(decisions)
++    assert not result.healthy
++    assert "1001" in result.detail
++
++
++def test_normal_decision_batch_size_is_healthy() -> None:
++    decisions = [_decision(DecisionOutcome.APPROVE) for _ in range(4)]
++    result = check_batch_size(decisions)
++    assert result.healthy
++
++
+ def test_fresh_configuration_is_healthy(default_thresholds) -> None:
+     clock = FixedClock(datetime(2026, 2, 1, tzinfo=timezone.utc))
+     result = check_config_freshness(default_thresholds, clock)
+@@ -43,9 +61,9 @@ def test_stale_configuration_is_unhealthy(default_thresholds) -> None:
+     assert "days old" in result.detail
+
+
+-def test_build_health_report_combines_both_checks(default_thresholds) -> None:
++def test_build_health_report_combines_all_checks(default_thresholds) -> None:
+     clock = FixedClock(datetime(2026, 2, 1, tzinfo=timezone.utc))
+     report = build_health_report([_decision(DecisionOutcome.APPROVE)], default_thresholds, clock)
+-    assert len(report.results) == 2
++    assert len(report.results) == 3
+     assert report.healthy
+     assert "HEALTHY" in report.summary()

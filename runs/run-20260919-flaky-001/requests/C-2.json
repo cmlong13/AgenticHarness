@@ -1,0 +1,9 @@
+{
+  "task_id": "T-FLAKY-DEMO",
+  "run_id": "run-20260919-flaky-001",
+  "command_id": "C-2",
+  "command": "python -m pytest tests/unit/test_health.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Engineer post-implementation check: confirm the full test_health.py file (including the two new batch-size tests and the updated combined-checks test) now passes."
+}

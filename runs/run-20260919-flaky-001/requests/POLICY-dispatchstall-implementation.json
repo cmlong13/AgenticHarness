@@ -1,0 +1,10 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260919-flaky-001",
+  "kind": "dispatch_stall_recovered",
+  "payload": {
+    "phase": "implementation",
+    "agent_id": "a18e788dd0024f20a",
+    "description": "After the orchestrator resumed the Engineer with C-2's command_result, the resumed turn's tool-use notification reported status: failed ('Agent stalled: no progress for 600s (stream watchdog did not recover)'). This is a session/tooling-level dispatch anomaly, not a protocol violation by either party -- the orchestrator did not spawn a replacement Engineer; it sent one further SendMessage to the exact same agent_id asking it to continue exactly where it left off, and that same identity genuinely resumed and correctly replied with its own finalization_evidence_requested turn, referencing the same changed_files and the same prior C-1/C-2 evidence, proving real continuity was preserved rather than fabricated."
+  }
+}

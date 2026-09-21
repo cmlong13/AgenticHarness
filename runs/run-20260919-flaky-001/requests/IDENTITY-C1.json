@@ -1,0 +1,17 @@
+{
+  "operation": "check_command_identity",
+  "request": {
+    "task_id": "T-FLAKY-DEMO",
+    "run_id": "run-20260919-flaky-001",
+    "command_id": "C-1",
+    "command": "python -m pytest tests/unit/test_health.py::test_oversized_decision_batch_is_unhealthy tests/unit/test_health.py::test_normal_decision_batch_size_is_healthy -v",
+    "working_directory": "demo-repo"
+  },
+  "result": {
+    "task_id": "T-FLAKY-DEMO",
+    "run_id": "run-20260919-flaky-001",
+    "command_id": "C-1",
+    "command": "python -m pytest tests/unit/test_health.py::test_oversized_decision_batch_is_unhealthy tests/unit/test_health.py::test_normal_decision_batch_size_is_healthy -v",
+    "working_directory": "demo-repo"
+  }
+}

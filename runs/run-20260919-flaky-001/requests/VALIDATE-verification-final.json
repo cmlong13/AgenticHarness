@@ -1,0 +1,8 @@
+{
+  "operation": "validate_artifact",
+  "phase": "verification",
+  "doc_ref": "runs/run-20260919-flaky-001/qe-turn-5-final.json",
+  "context_refs": {
+    "scope": "runs/run-20260919-flaky-001/scope.json"
+  }
+}

@@ -11,6 +11,7 @@ from loanflow.primitives import Clock
 
 _MAX_DECLINE_SHARE = 0.90
 _MAX_CONFIG_AGE_DAYS = 180
+_MAX_BATCH_SIZE = 1000
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,20 @@ def check_config_freshness(thresholds: Thresholds, clock: Clock) -> HealthResult
     return HealthResult("config_freshness", True, f"threshold configuration is {age.days} days old")
 
 
+def check_batch_size(decisions: List[Decision]) -> HealthResult:
+    batch_size = len(decisions)
+    if batch_size > _MAX_BATCH_SIZE:
+        return HealthResult(
+            "batch_size",
+            False,
+            f"batch of {batch_size} decisions exceeds the {_MAX_BATCH_SIZE}-decision sanity "
+            f"threshold (e.g. a data-pipeline duplication bug)",
+        )
+    return HealthResult(
+        "batch_size", True, f"batch of {batch_size} decisions is within the {_MAX_BATCH_SIZE}-decision sanity threshold"
+    )
+
+
 @dataclass(frozen=True)
 class HealthReport:
     results: tuple
@@ -66,4 +81,5 @@ def build_health_report(decisions: List[Decision], thresholds: Thresholds, clock
     return HealthReport((
         check_decision_distribution(decisions),
         check_config_freshness(thresholds, clock),
+        check_batch_size(decisions),
     ))

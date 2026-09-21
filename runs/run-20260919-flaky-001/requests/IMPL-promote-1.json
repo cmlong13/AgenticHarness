@@ -1,0 +1,7 @@
+{
+  "operation": "promote_artifact",
+  "run_id": "run-20260919-flaky-001",
+  "phase": "implementation",
+  "doc_ref": "runs/run-20260919-flaky-001/engineer-raw-1.json",
+  "context_refs": {"findings": "runs/run-20260919-flaky-001/findings.json"}
+}

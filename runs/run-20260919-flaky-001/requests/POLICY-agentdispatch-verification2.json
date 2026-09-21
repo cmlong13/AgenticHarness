@@ -1,0 +1,12 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260919-flaky-001",
+  "kind": "agent_dispatch",
+  "payload": {
+    "phase": "verification",
+    "subagent_type": "quality-engineer",
+    "agent_id": "ac2d67eb21c7caa59",
+    "dispatch_sequence": 2,
+    "note": "Fresh dispatch for a checkpoint-resumed process (evaluate_resume next_phase=verification); this is a new, distinct agent_id, not a resume of dispatch_sequence 1's agent_id (ad4f72ff97eb61f80) from the interrupted prior process, per work/SKILL.md's 'Resuming an interrupted run' step 6. Confirmed via ListAgents in this resumed process before dispatch: no reachable agents -- the prior instance cannot be resumed."
+  }
+}

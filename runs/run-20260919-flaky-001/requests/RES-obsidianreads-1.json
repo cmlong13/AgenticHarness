@@ -1,0 +1,6 @@
+{
+  "operation": "retain_architect_obsidian_reads",
+  "run_id": "run-20260919-flaky-001",
+  "task_id": "T-FLAKY-DEMO",
+  "findings_ref": "runs/run-20260919-flaky-001/findings.json"
+}

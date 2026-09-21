@@ -1,0 +1,10 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260919-flaky-001",
+  "kind": "transport_parse_failure",
+  "payload": {
+    "phase": "verification",
+    "attempt_ref": "runs/run-20260919-flaky-001/attempts/verification-1.raw.txt",
+    "description": "The Quality Engineer's first turn was not a raw JSON object -- it carried leading prose ('STATUS: in_progress ... Progress so far: ...') and wrapped the actual attempt_requested envelope inside a Markdown ```json code fence, followed by trailing prose. This violates quality-engineer.md's Output contract ('Exactly one raw JSON object per turn, no fence, no prose, response_type first'). Classified as a transport/parse failure, not a content failure -- the embedded JSON itself appears well-formed, but the turn as delivered does not parse as strict JSON."
+  }
+}

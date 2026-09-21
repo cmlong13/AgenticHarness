@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "record_kind": "agent_usage",
+  "agent_id": "ad4f72ff97eb61f80",
+  "identity": {
+    "match_status": "matched",
+    "run_id": "run-20260919-flaky-001",
+    "task_id": "T-FLAKY-DEMO",
+    "phase": "verification",
+    "subagent_type": "quality-engineer",
+    "dispatch_sequence": 1,
+    "candidate_run_ids": [
+      "run-20260919-flaky-001"
+    ]
+  },
+  "source": {
+    "hook_event_name": "SubagentStop",
+    "agent_transcript_path": "C:\\Users\\caleb\\.claude\\projects\\C--Users-caleb-Documents-Projects-AgenticHarness\\ee8c55c2-b0e5-46ee-b683-637b201f26d5\\subagents\\agent-ad4f72ff97eb61f80.jsonl",
+    "agent_type": "quality-engineer"
+  },
+  "captured_at": "2026-09-19T15:58:28Z",
+  "message_count": 30,
+  "models_seen": [
+    "claude-sonnet-5"
+  ],
+  "primary_model": "claude-sonnet-5",
+  "token_usage": {
+    "input_tokens": 60,
+    "output_tokens": 7857,
+    "cache_creation_input_tokens": 95466,
+    "cache_read_input_tokens": 789985,
+    "cache_creation_breakdown": {
+      "ephemeral_5m_input_tokens": 95466,
+      "ephemeral_1h_input_tokens": 0
+    }
+  },
+  "skipped_transcript_lines": [],
+  "cost": {
+    "priced": true,
+    "amount": "0.475352",
+    "currency": "USD",
+    "reason": null,
+    "pricing_source": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "pricing_verified_date": "2026-08-14"
+  }
+}
