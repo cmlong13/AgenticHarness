@@ -1,5 +1,9 @@
 # Project Spec: Agentic Coding Harness
 
+See `docs/assignment-audit.md` for the final, independently-audited requirement-by-requirement
+status (2026-09-21) — treat that document, not this header, as the authoritative current
+status; this header has not been kept current as the project progressed.
+
 Status: **Implementation in progress — artifact contracts, validation, all three phase
 subagents (Architect, Engineer, Quality Engineer, each with independently verified permission
 boundaries), the code-craftsmanship and test-runner skills (each live-verified through
