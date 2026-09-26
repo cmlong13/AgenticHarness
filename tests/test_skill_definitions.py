@@ -225,6 +225,30 @@ class TestGithubSkill:
         for op in ("git_repo_identity", "retain_commit_evidence", "retain_push_attempt", "verify_push", "gh_repo_metadata"):
             assert op in self.text
 
+    def test_five_skill_pack_procedures_each_independently_named(self) -> None:
+        # ASSIGNMENT.md §2.3: pr-create, read-file, search-code, commit-history,
+        # pr-review -- each its own heading, mapped to its own live_cli operation.
+        from harness.orchestrator import live_cli
+
+        for skill_name, op in (
+            ("read-file", "read_file"), ("search-code", "search_code"), ("commit-history", "commit_history"),
+            ("pr-review", "pr_review"), ("pr-create", "pr_create"),
+        ):
+            assert f"## `{skill_name}` -- operation `{op}`" in self.text
+            assert op in live_cli.OPERATIONS
+
+    def test_read_only_and_authorization_contracts_documented(self) -> None:
+        assert self.flat_text.count("(read-only)") >= 4
+        for phrase in [
+            "state-changing; explicit authorization only",
+            "`authorization_source`",
+            "never edits source, commits, pushes, creates a branch",
+            "never approves, comments, requests changes, or merges",
+            "`created_unverified`",
+            "An unscoped, GitHub-wide search is refused",
+        ]:
+            assert phrase in self.flat_text, f"expected {phrase!r} in github/SKILL.md"
+
 
 class TestJiraSkill:
     def setup_method(self) -> None:

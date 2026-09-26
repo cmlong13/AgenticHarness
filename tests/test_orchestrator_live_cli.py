@@ -1663,6 +1663,310 @@ class TestGhRepoMetadata:
         assert resp["metadata"]["nameWithOwner"] == "example-owner/example-repo"
 
 
+# ---------------------------------------------------------------------------
+# github/ skill pack (ASSIGNMENT.md §2.3): read-file, search-code,
+# commit-history, pr-review (read-only), pr-create (the one state-changing op)
+# ---------------------------------------------------------------------------
+
+
+def _no_subprocess(argv, cwd):
+    raise AssertionError(f"no command should have run: {argv}")
+
+
+class TestReadFile:
+    def test_reads_real_file_at_branch(self, git_repo_root, capsys) -> None:
+        repo_root, _ = git_repo_root
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "read_file", "target_repo_path": ".", "ref": "main", "file_path": "file.txt"}, capsys,
+        )
+        assert exit_code == 0
+        assert resp["status"] == "found"
+        assert resp["content"] == "hello\n"
+
+    def test_missing_file_is_not_found(self, git_repo_root, capsys) -> None:
+        repo_root, _ = git_repo_root
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "read_file", "target_repo_path": ".", "ref": "main", "file_path": "nope.txt"}, capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "not_found"
+
+    def test_repo_slug_routes_to_a_get_only_github_contents_call(self, git_repo_root, monkeypatch, capsys) -> None:
+        repo_root, _ = git_repo_root
+        calls: list[list] = []
+
+        def fake_runner(argv, cwd):
+            calls.append(argv)
+            return github.CommandResult(exit_code=0, stdout=json.dumps({
+                "type": "file", "encoding": "base64", "size": 6, "sha": "b" * 40, "content": "aGVsbG8K",
+            }), stderr="")
+
+        monkeypatch.setattr(github, "DEFAULT_RUNNER", fake_runner)
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "read_file", "ref": "main", "file_path": "a.py", "repo_slug": "owner/name"},
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["content"] == "hello\n"
+        assert calls == [["gh", "api", "--method", "GET", "repos/owner/name/contents/a.py?ref=main"]]
+
+    def test_flag_shaped_ref_rejected_without_running_anything(self, git_repo_root, monkeypatch, capsys) -> None:
+        repo_root, _ = git_repo_root
+        monkeypatch.setattr(github, "DEFAULT_RUNNER", _no_subprocess)
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "read_file", "ref": "--output=x", "file_path": "file.txt"}, capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "invalid_ref"
+
+    def test_protected_path_rejected(self, repo_root, capsys) -> None:
+        (repo_root / ".claude").mkdir()
+        (repo_root / ".claude" / "settings.json").write_text("{}", encoding="utf-8")
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "read_file", "target_repo_path": ".claude/settings.json", "ref": "main", "file_path": "x"},
+            capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "invalid"
+        assert resp["code"] == "protected_path"
+
+    def test_missing_required_field_is_a_usage_error(self, git_repo_root, capsys) -> None:
+        repo_root, _ = git_repo_root
+        exit_code, resp = _run_main(repo_root, {"operation": "read_file", "target_repo_path": ".", "ref": "main"}, capsys)
+        assert exit_code == 2
+        assert resp["status"] == "error"
+
+
+class TestSearchCode:
+    def test_delegates_to_github_module(self, git_repo_root, monkeypatch, capsys) -> None:
+        repo_root, _ = git_repo_root
+        seen: dict = {}
+
+        def fake_search(repo_path, query, **kwargs):
+            seen.update(kwargs)
+            return {"status": "found", "query": query, "results": [{"path": "a.py"}]}
+
+        monkeypatch.setattr(github, "search_code", fake_search)
+        exit_code, resp = _run_main(
+            repo_root,
+            {"operation": "search_code", "query": "def foo", "repo_slugs": ["owner/name"], "limit": 5},
+            capsys,
+        )
+        assert exit_code == 0
+        assert resp["results"] == [{"path": "a.py"}]
+        assert seen == {"repo_slugs": ["owner/name"], "limit": 5}
+
+    @pytest.mark.parametrize("extra", [{}, {"repo_slugs": "not-a-list"}, {"repo_slugs": [1]}])
+    def test_missing_or_malformed_repo_slugs_is_a_usage_error(self, git_repo_root, monkeypatch, capsys, extra) -> None:
+        repo_root, _ = git_repo_root
+        monkeypatch.setattr(github, "DEFAULT_RUNNER", _no_subprocess)
+        exit_code, resp = _run_main(repo_root, {"operation": "search_code", "query": "x", **extra}, capsys)
+        assert exit_code == 2
+        assert resp["status"] == "error"
+
+    def test_unscoped_empty_list_refused_without_running_gh(self, git_repo_root, monkeypatch, capsys) -> None:
+        repo_root, _ = git_repo_root
+        monkeypatch.setattr(github, "DEFAULT_RUNNER", _no_subprocess)
+        exit_code, resp = _run_main(repo_root, {"operation": "search_code", "query": "x", "repo_slugs": []}, capsys)
+        assert exit_code == 1
+        assert resp["status"] == "invalid_query"
+
+
+class TestCommitHistory:
+    def test_real_repo_history(self, git_repo_root, capsys) -> None:
+        repo_root, head_sha = git_repo_root
+        exit_code, resp = _run_main(repo_root, {"operation": "commit_history", "target_repo_path": "."}, capsys)
+        assert exit_code == 0
+        assert resp["status"] == "ok"
+        assert resp["commits"][0]["sha"] == head_sha
+
+    def test_ref_and_path_are_passed_through(self, git_repo_root, capsys) -> None:
+        repo_root, head_sha = git_repo_root
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "commit_history", "ref": head_sha, "path": "file.txt", "max_count": 1}, capsys,
+        )
+        assert exit_code == 0
+        assert [c["sha"] for c in resp["commits"]] == [head_sha]
+        assert resp["truncated"] is True
+
+    def test_invalid_max_count_is_a_negative_result_not_a_crash(self, git_repo_root, capsys) -> None:
+        repo_root, _ = git_repo_root
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "commit_history", "target_repo_path": ".", "max_count": 0}, capsys,
+        )
+        assert exit_code == 1
+        assert resp["status"] == "invalid_input"
+
+
+class TestPrReview:
+    def test_delegates_to_github_module(self, git_repo_root, monkeypatch, capsys) -> None:
+        repo_root, _ = git_repo_root
+        monkeypatch.setattr(
+            github, "pr_review",
+            lambda repo_path, pr_ref, **kwargs: {"status": "found", "pr_ref": pr_ref, "pull_request": {"number": 3}},
+        )
+        exit_code, resp = _run_main(repo_root, {"operation": "pr_review", "target_repo_path": ".", "pr_ref": "3"}, capsys)
+        assert exit_code == 0
+        assert resp["pull_request"]["number"] == 3
+
+    def test_not_found_is_a_negative_result(self, git_repo_root, monkeypatch, capsys) -> None:
+        repo_root, _ = git_repo_root
+        monkeypatch.setattr(
+            github, "pr_review", lambda repo_path, pr_ref, **kwargs: {"status": "not_found", "pr_ref": pr_ref},
+        )
+        exit_code, resp = _run_main(repo_root, {"operation": "pr_review", "target_repo_path": ".", "pr_ref": "3"}, capsys)
+        assert exit_code == 1
+        assert resp["status"] == "not_found"
+
+    def test_flag_shaped_pr_ref_rejected_without_running_gh(self, git_repo_root, monkeypatch, capsys) -> None:
+        repo_root, _ = git_repo_root
+        monkeypatch.setattr(github, "DEFAULT_RUNNER", _no_subprocess)
+        exit_code, resp = _run_main(repo_root, {"operation": "pr_review", "pr_ref": "--web"}, capsys)
+        assert exit_code == 1
+        assert resp["status"] == "invalid_input"
+
+
+class _ScriptedRemote:
+    """`git rev-parse` runs for real against the disposable repo; the remote URL,
+    per-ref `git ls-remote`, `gh pr create` and `gh pr view` are fixtures. Anything
+    else (a commit, a push) fails the test."""
+
+    def __init__(self, real_runner, remote_refs: dict, *, create=None, view=None):
+        self.real_runner = real_runner
+        self.remote_refs = remote_refs
+        self.create = create
+        self.view = view
+        self.calls: list[list] = []
+
+    def __call__(self, argv, cwd):
+        self.calls.append(argv)
+        if argv[:2] == ["git", "rev-parse"]:
+            return self.real_runner(argv, cwd)
+        if argv[:3] == ["git", "remote", "get-url"]:
+            return github.CommandResult(exit_code=0, stdout="https://github.com/example-owner/example-repo.git\n", stderr="")
+        if argv[:2] == ["git", "ls-remote"]:
+            sha = self.remote_refs.get(argv[3])
+            return github.CommandResult(exit_code=0, stdout=f"{sha}\t{argv[3]}\n" if sha else "", stderr="")
+        if argv[:3] == ["gh", "pr", "create"] and self.create is not None:
+            return self.create
+        if argv[:3] == ["gh", "pr", "view"] and self.view is not None:
+            return self.view
+        raise AssertionError(f"unexpected invocation in test: {argv}")
+
+    def ran_gh(self) -> bool:
+        return any(argv[0] == "gh" for argv in self.calls)
+
+
+_PR_CREATE_REQUEST = {
+    "operation": "pr_create", "run_id": "run-1", "task_id": "T-1", "target_repo_path": ".",
+    "base": "release", "head": "main", "title": "Add x", "body": "body",
+    "expected_repo": "example-owner/example-repo",
+    "authorized": True, "authorization_source": "user instruction: open a PR for main into release",
+}
+
+
+class TestPrCreate:
+    def _install(self, monkeypatch, head_sha, **kwargs) -> _ScriptedRemote:
+        remote_refs = kwargs.pop("remote_refs", {"refs/heads/main": head_sha, "refs/heads/release": "e" * 40})
+        fake = _ScriptedRemote(github.DEFAULT_RUNNER, remote_refs, **kwargs)
+        monkeypatch.setattr(github, "DEFAULT_RUNNER", fake)
+        return fake
+
+    @staticmethod
+    def _policy_events(repo_root) -> list:
+        log = repo_root / "runs" / "run-1" / "logs" / "policy-events.jsonl"
+        return [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+
+    @pytest.mark.parametrize("auth", [{"authorized": None}, {"authorized": "true"}, {"authorization_source": ""}])
+    def test_unauthorized_refusal_runs_nothing_but_is_retained(self, git_repo_root, monkeypatch, capsys, auth) -> None:
+        repo_root, head_sha = git_repo_root
+        fake = self._install(monkeypatch, head_sha, create=github.CommandResult(exit_code=0, stdout="", stderr=""))
+        request = {k: v for k, v in {**_PR_CREATE_REQUEST, **auth}.items() if v is not None}
+        exit_code, resp = _run_main(repo_root, request, capsys)
+        assert exit_code == 1
+        assert resp["status"] == "not_authorized"
+        assert fake.calls == []
+        doc = json.loads((repo_root / "runs" / "run-1" / "git" / "pr-create.json").read_text(encoding="utf-8"))
+        assert doc["status"] == "not_authorized"
+        assert self._policy_events(repo_root)[-1]["status"] == "not_authorized"
+
+    def test_push_not_verified_retains_evidence_but_never_calls_gh_pr_create(
+        self, git_repo_root, monkeypatch, capsys,
+    ) -> None:
+        repo_root, _ = git_repo_root
+        fake = self._install(monkeypatch, None, remote_refs={"refs/heads/main": "f" * 40, "refs/heads/release": "e" * 40})
+        exit_code, resp = _run_main(repo_root, _PR_CREATE_REQUEST, capsys)
+        assert exit_code == 1
+        assert resp["status"] == "push_not_verified"
+        assert not fake.ran_gh()
+        doc = json.loads((repo_root / "runs" / "run-1" / "git" / "pr-create.json").read_text(encoding="utf-8"))
+        assert doc["status"] == "push_not_verified"
+        assert doc["verification"]["status"] == "mismatch"
+
+    def test_created_retains_evidence_with_pr_url(self, git_repo_root, monkeypatch, capsys) -> None:
+        repo_root, head_sha = git_repo_root
+        self._install(
+            monkeypatch, head_sha,
+            create=github.CommandResult(exit_code=0, stdout="https://github.com/example-owner/example-repo/pull/9\n", stderr=""),
+            view=github.CommandResult(exit_code=0, stdout=json.dumps({
+                "number": 9, "url": "https://github.com/example-owner/example-repo/pull/9", "state": "OPEN",
+                "baseRefName": "release", "headRefName": "main", "headRefOid": head_sha,
+            }), stderr=""),
+        )
+        exit_code, resp = _run_main(repo_root, _PR_CREATE_REQUEST, capsys)
+        assert exit_code == 0
+        assert resp["status"] == "created"
+        assert resp["number"] == 9
+        doc = json.loads((repo_root / "runs" / "run-1" / "git" / "pr-create.json").read_text(encoding="utf-8"))
+        assert doc["status"] == "created"
+        assert doc["url"] == "https://github.com/example-owner/example-repo/pull/9"
+        assert doc["head_sha"] == head_sha
+        assert doc["authorization_source"] == _PR_CREATE_REQUEST["authorization_source"]
+        event = self._policy_events(repo_root)[-1]
+        assert event["kind"] == "pr_create_attempt" and event["status"] == "created"
+
+    def test_created_unverified_is_a_failure_exit(self, git_repo_root, monkeypatch, capsys) -> None:
+        repo_root, head_sha = git_repo_root
+        self._install(
+            monkeypatch, head_sha,
+            create=github.CommandResult(exit_code=0, stdout="https://github.com/example-owner/example-repo/pull/9\n", stderr=""),
+            view=github.CommandResult(exit_code=1, stdout="", stderr="no pull requests found"),
+        )
+        exit_code, resp = _run_main(repo_root, _PR_CREATE_REQUEST, capsys)
+        assert exit_code == 1
+        assert resp["status"] == "created_unverified"
+
+    def test_existing_evidence_blocks_before_anything_runs(self, git_repo_root, monkeypatch, capsys) -> None:
+        """The collision check happens first: a PR must never be opened whose evidence
+        record then cannot be retained."""
+        repo_root, head_sha = git_repo_root
+        evidence = repo_root / "runs" / "run-1" / "git" / "pr-create.json"
+        evidence.parent.mkdir(parents=True)
+        evidence.write_text('{"status": "earlier"}', encoding="utf-8")
+        fake = self._install(monkeypatch, head_sha)
+        exit_code, resp = _run_main(repo_root, _PR_CREATE_REQUEST, capsys)
+        assert exit_code == 1
+        assert resp["status"] == "blocked"
+        assert fake.calls == []
+        assert json.loads(evidence.read_text(encoding="utf-8")) == {"status": "earlier"}
+
+    @pytest.mark.parametrize("filename", ["../escape.json", "sub/x.json", "x.txt", ""])
+    def test_unsafe_filename_is_a_usage_error(self, git_repo_root, monkeypatch, capsys, filename) -> None:
+        repo_root, head_sha = git_repo_root
+        fake = self._install(monkeypatch, head_sha)
+        exit_code, resp = _run_main(repo_root, {**_PR_CREATE_REQUEST, "filename": filename}, capsys)
+        assert exit_code == 2
+        assert resp["status"] == "error"
+        assert fake.calls == []
+
+    def test_pr_create_never_exposes_a_simulation_parameter(self) -> None:
+        sig = inspect.signature(live_cli.op_pr_create)
+        assert "runner" not in sig.parameters
+        assert "simulated" not in " ".join(sig.parameters).lower()
+
+
 class TestResolveJiraIssue:
     """op_resolve_jira_issue -- the live-CLI boundary /work's ticket-mode resolution
     calls. Every scenario here goes through jira_connector.DEFAULT_TRANSPORT

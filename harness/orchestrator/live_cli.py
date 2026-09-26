@@ -35,6 +35,7 @@ session, not a Skill-scoped wrapper protecting against a restricted caller):
 from __future__ import annotations
 
 import json
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -110,6 +111,24 @@ SEMANTIC_VALIDATORS = {
 # a well-formed negative read outcome that must be retained honestly and treated as
 # "no vault evidence retrieved," never as authority. `no_matches` in particular is a
 # real, honest "nothing there," not a connector failure.
+# The github/ skill pack's five ASSIGNMENT.md §2.3 capabilities reuse this same
+# affirmative/negative split rather than inventing new vocabulary: op_read_file,
+# op_search_code and op_pr_review use the already-listed "found"; op_commit_history
+# uses the already-listed "ok". Their honest-negative siblings ("not_found",
+# "invalid_ref", "invalid_path", "not_a_file", "too_large", "not_text", "no_matches",
+# "no_commits", "invalid_input", "invalid_query", "command_failed", "invalid_output")
+# are deliberately absent -- none is authority that GitHub state was read, only that
+# the read was well-formed and came back empty or failed. op_pr_create is the one
+# state-changing capability; only its own "created" status (an independently
+# re-fetched OPEN PR whose base/head names and head commit match what was requested
+# -- see harness.orchestrator.github.pr_create) is affirmative. Its negative siblings
+# ("not_authorized", "invalid_input", "invalid_head_branch", "push_not_verified",
+# "base_not_found", "already_exists", "command_failed", "invalid_output",
+# "created_unverified") are never evidence a PR was opened --
+# "created_unverified" in particular means `gh pr create` itself reported success but
+# the independent re-fetch could not confirm it, exactly the same "the mutating
+# call's own success signal is not evidence" discipline verify_push already applies
+# to a push.
 # op_resolve_jira_issue_routed (the ASSIGNMENT.md §2.4 dual-route Jira connector) has its
 # own four affirmative classifications from harness.orchestrator.connector_router --
 # "resolved_via_rest" / "resolved_via_mcp" / "rest_failed_mcp_resolved" /
@@ -120,7 +139,7 @@ SEMANTIC_VALIDATORS = {
 # outcome, never evidence a real ticket was resolved.
 OK_STATUSES = {
     "valid", "match", "ok", "retained", "promoted", "written", "resumable", "appended", "captured", "verified",
-    "resolved", "published", "read", "found",
+    "resolved", "published", "read", "found", "created",
     "resolved_via_rest", "resolved_via_mcp", "rest_failed_mcp_resolved", "mcp_failed_rest_resolved",
 }
 
@@ -893,6 +912,135 @@ def op_gh_repo_metadata(req: dict) -> dict:
     return {"operation": "gh_repo_metadata", **result}
 
 
+def op_read_file(req: dict) -> dict:
+    """22a. Read-only: `read-file` (ASSIGNMENT.md §2.3's github/ skill pack) -- a file's
+    content as it exists at an arbitrary ref (`harness.orchestrator.github.read_file`):
+    the local clone via real `git show <ref>:<path>` by default, or GitHub itself via a
+    fixed `gh api --method GET .../contents/...` when `repo_slug` is given. Never the
+    current working tree (use `Read` for that); never fetches or writes anything."""
+    target_repo_path = req.get("target_repo_path", ".")
+    ref = _require_str(req, "ref")
+    file_path = _require_str(req, "file_path")
+    repo_slug = req.get("repo_slug")
+    max_bytes = req.get("max_bytes", github.READ_FILE_MAX_BYTES)
+    try:
+        repo_path = github.resolve_repo_path(target_repo_path, repo_root=REPO_ROOT)
+    except paths.PathSafetyError as exc:
+        return {"operation": "read_file", "status": "invalid", "error": exc.message, "code": exc.code}
+    result = github.read_file(repo_path, ref, file_path, repo_slug=repo_slug, max_bytes=max_bytes)
+    return {"operation": "read_file", **result}
+
+
+def op_search_code(req: dict) -> dict:
+    """22b. Read-only: `search-code` (ASSIGNMENT.md §2.3's github/ skill pack) -- code
+    search across GitHub-hosted repositories via `gh search code`
+    (harness.orchestrator.github.search_code), the one capability in this set git
+    itself cannot provide. `repo_slugs` (a non-empty list of `"owner/name"` strings) is
+    required -- an unscoped GitHub-wide search is refused as `invalid_query`."""
+    target_repo_path = req.get("target_repo_path", ".")
+    query = _require_str(req, "query")
+    repo_slugs = req.get("repo_slugs")
+    if not (isinstance(repo_slugs, list) and all(isinstance(s, str) for s in repo_slugs)):
+        raise LiveCliUsageError("'repo_slugs' must be a list of 'owner/name' strings")
+    limit = req.get("limit", 30)
+    try:
+        repo_path = github.resolve_repo_path(target_repo_path, repo_root=REPO_ROOT)
+    except paths.PathSafetyError as exc:
+        return {"operation": "search_code", "status": "invalid", "error": exc.message, "code": exc.code}
+    result = github.search_code(repo_path, query, repo_slugs=repo_slugs, limit=limit)
+    return {"operation": "search_code", **result}
+
+
+def op_commit_history(req: dict) -> dict:
+    """22c. Read-only: `commit-history` (ASSIGNMENT.md §2.3's github/ skill pack) --
+    bounded `git log` (harness.orchestrator.github.commit_history), optionally at a
+    given `ref` and/or scoped to one `path`'s own history."""
+    target_repo_path = req.get("target_repo_path", ".")
+    max_count = req.get("max_count", 20)
+    ref = req.get("ref")
+    path = req.get("path")
+    try:
+        repo_path = github.resolve_repo_path(target_repo_path, repo_root=REPO_ROOT)
+    except paths.PathSafetyError as exc:
+        return {"operation": "commit_history", "status": "invalid", "error": exc.message, "code": exc.code}
+    result = github.commit_history(repo_path, max_count=max_count, ref=ref, path=path)
+    return {"operation": "commit_history", **result}
+
+
+def op_pr_review(req: dict) -> dict:
+    """22d. Read-only: `pr-review` (ASSIGNMENT.md §2.3's github/ skill pack) -- PR
+    review/check-run/mergeability state plus a derived review summary via `gh pr view`
+    (harness.orchestrator.github.pr_review). Issues no write call of any kind; never a
+    substitute for verify_push's own git ls-remote check."""
+    target_repo_path = req.get("target_repo_path", ".")
+    pr_ref = _require_str(req, "pr_ref")
+    repo_slug = req.get("repo_slug")
+    try:
+        repo_path = github.resolve_repo_path(target_repo_path, repo_root=REPO_ROOT)
+    except paths.PathSafetyError as exc:
+        return {"operation": "pr_review", "status": "invalid", "error": exc.message, "code": exc.code}
+    result = github.pr_review(repo_path, pr_ref, repo_slug=repo_slug)
+    return {"operation": "pr_review", **result}
+
+
+def op_pr_create(req: dict) -> dict:
+    """22e. The one state-changing github/ skill-pack capability: `pr-create`
+    (ASSIGNMENT.md §2.3). Requires `"authorized": true` (the JSON literal) plus a
+    non-empty `authorization_source` and `expected_repo`; otherwise refused before any
+    command runs. Never commits or pushes anything itself -- refuses
+    ("push_not_verified") unless the `head` branch's real local tip is already an
+    independently `verify_push`-verified push to `remote`. The evidence path is
+    collision-checked *before* anything runs (so a PR can never be opened whose record
+    then cannot be kept), and runs/<run_id>/git/pr-create.json plus a
+    `pr_create_attempt` policy event are retained whatever the classification --
+    including a refusal."""
+    run_id = _require_str(req, "run_id")
+    task_id = _require_str(req, "task_id")
+    base = _require_str(req, "base")
+    head = _require_str(req, "head")
+    title = _require_str(req, "title")
+    body = req.get("body", "")
+    if not isinstance(body, str):
+        raise LiveCliUsageError("'body' must be a string")
+    target_repo_path = req.get("target_repo_path", ".")
+    remote = req.get("remote", "origin")
+    repo_slug = req.get("repo_slug")
+    expected_repo = req.get("expected_repo")
+    authorized = req.get("authorized", False)
+    authorization_source = req.get("authorization_source")
+    filename = req.get("filename", "pr-create.json")
+    if not isinstance(filename, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*\.json", filename) or ".." in filename:
+        raise LiveCliUsageError("'filename' must be a plain *.json file name")
+    try:
+        repo_path = github.resolve_repo_path(target_repo_path, repo_root=REPO_ROOT)
+    except paths.PathSafetyError as exc:
+        return {"operation": "pr_create", "status": "invalid", "error": exc.message, "code": exc.code}
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    if (run_directory / "git" / filename).exists():
+        return {
+            "operation": "pr_create", "status": "blocked",
+            "error": f"evidence file runs/{run_id}/git/{filename} already exists; nothing was run",
+        }
+    result = github.pr_create(
+        repo_path, base=base, head=head, title=title, body=body, expected_repo=expected_repo,
+        authorized=authorized, authorization_source=authorization_source, remote=remote, repo_slug=repo_slug,
+    )
+    doc = {
+        "task_id": task_id, "run_id": run_id, "target_repo_path": target_repo_path,
+        "requested_at": _utc_now_iso(), **result,
+    }
+    evidence_io.ensure_run_dirs(run_directory)
+    try:
+        path = evidence_io.retain_git_evidence(run_directory, filename, doc)
+    except evidence_io.EvidenceCollisionError as exc:
+        return {"operation": "pr_create", "status": "blocked", "error": str(exc), "result": result}
+    evidence_io.retain_policy_event(
+        run_directory, "pr_create_attempt",
+        {"status": result.get("status"), "base": base, "head": head, "authorization_source": authorization_source},
+    )
+    return {"operation": "pr_create", "path": _rel(path), **result}
+
+
 def op_resolve_jira_issue(req: dict) -> dict:
     """23. The one Jira ticket-resolution entry point (harness.orchestrator.
     jira_connector) -- ticket-mode `/work`'s real connector boundary, always called
@@ -1365,6 +1513,11 @@ OPERATIONS = {
     "retain_push_attempt": op_retain_push_attempt,
     "verify_push": op_verify_push,
     "gh_repo_metadata": op_gh_repo_metadata,
+    "read_file": op_read_file,
+    "search_code": op_search_code,
+    "commit_history": op_commit_history,
+    "pr_review": op_pr_review,
+    "pr_create": op_pr_create,
     "resolve_jira_issue": op_resolve_jira_issue,
     "resolve_jira_issue_routed": op_resolve_jira_issue_routed,
     "publish_run_summary": op_publish_run_summary,
