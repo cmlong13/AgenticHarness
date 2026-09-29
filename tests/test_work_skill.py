@@ -1058,6 +1058,24 @@ class TestConnectorRouting:
         assert "ticket-mode\n    `/work` continues to resolve tickets through it via `resolve_jira_issue`" in self.text \
             or "ticket-mode `/work` continues to resolve tickets through it via `resolve_jira_issue`" in rule
 
+    def test_standing_rule_22_governs_ticket_mutation(self) -> None:
+        rule = self._slice("22. Jira ticket mutation", "# Parsing $ARGUMENTS")
+        for phrase in [
+            "**only by this orchestrator session**",
+            "A normal `/work` run creates and edits no ticket.",
+            'skill: "jira"',
+            "`authorized: true` (the JSON boolean)",
+            "they never create one",
+            "No subagent is ever given a Jira write path.",
+        ]:
+            assert phrase in " ".join(rule.split()), f"expected {phrase!r} in standing rule 22"
+
+    def test_ops_table_rows_for_jira_skill_pack(self) -> None:
+        for op in ("read_ticket", "create_ticket", "edit_ticket"):
+            assert f"| `{op}` |" in self.text
+        create_row = self._slice("| `create_ticket` |", "\n| `edit_ticket` |")
+        assert "standing rule 22 only" in create_row and "REST only" in create_row
+
     def test_ops_table_row_for_routed_operation(self) -> None:
         assert "| `resolve_jira_issue_routed` |" in self.text
         row = self._slice("| `resolve_jira_issue_routed` |", "\n| `publish_run_summary` |")

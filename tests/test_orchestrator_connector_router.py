@@ -172,6 +172,43 @@ class TestRecordShape:
         assert cr.KEPT_ROUTE == "rest"
 
 
+class TestJiraOperationRoutes:
+    """jira/ skill pack routing: read-ticket is dual-route; create/edit are REST only."""
+
+    def test_operation_route_table(self):
+        assert cr.JIRA_OPERATION_ROUTES == {
+            "read_ticket": ("rest", "mcp"),
+            "create_ticket": ("rest",),
+            "edit_ticket": ("rest",),
+        }
+
+    @pytest.mark.parametrize("operation", ["create_ticket", "edit_ticket"])
+    @pytest.mark.parametrize("requested", [None, "rest"])
+    def test_mutation_selects_rest(self, operation, requested):
+        route, reason = cr.select_mutation_route(operation, requested)
+        assert route == "rest"
+        assert "never fall back" in reason
+
+    @pytest.mark.parametrize("operation", ["create_ticket", "edit_ticket"])
+    @pytest.mark.parametrize("requested", ["mcp", "MCP", "rest_first", "", 1])
+    def test_mutation_refuses_any_other_route(self, operation, requested):
+        route, reason = cr.select_mutation_route(operation, requested)
+        assert route is None
+        assert "supports only" in reason
+
+    @pytest.mark.parametrize("operation", ["read_ticket", "resolve_issue", "delete_ticket"])
+    def test_non_mutation_operations_are_not_routed_here(self, operation):
+        with pytest.raises(ValueError):
+            cr.select_mutation_route(operation)
+
+    def test_selection_is_deterministic(self):
+        results = {cr.select_mutation_route("edit_ticket", None) for _ in range(20)}
+        assert len(results) == 1
+    # The MCP server's own tool list (exactly one read-only `get_issue`, no write tool) is
+    # asserted over the real tools/list protocol in
+    # tests/test_mcp_servers.py::TestJiraServer::test_exactly_one_read_only_tool.
+
+
 class TestRealIntegrationNoCredentials:
     def test_real_rest_route_reports_connector_unavailable(self, monkeypatch):
         for k in ("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"):

@@ -299,12 +299,40 @@ class TestJiraSkill:
         ):
             assert status in self.text
 
-    def test_no_speculative_write_support_documented(self) -> None:
+    def test_skill_pack_procedures_each_independently_named(self) -> None:
+        # ASSIGNMENT.md §2.3: create-ticket, read-ticket, edit-ticket -- each its own
+        # heading, mapped to its own live_cli operation.
+        from harness.orchestrator import live_cli
+
+        assert "# 10. Jira skill pack: read-ticket, create-ticket, edit-ticket" in self.text
+        for skill_name, op in (("read-ticket", "read_ticket"), ("create-ticket", "create_ticket"), ("edit-ticket", "edit_ticket")):
+            assert f"## `{skill_name}` -- operation `{op}`" in self.text
+            assert op in live_cli.OPERATIONS
+        assert "(read-only)" in self.text
+        assert "[`FIELD_REFERENCE.md`](FIELD_REFERENCE.md)" in self.text
+        assert (self.path.parent / "FIELD_REFERENCE.md").exists()
+
+    def test_authorization_and_verification_contract_documented(self) -> None:
         for phrase in [
-            "No create-ticket, edit-ticket, status-transition, or comment-posting",
-            "Never write, transition, comment on, or otherwise mutate a real Jira issue",
+            "`authorized` must be the JSON boolean `true`",
+            "setting them never grants permission",
+            "no validation, no environment read, no network call",
+            "`expected_base_url` is required",
+            "Jira's own `201`/`204` is never the success signal",
+            "`created_unverified`",
+            "`updated_unverified`",
+            "`indeterminate`",
+            "It never contains the `Authorization` header or the API token",
+            "REST only, with no fallback",
         ]:
+            assert phrase in self.flat_text, f"expected {phrase!r} in jira/SKILL.md"
+
+    def test_remaining_gaps_stated_plainly(self) -> None:
+        # Transitions and comments are still not implemented -- the skill must say so,
+        # not imply them.
+        for phrase in ["**No status transitions.**", "**No comments.**", "**not implemented**", "**No MCP writes.**"]:
             assert phrase in self.flat_text
+        assert "Never create, edit, transition, comment on, or otherwise mutate a real Jira issue except" in self.flat_text
 
     def test_credential_handling_documented(self) -> None:
         for phrase in ["JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN", "never retained in any evidence file"]:

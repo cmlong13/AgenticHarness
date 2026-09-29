@@ -241,6 +241,30 @@ class TestSkillEnforcement:
         exit_code, _ = _run_hook(skill_enforcement, payload, monkeypatch)
         assert exit_code == 2
 
+    @pytest.mark.parametrize("command", [
+        'curl -X POST -u a:b https://x.atlassian.net/rest/api/3/issue -d "{}"',
+        "cd /tmp && curl https://x.atlassian.net/rest/api/2/issue/PROJ-1",
+        'Invoke-RestMethod -Method Put -Uri "https://x.atlassian.net/rest/api/3/issue/PROJ-1"',
+        "wget -qO- https://x.atlassian.net/rest/api/latest/issue/PROJ-1",
+        "python -c \"import urllib.request; urllib.request.urlopen('https://x.atlassian.net/rest/api/3/issue')\"",
+    ])
+    def test_raw_jira_rest_call_is_blocked(self, skill_enforcement, monkeypatch, command) -> None:
+        exit_code, stderr = _run_hook(skill_enforcement, _bash_payload(command), monkeypatch)
+        assert exit_code == 2
+        assert "call the Jira REST API directly" in stderr
+        log = skill_enforcement.LOG_PATH.read_text(encoding="utf-8")
+        assert '"kind": "raw_jira_api_bypass"' in log
+
+    @pytest.mark.parametrize("command", [
+        'python -m harness.orchestrator.live_cli --request-file "runs/r/requests/JIRA-1.json"',
+        'grep -rn "curl" docs/ | grep "/rest/api/3/"',
+        "curl https://api.github.com/repos/o/n",
+        'git log --grep "/rest/api/3/issue"',
+    ])
+    def test_non_jira_or_mention_only_commands_are_allowed(self, skill_enforcement, monkeypatch, command) -> None:
+        exit_code, _ = _run_hook(skill_enforcement, _bash_payload(command), monkeypatch)
+        assert exit_code == 0
+
     def test_demo_repo_python_c_write_is_blocked(self, skill_enforcement, monkeypatch) -> None:
         payload = _bash_payload(
             "python -c \"open('demo-repo/src/loanflow/explanations.py', 'w').write('x')\""

@@ -57,6 +57,35 @@ JIRA_MCP_SERVER = "jira"
 JIRA_MCP_SERVER_MODULE = "harness.mcp.jira_server"
 JIRA_MCP_TOOL = "get_issue"
 
+# Which routes each Jira skill-pack procedure may use, in the only order they may be
+# tried. read-ticket is dual-route (resolve_issue_routed below). create-ticket and
+# edit-ticket are REST-only with no fallback, for two reasons: (1) a mutation is not
+# idempotent -- a REST call that timed out may already have created or changed the issue,
+# so retrying it over MCP could apply it twice; (2) the MCP server is registered in
+# .mcp.json, so any write tool on it would be callable directly as an `mcp__jira__*`
+# tool, bypassing live_cli's authorization check and evidence retention.
+JIRA_OPERATION_ROUTES = {
+    "read_ticket": ("rest", "mcp"),
+    "create_ticket": ("rest",),
+    "edit_ticket": ("rest",),
+}
+MUTATION_NO_FALLBACK_REASON = (
+    "mutations are REST-only and never fall back: a failed or timed-out write may already have "
+    "been applied, so repeating it on another route could apply it twice"
+)
+
+
+def select_mutation_route(operation: str, requested_route: object = None) -> tuple[str | None, str]:
+    """Deterministic route choice for a Jira mutation. Returns (route, reason); route is
+    None when the request asked for a route the operation does not support -- the caller
+    must then refuse without contacting Jira."""
+    allowed = JIRA_OPERATION_ROUTES.get(operation)
+    if allowed is None or operation == "read_ticket":
+        raise ValueError(f"{operation!r} is not a Jira mutation operation")
+    if requested_route is None or requested_route == allowed[0]:
+        return allowed[0], MUTATION_NO_FALLBACK_REASON
+    return None, f"{operation} supports only the {list(allowed)} route(s), not {requested_route!r}; {MUTATION_NO_FALLBACK_REASON}"
+
 # Normalized per-route outcome vocabulary -- the same seven jira_connector already uses,
 # plus `route_error` for an MCP-transport/protocol failure that never reached Jira's own
 # classification layer.

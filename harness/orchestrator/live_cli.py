@@ -137,9 +137,17 @@ SEMANTIC_VALIDATORS = {
 # "unauthorized", "identity_mismatch", "invalid_issue_key", "both_routes_failed",
 # "route_disagreement") are deliberately absent -- each is a well-formed negative routing
 # outcome, never evidence a real ticket was resolved.
+# The jira/ skill pack's two state-changing procedures follow pr_create's discipline:
+# op_create_ticket's "created" (already listed) and op_edit_ticket's "updated" are
+# affirmative only after an independent re-read matched every requested value. Their
+# negative siblings ("created_unverified", "updated_unverified", "not_authorized",
+# "invalid_input", "invalid_issue_key", "unsupported_issue_type", "unsupported_field",
+# "unsupported_route", "connector_unavailable", "wrong_instance", "not_found",
+# "unauthorized", "identity_mismatch", "rejected", "indeterminate", "invalid_response")
+# are never evidence a ticket was created or changed. op_read_ticket reuses "resolved".
 OK_STATUSES = {
     "valid", "match", "ok", "retained", "promoted", "written", "resumable", "appended", "captured", "verified",
-    "resolved", "published", "read", "found", "created",
+    "resolved", "published", "read", "found", "created", "updated",
     "resolved_via_rest", "resolved_via_mcp", "rest_failed_mcp_resolved", "mcp_failed_rest_resolved",
 }
 
@@ -1057,10 +1065,27 @@ def op_resolve_jira_issue(req: dict) -> dict:
     lookup is never treated as an empty issue, and the retained `raw` field never
     contains the Authorization header (jira_connector.build_auth_header's header dict is
     never part of HttpResult/JiraResolution)."""
+    return _read_jira_issue(req, "resolve_jira_issue", "issue-resolution.json", "jira_issue_resolution")
+
+
+def op_read_ticket(req: dict) -> dict:
+    """23a. Jira skill pack `read-ticket` (read-only): the same single-issue REST read
+    as op_resolve_jira_issue (one GET, identity-checked, every outcome retained), for
+    reading a ticket outside ticket-mode intake -- for example re-reading an issue
+    after `create_ticket` / `edit_ticket` reported `indeterminate`. Retains
+    runs/<run_id>/jira/<filename> (default read-ticket-1.json) plus a
+    `jira_read_ticket` policy event. The dual-route (MCP) read is
+    `resolve_jira_issue_routed`."""
+    return _read_jira_issue(req, "read_ticket", "read-ticket-1.json", "jira_read_ticket")
+
+
+def _read_jira_issue(req: dict, operation: str, default_filename: str, event_kind: str) -> dict:
     run_id = _require_str(req, "run_id")
     task_id = _require_str(req, "task_id")
     requested_issue_key_raw = _require_str(req, "issue_key")
-    filename = req.get("filename", "issue-resolution.json")
+    filename = req.get("filename", default_filename)
+    if _JIRA_CALLER_SUPPLIED_SECRETS.intersection(req):
+        raise LiveCliUsageError("credentials/transport are read from the environment, never from the request")
     normalized_key = jira_connector.normalize_issue_key(requested_issue_key_raw)
     credentials = jira_connector.JiraCredentials.from_env()
     result = jira_connector.resolve_issue(normalized_key, credentials)
@@ -1073,12 +1098,105 @@ def op_resolve_jira_issue(req: dict) -> dict:
     try:
         path = evidence_io.retain_jira_evidence(run_directory, filename, doc)
     except evidence_io.EvidenceCollisionError as exc:
-        return {"operation": "resolve_jira_issue", "status": "blocked", "error": str(exc)}
+        return {"operation": operation, "status": "blocked", "error": str(exc)}
     evidence_io.retain_policy_event(
-        run_directory, "jira_issue_resolution",
+        run_directory, event_kind,
         {"status": result.status, "requested_issue_key": result.requested_issue_key, "reason": result.reason},
     )
-    return {"operation": "resolve_jira_issue", "path": _rel(path), **result.as_dict()}
+    return {"operation": operation, "path": _rel(path), **result.as_dict()}
+
+
+_JIRA_CALLER_SUPPLIED_SECRETS = frozenset(
+    {"env", "credentials", "transport", "base_url", "email", "api_token", "JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"}
+)
+
+
+def _jira_mutation(req: dict, operation: str, default_filename: str, event_kind: str, call) -> dict:
+    """Shared boundary for create_ticket / edit_ticket: request hygiene, route
+    selection (connector_router.select_mutation_route -- REST only, never a fallback),
+    an evidence-path collision check *before* anything is sent (so a mutation can never
+    happen whose record then cannot be kept), then unconditional retention of
+    runs/<run_id>/jira/<filename> and an `event_kind` policy event -- refusals included.
+    `call(credentials)` runs the jira_connector procedure; credentials come only from
+    the environment."""
+    run_id = _require_str(req, "run_id")
+    task_id = _require_str(req, "task_id")
+    filename = req.get("filename", default_filename)
+    if not isinstance(filename, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*\.json", filename) or ".." in filename:
+        raise LiveCliUsageError("'filename' must be a plain *.json file name")
+    if _JIRA_CALLER_SUPPLIED_SECRETS.intersection(req):
+        raise LiveCliUsageError("credentials/transport are read from the environment, never from the request")
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    if (run_directory / "jira" / filename).exists():
+        return {
+            "operation": operation, "status": "blocked",
+            "error": f"evidence file runs/{run_id}/jira/{filename} already exists; nothing was sent",
+        }
+    route, route_reason = connector_router.select_mutation_route(operation, req.get("route"))
+    if route is None:
+        result = {"operation": operation, "status": "unsupported_route", "reason": route_reason, "route": None}
+    else:
+        result = call(jira_connector.JiraCredentials.from_env())
+    doc = {
+        "task_id": task_id, "run_id": run_id, "requested_at": _utc_now_iso(),
+        "authorized": req.get("authorized"),
+        "routing": {"allowed_routes": list(connector_router.JIRA_OPERATION_ROUTES[operation]),
+                    "requested_route": req.get("route"), "selected_route": route,
+                    "fallback_attempted": False, "reason": route_reason},
+        **result,
+    }
+    evidence_io.ensure_run_dirs(run_directory)
+    try:
+        path = evidence_io.retain_jira_evidence(run_directory, filename, doc)
+    except evidence_io.EvidenceCollisionError as exc:
+        return {"operation": operation, "status": "blocked", "error": str(exc), "result": result}
+    evidence_io.retain_policy_event(
+        run_directory, event_kind,
+        {"status": result.get("status"), "issue_key": result.get("issue_key"), "route": route,
+         "authorization_source": result.get("authorization_source"), "reason": result.get("reason")},
+    )
+    return {"operation": operation, "path": _rel(path), **result}
+
+
+def op_create_ticket(req: dict) -> dict:
+    """23b. Jira skill pack `create-ticket` -- state-changing, explicit authorization
+    only. Fields: `run_id`, `task_id`, `project_key`, `issue_type`, `fields`
+    (`summary` required, `description` optional -- nothing else),
+    `expected_base_url`, `authorized` (the JSON literal true), `authorization_source`,
+    optional `filename` (default create-ticket.json), optional `route` (only "rest").
+    Refused before any network call unless authorized and valid
+    (jira_connector.create_issue). `created` only after an independent re-read
+    confirms the new issue's project, type, summary and description; otherwise
+    `created_unverified`. Always retains runs/<run_id>/jira/<filename> and a
+    `jira_create_ticket` policy event."""
+    return _jira_mutation(
+        req, "create_ticket", "create-ticket.json", "jira_create_ticket",
+        lambda credentials: jira_connector.create_issue(
+            project_key=req.get("project_key"), issue_type=req.get("issue_type"), fields=req.get("fields"),
+            authorized=req.get("authorized", False), authorization_source=req.get("authorization_source"),
+            expected_base_url=req.get("expected_base_url"), credentials=credentials,
+        ),
+    )
+
+
+def op_edit_ticket(req: dict) -> dict:
+    """23c. Jira skill pack `edit-ticket` -- state-changing, explicit authorization
+    only. Fields: `run_id`, `task_id`, `issue_key`, `fields` (any of `summary`,
+    `description` -- nothing else; never status, never a comment),
+    `expected_base_url`, `authorized` (the JSON literal true), `authorization_source`,
+    optional `filename` (default edit-ticket.json), optional `route` (only "rest").
+    Pre-reads the issue, sends only the supplied fields, then independently re-reads
+    it (jira_connector.edit_issue). `updated` only when the re-read shows exactly the
+    requested values; otherwise `updated_unverified`. Always retains
+    runs/<run_id>/jira/<filename> and a `jira_edit_ticket` policy event."""
+    return _jira_mutation(
+        req, "edit_ticket", "edit-ticket.json", "jira_edit_ticket",
+        lambda credentials: jira_connector.edit_issue(
+            issue_key=req.get("issue_key"), fields=req.get("fields"),
+            authorized=req.get("authorized", False), authorization_source=req.get("authorization_source"),
+            expected_base_url=req.get("expected_base_url"), credentials=credentials,
+        ),
+    )
 
 
 def op_resolve_jira_issue_routed(req: dict) -> dict:
@@ -1519,6 +1637,9 @@ OPERATIONS = {
     "pr_review": op_pr_review,
     "pr_create": op_pr_create,
     "resolve_jira_issue": op_resolve_jira_issue,
+    "read_ticket": op_read_ticket,
+    "create_ticket": op_create_ticket,
+    "edit_ticket": op_edit_ticket,
     "resolve_jira_issue_routed": op_resolve_jira_issue_routed,
     "publish_run_summary": op_publish_run_summary,
     "search_obsidian": op_search_obsidian,

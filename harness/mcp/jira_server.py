@@ -16,8 +16,11 @@ success.
 
 Boundaries (enforced here, not just documented):
 
-- Read-only. There is no create/edit/transition/comment tool, and none will be added
-  here speculatively (ASSIGNMENT.md and the Jira milestone both forbid Jira writes).
+- Read-only. There is no create/edit/transition/comment tool. The jira/ skill pack's
+  create-ticket and edit-ticket are REST-only by design
+  (``connector_router.JIRA_OPERATION_ROUTES``): a write tool here would be callable
+  directly as an ``mcp__jira__*`` tool, bypassing live_cli's authorization check and
+  evidence retention, and a non-idempotent write must never be retried on a second route.
 - No caller-supplied base URL or credential. ``JIRA_BASE_URL`` / ``JIRA_EMAIL`` /
   ``JIRA_API_TOKEN`` are read fresh from *this server process's* environment via
   ``JiraCredentials.from_env`` on every call; a ``get_issue`` ``arguments`` object

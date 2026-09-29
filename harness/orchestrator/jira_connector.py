@@ -18,10 +18,15 @@ When credentials are absent -- the case in this environment today -- `resolve_is
 returns a genuine `connector_unavailable` result: this is an honest, real "no connector is
 configured" outcome, not a fabricated success.
 
-This is deliberately NOT the MCP-vs-REST fallback ASSIGNMENT.md Part 8/§2.4 describes for
-"at least one connector" -- there is exactly one Jira connector here, REST, because no
-Jira MCP server exists in this environment to compare against or fall back from. See
-PROJECT_SPEC.md's Jira-skill milestone entry for the full accounting of what remains open.
+This module is Route B (REST, the kept route) of the dual-route Jira connector; the MCP
+route (harness/mcp/jira_server.py) wraps `resolve_issue` from here, and
+harness/orchestrator/connector_router.py selects between them for reads. The two
+state-changing skill-pack procedures, `create_issue` (create-ticket) and `edit_issue`
+(edit-ticket), live here too and are REST-only by design -- see connector_router's
+JIRA_OPERATION_ROUTES for why a mutation never falls back to another route. Every field
+either procedure reads or writes is enumerated in this module's field-reference
+constants (READ_FIELDS / CREATE_FIELDS / EDIT_FIELDS / SUPPORTED_ISSUE_TYPES /
+CUSTOM_FIELD_IDS), which .claude/skills/jira/FIELD_REFERENCE.md documents.
 
 Every real HTTP call goes through a swappable `HttpTransport` (a plain
 `Callable[[str, str, dict], HttpResult]`), exactly the seam
@@ -53,6 +58,7 @@ import base64
 import json
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from typing import Callable
@@ -65,6 +71,72 @@ ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,9}-[1-9][0-9]{0,9}$")
 
 RESOLUTION_STATUSES = frozenset(
     {"resolved", "not_found", "unauthorized", "connector_unavailable", "identity_mismatch", "invalid_issue_key", "invalid_response"}
+)
+
+# ---------------------------------------------------------------------------
+# Field reference -- the single source of truth .claude/skills/jira/FIELD_REFERENCE.md
+# documents (tests/test_orchestrator_jira_connector.py::TestFieldReference keeps the two
+# in lockstep). Only Jira's own standard, system-defined fields appear here.
+# ---------------------------------------------------------------------------
+
+# Standard fields read-ticket requests (`?fields=` on GET /issue/{key}).
+READ_FIELDS = ("summary", "description", "issuetype", "status", "project", "created", "updated")
+
+# Caller-settable fields for create-ticket (inside the request's `fields` object; the
+# project and issue type are separate, required request fields). `summary` is required.
+CREATE_FIELDS = ("summary", "description")
+CREATE_REQUIRED_FIELDS = ("summary",)
+
+# Caller-settable fields for edit-ticket -- at least one must be supplied.
+EDIT_FIELDS = ("summary", "description")
+
+# Issue types create-ticket accepts: the standard Jira Software default types that need
+# no parent issue and no custom field to create. Epic (Epic Name is a custom field on
+# company-managed projects) and Sub-task (requires a parent) are deliberately excluded.
+# Whether a given project actually enables one of these is still Jira's decision -- a
+# project without it answers 400, classified `rejected`, never retried with another type.
+SUPPORTED_ISSUE_TYPES = ("Task", "Bug", "Story")
+
+# Configured custom-field ids (logical name -> "customfield_<digits>"). Deliberately
+# empty: no custom field has been authorized for this harness, and an agent must never
+# guess one. See FIELD_REFERENCE.md "Adding a custom field safely".
+CUSTOM_FIELD_IDS: dict = {}
+
+# Field names that are real Jira fields but that this skill deliberately does not set,
+# each with the reason reported back in an `unsupported_field` refusal.
+_UNSUPPORTED_FIELD_REASONS = {
+    "status": "status changes need a workflow transition, which this skill does not perform",
+    "resolution": "resolution is set by a workflow transition, which this skill does not perform",
+    "assignee": "assignee is never set -- account ids are never guessed",
+    "reporter": "reporter is never set -- account ids are never guessed",
+    "labels": "labels are not supported by this skill",
+    "priority": "priority is not supported by this skill",
+    "components": "components are not supported by this skill",
+    "fixVersions": "fix versions are not supported by this skill",
+    "duedate": "due date is not supported by this skill",
+    "parent": "parent links are not supported by this skill",
+    "comment": "comments are not posted by this skill",
+    "project": "project is a separate, required create-ticket field and can never be edited",
+    "issuetype": "issue type is a separate, required create-ticket field and can never be edited",
+}
+
+SUMMARY_MAX_LEN = 255  # Jira's own summary limit.
+DESCRIPTION_MAX_LEN = 32_000  # Under Jira's 32,767-character text-field limit.
+AUTHORIZATION_SOURCE_MAX_LEN = 500
+
+CREATE_STATUSES = frozenset(
+    {
+        "created", "created_unverified", "not_authorized", "invalid_input", "unsupported_issue_type",
+        "unsupported_field", "connector_unavailable", "wrong_instance", "unauthorized", "rejected",
+        "indeterminate", "invalid_response",
+    }
+)
+EDIT_STATUSES = frozenset(
+    {
+        "updated", "updated_unverified", "not_authorized", "invalid_input", "invalid_issue_key",
+        "unsupported_field", "connector_unavailable", "wrong_instance", "not_found", "unauthorized",
+        "identity_mismatch", "rejected", "indeterminate", "invalid_response",
+    }
 )
 
 _ENV_BASE_URL = "JIRA_BASE_URL"
@@ -126,15 +198,17 @@ class HttpResult:
         }
 
 
-HttpTransport = Callable[[str, str, dict], HttpResult]
+# (method, url, headers) for a GET; write calls pass a fourth positional argument, the
+# encoded JSON request body. A read-only fake may therefore keep the 3-argument shape.
+HttpTransport = Callable[..., HttpResult]
 
 
-def _default_transport(method: str, url: str, headers: dict) -> HttpResult:
+def _default_transport(method: str, url: str, headers: dict, body: bytes | None = None) -> HttpResult:
     """The one real HTTP entry point in this module. Never raises for a normal HTTP
     error status (Jira's own 404/401/403 responses are legitimate, classified
     HttpResults, not exceptions) -- only a genuine transport failure (DNS, timeout,
     connection refused) is caught and folded into status_code -1."""
-    request = urllib.request.Request(url, method=method, headers=headers)
+    request = urllib.request.Request(url, data=body, method=method, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_SECONDS) as resp:
             return HttpResult(status_code=resp.status, body=resp.read().decode("utf-8", errors="replace"))
@@ -189,7 +263,7 @@ def fetch_issue(issue_key: str, credentials: JiraCredentials, transport: HttpTra
     """One real (or, in a test, fake -- see module docstring) HTTP GET against Jira's
     standard-fields issue endpoint. Requests only standard fields -- never a guessed
     custom-field id."""
-    url = issue_url(credentials.base_url, issue_key) + "?fields=summary,description,issuetype,status,project,created,updated"
+    url = issue_url(credentials.base_url, issue_key) + "?fields=" + ",".join(READ_FIELDS)
     headers = build_auth_header(credentials)
     return (transport or DEFAULT_TRANSPORT)("GET", url, headers)
 
@@ -423,3 +497,330 @@ def resolve_issue(
         status="resolved", requested_issue_key=requested_issue_key, issue=resolved,
         reason="requested issue key matches returned issue key", raw=raw,
     )
+
+
+# ---------------------------------------------------------------------------
+# create-ticket / edit-ticket -- the two state-changing procedures
+# ---------------------------------------------------------------------------
+#
+# Both follow the same order, stopping at the first failure:
+#   1. explicit authorization (`authorized is True` + a named authorization_source) --
+#      before anything else, so an unauthorized request never reaches validation, the
+#      environment, or the network;
+#   2. input validation (keys, issue type, field names, field values);
+#   3. connector availability (credentials from the environment, never the request);
+#   4. instance identity (`expected_base_url` must equal the configured JIRA_BASE_URL);
+#   5. the one mutating HTTP call;
+#   6. an independent re-read (`resolve_issue`) compared field-by-field against what was
+#      requested. The mutating call's own 201/204 is never the success signal -- a
+#      mismatch or failed re-read is `created_unverified` / `updated_unverified`.
+# Neither procedure retries, falls back to another route, transitions, or comments.
+
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+PROJECT_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,9}$")
+
+
+def is_valid_project_key(value: object) -> bool:
+    """Exact shape only -- never upper-cased or otherwise corrected on the caller's behalf."""
+    return isinstance(value, str) and bool(PROJECT_KEY_RE.match(value))
+
+
+def _authorization_refusal(authorized: object, authorization_source: object) -> str | None:
+    if authorized is not True:
+        return "authorized must be the boolean true (a string such as \"true\" is not authorization)"
+    if not isinstance(authorization_source, str) or not authorization_source.strip():
+        return "authorization_source must name where the explicit authorization came from"
+    if len(authorization_source) > AUTHORIZATION_SOURCE_MAX_LEN or _CONTROL_CHARS_RE.search(authorization_source):
+        return f"authorization_source must be at most {AUTHORIZATION_SOURCE_MAX_LEN} printable characters"
+    return None
+
+
+def _normalized_instance(url: object) -> tuple | None:
+    """(scheme, host, path) for an http(s) base URL, lower-cased where Jira is
+    case-insensitive; None for anything that is not a plain base URL."""
+    if not isinstance(url, str) or not url.strip():
+        return None
+    parsed = urllib.parse.urlsplit(url.strip())
+    if parsed.scheme.lower() not in ("https", "http") or not parsed.netloc or parsed.query or parsed.fragment:
+        return None
+    if "@" in parsed.netloc:
+        return None
+    return (parsed.scheme.lower(), parsed.netloc.lower(), parsed.path.rstrip("/"))
+
+
+def _unsupported_field_reason(name: object) -> str:
+    if isinstance(name, str) and name.startswith("customfield_"):
+        return (
+            f"{name!r} is a custom field id; none is configured (CUSTOM_FIELD_IDS is empty) and "
+            "custom field ids are never guessed -- see FIELD_REFERENCE.md"
+        )
+    if isinstance(name, str) and name in _UNSUPPORTED_FIELD_REASONS:
+        return f"{name!r}: {_UNSUPPORTED_FIELD_REASONS[name]}"
+    return f"{name!r} is not a field this skill supports -- see FIELD_REFERENCE.md"
+
+
+def _validate_fields(fields: object, allowed: tuple, required: tuple) -> tuple[str, str] | None:
+    """Returns (status, reason) for the first problem, or None when `fields` is valid."""
+    if not isinstance(fields, dict) or not fields:
+        return "invalid_input", "fields must be a non-empty object"
+    for name in fields:
+        if name not in allowed:
+            return "unsupported_field", _unsupported_field_reason(name)
+    for name in required:
+        if name not in fields:
+            return "invalid_input", f"fields.{name} is required"
+    if "summary" in fields:
+        summary = fields["summary"]
+        if (
+            not isinstance(summary, str) or not summary.strip() or len(summary) > SUMMARY_MAX_LEN
+            or "\n" in summary or "\r" in summary or _CONTROL_CHARS_RE.search(summary)
+        ):
+            return "invalid_input", f"fields.summary must be one non-empty line of at most {SUMMARY_MAX_LEN} characters"
+    if "description" in fields:
+        description = fields["description"]
+        if not isinstance(description, str) or len(description) > DESCRIPTION_MAX_LEN or _CONTROL_CHARS_RE.search(description):
+            return "invalid_input", f"fields.description must be plain text of at most {DESCRIPTION_MAX_LEN} characters"
+    return None
+
+
+def description_lines(text: str) -> list:
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def description_to_adf(text: str) -> dict:
+    """Plain text -> the Atlassian Document Format Jira REST v3 requires for
+    `description`: one paragraph per non-blank line. Blank lines are not preserved;
+    `description_lines` applies the same rule so verification compares like with like."""
+    return {
+        "type": "doc",
+        "version": 1,
+        "content": [{"type": "paragraph", "content": [{"type": "text", "text": line}]} for line in description_lines(text)],
+    }
+
+
+def _build_jira_fields(fields: dict) -> dict:
+    out: dict = {}
+    if "summary" in fields:
+        out["summary"] = fields["summary"].strip()
+    if "description" in fields:
+        out["description"] = description_to_adf(fields["description"])
+    return out
+
+
+def _expected_state(fields: dict) -> dict:
+    expected: dict = {}
+    if "summary" in fields:
+        expected["summary"] = fields["summary"].strip()
+    if "description" in fields:
+        expected["description_lines"] = description_lines(fields["description"])
+    return expected
+
+
+def _jira_error_summary(body: str) -> str:
+    """Jira's own validation message (errorMessages / errors), bounded -- never the whole body."""
+    try:
+        parsed = json.loads(body)
+    except (json.JSONDecodeError, TypeError):
+        return ""
+    if not isinstance(parsed, dict):
+        return ""
+    parts = [str(m) for m in parsed.get("errorMessages") or [] if m]
+    errors = parsed.get("errors")
+    if isinstance(errors, dict):
+        parts.extend(f"{k}: {v}" for k, v in errors.items())
+    return "; ".join(parts)[:500]
+
+
+def _write_headers(credentials: JiraCredentials) -> dict:
+    return {**build_auth_header(credentials), "Content-Type": "application/json"}
+
+
+def _classify_write_failure(http_result: HttpResult, action: str) -> tuple[str, str]:
+    """(status, reason) for a mutating call that did not return its success code."""
+    code = http_result.status_code
+    if code == -1:
+        return "indeterminate", (
+            f"{action} request failed before a response arrived ({http_result.reason}); Jira may or may not "
+            "have applied it -- re-read with read-ticket before any retry"
+        )
+    if code >= 500:
+        return "indeterminate", (
+            f"Jira returned {code} for the {action} request; it may or may not have been applied -- "
+            "re-read with read-ticket before any retry"
+        )
+    if code in (401, 403):
+        return "unauthorized", f"Jira returned {code} for the {action} request"
+    if code == 404:
+        return "not_found", f"Jira returned 404 for the {action} request"
+    if code == 400:
+        detail = _jira_error_summary(http_result.body)
+        return "rejected", f"Jira rejected the {action} request (400){': ' + detail if detail else ''}"
+    return "invalid_response", f"Jira returned unexpected status {code} for the {action} request"
+
+
+def _verify(issue_key: str, credentials: JiraCredentials, expected: dict, transport: HttpTransport | None) -> dict:
+    """Independent re-read of `issue_key`, compared against `expected`. `verified` is
+    true only when the re-read resolved and every expected value matched."""
+    reread = resolve_issue(issue_key, credentials, transport)
+    record = {
+        "method": "independent re-read: GET /rest/api/3/issue/{key}",
+        "reread_status": reread.status,
+        "reread_reason": reread.reason,
+        "expected": expected,
+        "observed": reread.issue.as_dict() if reread.issue else None,
+        "mismatches": [],
+        "verified": False,
+    }
+    if reread.issue is not None:
+        observed = {
+            "project_key": reread.issue.project_key,
+            "issue_type": reread.issue.issue_type,
+            "summary": reread.issue.summary,
+            "description_lines": description_lines(reread.issue.description),
+        }
+        record["mismatches"] = [
+            {"field": name, "expected": value, "observed": observed[name]}
+            for name, value in expected.items()
+            if observed[name] != value
+        ]
+        record["verified"] = not record["mismatches"]
+    return record
+
+
+def _preflight(expected_base_url: object, credentials: JiraCredentials | None) -> tuple[str, str] | None:
+    """Steps 3-4, shared by create and edit. (status, reason) for a refusal, else None."""
+    if credentials is None:
+        return "connector_unavailable", (
+            f"no Jira connector is configured in this environment "
+            f"({_ENV_BASE_URL}/{_ENV_EMAIL}/{_ENV_API_TOKEN} are not all set); nothing was sent"
+        )
+    configured = _normalized_instance(credentials.base_url)
+    if configured is None or configured != _normalized_instance(expected_base_url):
+        return "wrong_instance", (
+            f"expected_base_url {expected_base_url!r} does not match the configured {_ENV_BASE_URL}; nothing was sent"
+        )
+    return None
+
+
+def create_issue(
+    *, project_key: object, issue_type: object, fields: object, authorized: object = False,
+    authorization_source: object = None, expected_base_url: object = None,
+    credentials: JiraCredentials | None, transport: HttpTransport | None = None,
+) -> dict:
+    """create-ticket: POST /rest/api/3/issue, then an independent re-read. Returns a
+    credential-free dict whose `status` is one of CREATE_STATUSES; only `created` means
+    the issue exists and holds exactly the requested project, type, summary and
+    description."""
+    base = {
+        "operation": "create_ticket", "route": "rest", "issue_key": None,
+        "requested": {"project_key": project_key, "issue_type": issue_type, "fields": fields},
+        "authorization_source": authorization_source if isinstance(authorization_source, str) else None,
+        "mutation": None, "verification": None,
+    }
+
+    def done(status: str, reason: str, **extra) -> dict:
+        return {**base, **extra, "status": status, "reason": reason}
+
+    refusal = _authorization_refusal(authorized, authorization_source)
+    if refusal:
+        return done("not_authorized", f"{refusal}; nothing was validated or sent")
+    if not is_valid_project_key(project_key):
+        return done("invalid_input", f"project_key {project_key!r} is not a valid Jira project key (e.g. 'PROJ')")
+    if not isinstance(issue_type, str) or issue_type not in SUPPORTED_ISSUE_TYPES:
+        return done(
+            "unsupported_issue_type",
+            f"issue_type {issue_type!r} is not one of {list(SUPPORTED_ISSUE_TYPES)} -- see FIELD_REFERENCE.md",
+        )
+    problem = _validate_fields(fields, CREATE_FIELDS, CREATE_REQUIRED_FIELDS)
+    if problem:
+        return done(*problem)
+    blocked = _preflight(expected_base_url, credentials)
+    if blocked:
+        return done(*blocked)
+
+    payload = {"fields": {"project": {"key": project_key}, "issuetype": {"name": issue_type}, **_build_jira_fields(fields)}}
+    url = f"{credentials.base_url}/rest/api/3/issue"
+    http_result = (transport or DEFAULT_TRANSPORT)("POST", url, _write_headers(credentials), json.dumps(payload).encode("utf-8"))
+    base["mutation"] = {"request": {"method": "POST", "url": url, "body": payload}, "response": http_result.as_dict()}
+
+    if http_result.status_code != 201:
+        return done(*_classify_write_failure(http_result, "create"))
+    try:
+        created = json.loads(http_result.body)
+    except json.JSONDecodeError:
+        created = None
+    created_key = created.get("key") if isinstance(created, dict) else None
+    if not is_valid_issue_key(created_key):
+        return done("created_unverified", "Jira answered 201 but its body carried no valid issue key to re-read")
+    base["issue_key"] = created_key
+    if project_key_from_issue_key(created_key) != project_key:
+        return done(
+            "created_unverified",
+            f"Jira answered 201 with issue {created_key!r}, which is not in the requested project {project_key!r}",
+        )
+
+    expected = {"project_key": project_key, "issue_type": issue_type, **_expected_state(fields)}
+    verification = _verify(created_key, credentials, expected, transport)
+    if not verification["verified"]:
+        return done(
+            "created_unverified",
+            f"Jira answered 201 for {created_key!r} but the independent re-read did not confirm it "
+            f"({verification['reread_status']}; mismatched: {[m['field'] for m in verification['mismatches']]})",
+            verification=verification,
+        )
+    return done("created", f"{created_key!r} created and confirmed by an independent re-read", verification=verification)
+
+
+def edit_issue(
+    *, issue_key: object, fields: object, authorized: object = False, authorization_source: object = None,
+    expected_base_url: object = None, credentials: JiraCredentials | None, transport: HttpTransport | None = None,
+) -> dict:
+    """edit-ticket: pre-read, PUT /rest/api/3/issue/{key} with only the supplied
+    fields, then an independent re-read. Returns a credential-free dict whose `status`
+    is one of EDIT_STATUSES; only `updated` means the issue now holds exactly the
+    requested values. Never transitions status and never comments."""
+    normalized = normalize_issue_key(issue_key) if isinstance(issue_key, str) else issue_key
+    base = {
+        "operation": "edit_ticket", "route": "rest", "issue_key": normalized,
+        "requested": {"issue_key": issue_key, "fields": fields},
+        "authorization_source": authorization_source if isinstance(authorization_source, str) else None,
+        "pre_read": None, "mutation": None, "verification": None,
+    }
+
+    def done(status: str, reason: str, **extra) -> dict:
+        return {**base, **extra, "status": status, "reason": reason}
+
+    refusal = _authorization_refusal(authorized, authorization_source)
+    if refusal:
+        return done("not_authorized", f"{refusal}; nothing was validated or sent")
+    if not is_valid_issue_key(normalized):
+        return done("invalid_issue_key", f"{issue_key!r} is not a valid Jira issue key shape")
+    problem = _validate_fields(fields, EDIT_FIELDS, ())
+    if problem:
+        return done(*problem)
+    blocked = _preflight(expected_base_url, credentials)
+    if blocked:
+        return done(*blocked)
+
+    # Pre-read: the issue must exist and be the one requested before anything is sent.
+    pre = resolve_issue(normalized, credentials, transport)
+    base["pre_read"] = {"status": pre.status, "reason": pre.reason, "issue": pre.issue.as_dict() if pre.issue else None}
+    if pre.status != "resolved":
+        return done(pre.status, f"pre-read did not resolve {normalized!r} ({pre.reason}); nothing was sent")
+
+    payload = {"fields": _build_jira_fields(fields)}
+    url = issue_url(credentials.base_url, normalized)
+    http_result = (transport or DEFAULT_TRANSPORT)("PUT", url, _write_headers(credentials), json.dumps(payload).encode("utf-8"))
+    base["mutation"] = {"request": {"method": "PUT", "url": url, "body": payload}, "response": http_result.as_dict()}
+    if http_result.status_code not in (200, 204):
+        return done(*_classify_write_failure(http_result, "edit"))
+
+    verification = _verify(normalized, credentials, _expected_state(fields), transport)
+    if not verification["verified"]:
+        return done(
+            "updated_unverified",
+            f"Jira accepted the edit of {normalized!r} but the independent re-read did not confirm it "
+            f"({verification['reread_status']}; mismatched: {[m['field'] for m in verification['mismatches']]})",
+            verification=verification,
+        )
+    return done("updated", f"{normalized!r} updated and confirmed by an independent re-read", verification=verification)

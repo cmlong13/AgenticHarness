@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """PreToolUse hook, matcher "Bash" -- blocks and records the two Skill-mediation bypasses
 `test-runner/SKILL.md` itself already names as a known, un-enforced gap ("This does not
-sandbox the caller... a skill-scoped PreToolUse hook could enforce this for real").
+sandbox the caller... a skill-scoped PreToolUse hook could enforce this for real"), plus
+raw Jira REST calls that bypass the jira skill (check 3 below).
 
 Registered in .claude/settings.json. Every blocked or flagged attempt is appended to
 .claude/hooks/logs/skill-enforcement-events.jsonl before this script exits, so "record"
@@ -40,6 +41,16 @@ captured payloads this conclusion is based on.
    already-documented trust-boundary honesty (see test-runner/SKILL.md's own "Repository
    test-code trust boundary" section).
 
+3. **Raw Jira REST calls bypassing the jira skill** (ASSIGNMENT.md §2.5's own example) --
+   a `Bash` command that names a Jira REST path (`/rest/api/2/`, `/rest/api/3/`,
+   `/rest/api/latest/`) together with an HTTP client in command position (`curl`, `wget`,
+   `http`, `Invoke-RestMethod`/`irm`, `Invoke-WebRequest`/`iwr`) or a `python -c "..."`
+   one-liner using `urllib`/`requests`/`httpx`. A command that merely mentions a client
+   name (a grep, a doc edit) is not matched. Blocked unconditionally: every
+   Jira read and write goes through `live_cli.py`'s `read_ticket` / `resolve_jira_issue` /
+   `create_ticket` / `edit_ticket` operations, which enforce authorization and retain
+   evidence. Same substring heuristic, same documented limits, as check 2.
+
 Read-only demo-repo/ commands the orchestrator is explicitly required to run (`git status
 --short -- demo-repo`, `git diff --stat -- demo-repo`, `cat`/`Read`-equivalents) are never
 matched by the write-indicator check above and are always allowed.
@@ -62,6 +73,15 @@ _WRAPPER_MARKER = "run_command.py"
 _REDIRECT_RE = re.compile(r"(?<!\d)>>?(?!=)")
 _OTHER_WRITE_INDICATORS = ("sed -i", "tee ", "cp ", "mv ", "rm ", "rm -")
 _PYTHON_WRITE_RE = re.compile(r"python3?\s+-c.*open\([^)]*['\"]([wa][b+]?)['\"]", re.IGNORECASE)
+_JIRA_REST_PATH_RE = re.compile(r"/rest/api/(?:2|3|latest)/", re.IGNORECASE)
+# An HTTP client in command position (line start, or after ; & | ( or $( ), or a
+# `python -c "..."` one-liner using an HTTP library. Matching the client name anywhere
+# would also block commands that merely *mention* curl next to a Jira path (docs, greps).
+_HTTP_CLIENT_CMD_RE = re.compile(
+    r"(?:^|[;&|(]|\$\()\s*(?:curl|wget|http|https|invoke-restmethod|invoke-webrequest|irm|iwr)(?:\.exe)?\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+_PYTHON_HTTP_RE = re.compile(r"python3?\s+-c\s+[\"'].*(?:urllib|requests\.|httpx)", re.IGNORECASE | re.DOTALL)
 
 
 def _record(kind: str, command: str, reason: str) -> None:
@@ -90,6 +110,12 @@ def _looks_like_demo_repo_write(command: str) -> bool:
     if _PYTHON_WRITE_RE.search(command):
         return True
     return False
+
+
+def _looks_like_raw_jira_call(command: str) -> bool:
+    if not _JIRA_REST_PATH_RE.search(command):
+        return False
+    return bool(_HTTP_CLIENT_CMD_RE.search(command) or _PYTHON_HTTP_RE.search(command))
 
 
 def _block(kind: str, command: str, reason: str) -> int:
@@ -128,6 +154,16 @@ def main() -> int:
             "Only the Engineer subagent's own Edit/Write tool may modify approved demo-repo/ "
             "files -- Bash must never be used as an orchestrator fallback to edit application "
             "source.",
+        )
+
+    if _looks_like_raw_jira_call(command):
+        return _block(
+            "raw_jira_api_bypass",
+            command,
+            "skill-enforcement: a Bash command appears to call the Jira REST API directly. "
+            "Invoke the jira Skill and use live_cli.py's read_ticket / resolve_jira_issue / "
+            "create_ticket / edit_ticket operations instead -- they enforce authorization and "
+            "retain evidence.",
         )
 
     return 0

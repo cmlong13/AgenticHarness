@@ -2169,6 +2169,228 @@ class TestResolveJiraIssueRouted:
         assert list(inspect.signature(live_cli.op_resolve_jira_issue_routed).parameters) == ["req"]
 
 
+class TestJiraSkillPackOperations:
+    """read_ticket / create_ticket / edit_ticket at the live-CLI boundary. Jira is
+    replaced only at jira_connector.DEFAULT_TRANSPORT (monkeypatched with a recording
+    fake) or by real env-var absence -- no real Jira instance is ever contacted and no
+    real ticket is created or edited."""
+
+    BASE = "https://example.atlassian.net"
+
+    def _creds(self, monkeypatch):
+        monkeypatch.setenv("JIRA_BASE_URL", self.BASE)
+        monkeypatch.setenv("JIRA_EMAIL", "a@example.invalid")
+        monkeypatch.setenv("JIRA_API_TOKEN", "super-secret-token")
+
+    def _no_creds(self, monkeypatch):
+        for k in ("JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"):
+            monkeypatch.delenv(k, raising=False)
+
+    def _transport(self, monkeypatch, *results):
+        calls: list[tuple[str, str]] = []
+        queue = list(results)
+
+        def fake(method, url, headers, body=None):
+            calls.append((method, url))
+            if not queue:
+                raise AssertionError(f"unexpected HTTP call {method} {url}")
+            return queue.pop(0)
+
+        monkeypatch.setattr(jira_connector, "DEFAULT_TRANSPORT", fake)
+        return calls
+
+    def _issue(self, key="PROJ-7", summary="Add a health check", issue_type="Task"):
+        return jira_connector.HttpResult(200, json.dumps({"key": key, "fields": {
+            "summary": summary, "description": None, "issuetype": {"name": issue_type},
+            "status": {"name": "To Do"}, "project": {"key": key.split("-")[0]},
+        }}))
+
+    def _create_req(self, **overrides):
+        return {
+            "operation": "create_ticket", "run_id": "run-1", "task_id": "T-1", "project_key": "PROJ",
+            "issue_type": "Task", "fields": {"summary": "Add a health check"}, "expected_base_url": self.BASE,
+            "authorized": True, "authorization_source": "user instruction: 'file a ticket for the health check'",
+            **overrides,
+        }
+
+    def _edit_req(self, **overrides):
+        return {
+            "operation": "edit_ticket", "run_id": "run-1", "task_id": "T-1", "issue_key": "PROJ-7",
+            "fields": {"summary": "Add a health check"}, "expected_base_url": self.BASE,
+            "authorized": True, "authorization_source": "PROJ-7 asks for its summary to be corrected",
+            **overrides,
+        }
+
+    def _evidence(self, repo_root, name, run_id="run-1"):
+        return json.loads((repo_root / "runs" / run_id / "jira" / name).read_text(encoding="utf-8"))
+
+    def _events(self, repo_root, run_id="run-1"):
+        path = repo_root / "runs" / run_id / "logs" / "policy-events.jsonl"
+        return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+    # -- read_ticket ------------------------------------------------------------
+
+    def test_read_ticket_resolved_is_get_only_and_retained(self, repo_root, monkeypatch, capsys) -> None:
+        self._creds(monkeypatch)
+        calls = self._transport(monkeypatch, self._issue())
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "read_ticket", "run_id": "run-1", "task_id": "T-1", "issue_key": "proj-7"}, capsys,
+        )
+        assert exit_code == 0 and resp["status"] == "resolved"
+        assert resp["issue"]["issue_key"] == "PROJ-7"
+        assert [m for m, _ in calls] == ["GET"]
+        assert self._evidence(repo_root, "read-ticket-1.json")["status"] == "resolved"
+        assert self._events(repo_root)[-1]["kind"] == "jira_read_ticket"
+        assert "super-secret-token" not in json.dumps(self._evidence(repo_root, "read-ticket-1.json"))
+
+    def test_read_ticket_malformed_key_never_calls_jira(self, repo_root, monkeypatch, capsys) -> None:
+        self._creds(monkeypatch)
+        calls = self._transport(monkeypatch)
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "read_ticket", "run_id": "run-1", "task_id": "T-1", "issue_key": "--help"}, capsys,
+        )
+        assert exit_code == 1 and resp["status"] == "invalid_issue_key"
+        assert calls == []
+
+    def test_read_ticket_connector_unavailable_is_not_success(self, repo_root, monkeypatch, capsys) -> None:
+        self._no_creds(monkeypatch)
+        exit_code, resp = _run_main(
+            repo_root, {"operation": "read_ticket", "run_id": "run-1", "task_id": "T-1", "issue_key": "PROJ-7"}, capsys,
+        )
+        assert exit_code == 1 and resp["status"] == "connector_unavailable"
+        assert resp["issue"] is None
+
+    def test_read_ticket_rejects_request_supplied_credentials(self, repo_root, monkeypatch, capsys) -> None:
+        exit_code, _ = _run_main(
+            repo_root,
+            {"operation": "read_ticket", "run_id": "run-1", "task_id": "T-1", "issue_key": "PROJ-7", "api_token": "x"},
+            capsys,
+        )
+        assert exit_code == 2
+
+    # -- create_ticket ----------------------------------------------------------
+
+    def test_create_ticket_created_after_verification(self, repo_root, monkeypatch, capsys) -> None:
+        self._creds(monkeypatch)
+        calls = self._transport(monkeypatch, jira_connector.HttpResult(201, '{"key": "PROJ-7"}'), self._issue())
+        exit_code, resp = _run_main(repo_root, self._create_req(), capsys)
+        assert exit_code == 0 and resp["status"] == "created"
+        assert [m for m, _ in calls] == ["POST", "GET"]
+        doc = self._evidence(repo_root, "create-ticket.json")
+        assert doc["issue_key"] == "PROJ-7" and doc["authorized"] is True
+        assert doc["authorization_source"].startswith("user instruction")
+        assert doc["routing"] == {
+            "allowed_routes": ["rest"], "requested_route": None, "selected_route": "rest",
+            "fallback_attempted": False, "reason": doc["routing"]["reason"],
+        }
+        assert doc["verification"]["verified"] is True
+        assert doc["mutation"]["request"]["method"] == "POST"
+        blob = json.dumps(doc)
+        assert "super-secret-token" not in blob and "Authorization" not in blob and "Basic " not in blob
+        event = self._events(repo_root)[-1]
+        assert event["kind"] == "jira_create_ticket" and event["status"] == "created" and event["issue_key"] == "PROJ-7"
+
+    @pytest.mark.parametrize("authorized", ["true", 1, None])
+    def test_create_ticket_without_boolean_authorization_sends_nothing(
+        self, repo_root, monkeypatch, capsys, authorized
+    ) -> None:
+        self._creds(monkeypatch)
+        calls = self._transport(monkeypatch)
+        req = self._create_req(authorized=authorized)
+        if authorized is None:
+            del req["authorized"]
+        exit_code, resp = _run_main(repo_root, req, capsys)
+        assert exit_code == 1 and resp["status"] == "not_authorized"
+        assert calls == []
+        # A refusal is still retained evidence.
+        assert self._evidence(repo_root, "create-ticket.json")["status"] == "not_authorized"
+        assert self._events(repo_root)[-1]["kind"] == "jira_create_ticket"
+
+    def test_create_ticket_connector_unavailable_is_exit_1(self, repo_root, monkeypatch, capsys) -> None:
+        self._no_creds(monkeypatch)
+        exit_code, resp = _run_main(repo_root, self._create_req(), capsys)
+        assert exit_code == 1 and resp["status"] == "connector_unavailable"
+        assert resp["issue_key"] is None
+
+    def test_create_ticket_unverified_is_exit_1(self, repo_root, monkeypatch, capsys) -> None:
+        self._creds(monkeypatch)
+        self._transport(monkeypatch, jira_connector.HttpResult(201, '{"key": "PROJ-7"}'), self._issue(summary="Other"))
+        exit_code, resp = _run_main(repo_root, self._create_req(), capsys)
+        assert exit_code == 1 and resp["status"] == "created_unverified"
+
+    def test_create_ticket_mcp_route_refused_without_calling_jira(self, repo_root, monkeypatch, capsys) -> None:
+        self._creds(monkeypatch)
+        calls = self._transport(monkeypatch)
+        exit_code, resp = _run_main(repo_root, self._create_req(route="mcp"), capsys)
+        assert exit_code == 1 and resp["status"] == "unsupported_route"
+        assert calls == []
+        assert self._evidence(repo_root, "create-ticket.json")["routing"]["selected_route"] is None
+
+    def test_create_ticket_existing_evidence_blocks_before_sending(self, repo_root, monkeypatch, capsys) -> None:
+        self._creds(monkeypatch)
+        calls = self._transport(monkeypatch)
+        _write(repo_root / "runs" / "run-1" / "jira" / "create-ticket.json", {"prior": True})
+        exit_code, resp = _run_main(repo_root, self._create_req(), capsys)
+        assert exit_code == 1 and resp["status"] == "blocked"
+        assert calls == []
+
+    @pytest.mark.parametrize("smuggled", ["env", "credentials", "transport", "base_url", "JIRA_API_TOKEN"])
+    def test_create_ticket_rejects_request_supplied_credentials(self, repo_root, monkeypatch, capsys, smuggled) -> None:
+        exit_code, _ = _run_main(repo_root, self._create_req(**{smuggled: "x"}), capsys)
+        assert exit_code == 2
+
+    def test_create_ticket_bad_filename_is_usage_error(self, repo_root, monkeypatch, capsys) -> None:
+        exit_code, _ = _run_main(repo_root, self._create_req(filename="../escape.json"), capsys)
+        assert exit_code == 2
+
+    # -- edit_ticket ------------------------------------------------------------
+
+    def test_edit_ticket_updated_after_verification(self, repo_root, monkeypatch, capsys) -> None:
+        self._creds(monkeypatch)
+        calls = self._transport(
+            monkeypatch, self._issue(summary="Old"), jira_connector.HttpResult(204, ""), self._issue(),
+        )
+        exit_code, resp = _run_main(repo_root, self._edit_req(), capsys)
+        assert exit_code == 0 and resp["status"] == "updated"
+        assert [m for m, _ in calls] == ["GET", "PUT", "GET"]
+        doc = self._evidence(repo_root, "edit-ticket.json")
+        assert doc["pre_read"]["issue"]["summary"] == "Old"
+        assert doc["mutation"]["request"]["body"] == {"fields": {"summary": "Add a health check"}}
+        assert doc["verification"]["verified"] is True
+        assert self._events(repo_root)[-1]["kind"] == "jira_edit_ticket"
+
+    def test_edit_ticket_status_field_refused_without_calling_jira(self, repo_root, monkeypatch, capsys) -> None:
+        self._creds(monkeypatch)
+        calls = self._transport(monkeypatch)
+        exit_code, resp = _run_main(repo_root, self._edit_req(fields={"status": "Done"}), capsys)
+        assert exit_code == 1 and resp["status"] == "unsupported_field"
+        assert calls == []
+
+    def test_edit_ticket_unverified_is_exit_1(self, repo_root, monkeypatch, capsys) -> None:
+        self._creds(monkeypatch)
+        self._transport(monkeypatch, self._issue(summary="Old"), jira_connector.HttpResult(204, ""), self._issue(summary="Old"))
+        exit_code, resp = _run_main(repo_root, self._edit_req(), capsys)
+        assert exit_code == 1 and resp["status"] == "updated_unverified"
+
+    def test_edit_ticket_missing_authorization_sends_nothing(self, repo_root, monkeypatch, capsys) -> None:
+        self._creds(monkeypatch)
+        calls = self._transport(monkeypatch)
+        exit_code, resp = _run_main(repo_root, self._edit_req(authorized=False), capsys)
+        assert exit_code == 1 and resp["status"] == "not_authorized"
+        assert calls == []
+
+    def test_mutation_statuses_exit_codes(self) -> None:
+        assert {"created", "updated", "resolved"} <= live_cli.OK_STATUSES
+        for status in ("created_unverified", "updated_unverified", "not_authorized", "unsupported_field",
+                       "unsupported_route", "connector_unavailable", "indeterminate", "wrong_instance", "rejected"):
+            assert status not in live_cli.OK_STATUSES
+
+    def test_operations_registered(self) -> None:
+        for op in ("read_ticket", "create_ticket", "edit_ticket"):
+            assert op in live_cli.OPERATIONS
+            assert list(inspect.signature(live_cli.OPERATIONS[op]).parameters) == ["req"]
+
+
 class TestPublishRunSummary:
     """op_publish_run_summary -- the live-CLI boundary /work's Obsidian publication
     calls. Every scenario points OBSIDIAN_VAULT_PATH at a pytest tmp dir or unsets it;
