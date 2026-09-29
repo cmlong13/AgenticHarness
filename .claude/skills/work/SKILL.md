@@ -106,7 +106,8 @@ $ARGUMENTS
     point at a path `build_usage_summary` itself returned; its target document's own
     `subagent_subtotal` may never be described, in this document's own procedures or in
     any report to the user, as the run's "total pipeline cost" -- that claim requires a
-    genuinely measured orchestrator usage figure, which this milestone does not capture.
+    genuinely measured orchestrator usage figure, which exists only after this session
+    ends (see "Terminal usage summary" below), never from inside this run.
 17. Any Git commit or push this session performs (only ever when a ticket explicitly
     authorizes it, per standing rule 12) is always preceded by invoking the real
     `github` Skill (`Skill` tool, `skill: "github"`) in this same turn sequence -- never
@@ -1602,10 +1603,17 @@ accounting evidence, not only the ones that got far enough to checkpoint.
 3. State the accounting picture honestly when reporting this run (see "What to state,
    every time" below) using that same document's own fields -- never restate or
    re-summarize them from memory, and never describe `subagent_subtotal` as this run's
-   total pipeline cost. `full_pipeline_total` is `null` for every run this milestone
-   produces (orchestrator usage is not captured -- see "Per-agent usage accounting"
-   above and `harness/orchestrator/usage.py`'s own module docstring for why), and that
-   `null` must be reported as exactly what it is, not glossed over or omitted.
+   total pipeline cost. `full_pipeline_total` is `null` in every summary written during
+   the run (this session's own orchestrator usage is still growing while you write it --
+   see `harness/orchestrator/usage.py`'s module docstring), and that `null` must be
+   reported as exactly what it is, not glossed over or omitted. A full total is produced
+   only afterwards, outside this session: when the run was executed as one dedicated
+   headless session (`claude -p "/work ..." --output-format json`), the operator runs
+   `live_cli` `finalize_pipeline_usage` after that process exits, with the session's main
+   transcript and the saved headless result. It rewrites the same `usage-summary.json` with
+   the measured orchestrator usage and, only if every model call in the session reconciles
+   with the runtime's own `modelUsage`, a `full_pipeline_total`. Never call
+   `finalize_pipeline_usage` from inside `/work`.
 4. Any `usage_accounting_gap` policy events this run retained (per "Per-agent usage
    accounting" above) are accounting evidence, not pipeline evidence -- report them as
    what they are (an incomplete accounting picture for a specific agent) and never let
@@ -1768,7 +1776,8 @@ State plainly, every time:
   (never restated from memory): every agent's `identity.match_status` (and, for any that
   are not `"matched"`, the `usage_accounting_gap` policy event this run retained for it --
   state this as an accounting gap, not a pipeline problem), the `subagent_subtotal`'s own
-  token/cost figures, and that `orchestrator` usage was not measured this run and
-  `full_pipeline_total` is therefore `null`. Never call the `subagent_subtotal` this run's
+  token/cost figures, and that `orchestrator` usage is not final while this session is
+  running, so `full_pipeline_total` is `null` here (see "Terminal usage summary" for how it
+  is finalized after the session). Never call the `subagent_subtotal` this run's
   total pipeline cost (standing rule 16) -- state it as exactly what it is, a subtotal
   over the agents this run's own accounting actually captured.

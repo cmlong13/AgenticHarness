@@ -1,5 +1,22 @@
 # Usage-accounting milestone: live hook signal verification (2026-08-06)
 
+> **Correction (2026-09-29).** Two statements below are wrong and are superseded:
+>
+> 1. "Each `type: "assistant"` line ... has its own independent `usage`" / "summing every
+>    `type: "assistant"` entry". One API response is written as *several* assistant lines,
+>    one per content block, sharing a `message.id`. Each repeats that call's input/cache
+>    usage, and `output_tokens` is final only on the last line. That held across every
+>    local transcript checked (2,640 message ids in 93 files). Summing every line roughly
+>    doubled every retained per-agent figure. `harness/orchestrator/usage.py` now counts
+>    one usage per `message.id` (last line wins).
+> 2. "summing ... the main transcript gives a clean orchestrator-only total". It is clean
+>    only if the session did nothing but the run. The runtime's own session `modelUsage`
+>    (headless `result` JSON, and the transcript's `cost-state` entry) can also include
+>    calls no transcript records. Examples are `claude-haiku-4-5` auxiliary calls and
+>    title/summary generation in interactive sessions. A full pipeline total is therefore
+>    computed only for a run executed as one dedicated headless session, and only after
+>    reconciling against that `modelUsage` (`usage.finalize_pipeline_usage`).
+
 Before designing `.claude/hooks/record_agent_usage.py` or `harness/orchestrator/usage.py`,
 this milestone needed real answers to the questions Part 1 of the assignment requires:
 which hook event fires after an agent turn, whether it carries `agent_id`, whether it

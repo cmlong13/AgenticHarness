@@ -25,7 +25,7 @@ REAL_PRICING_PATH = Path(__file__).resolve().parent.parent / "harness" / "model-
 def _assistant_line(
     *, model: str = "claude-sonnet-5", input_tokens: int = 2, output_tokens: int = 10,
     cache_creation_5m: int = 0, cache_creation_1h: int = 0, cache_read: int = 0,
-    include_breakdown: bool = True,
+    include_breakdown: bool = True, message_id: str | None = None,
 ) -> str:
     usage_obj = {
         "input_tokens": input_tokens,
@@ -40,7 +40,10 @@ def _assistant_line(
         }
     else:
         usage_obj["cache_creation_input_tokens"] = cache_creation_5m + cache_creation_1h
-    return json.dumps({"type": "assistant", "agentId": "a1", "message": {"model": model, "usage": usage_obj}})
+    message = {"model": model, "usage": usage_obj}
+    if message_id is not None:
+        message["id"] = message_id
+    return json.dumps({"type": "assistant", "agentId": "a1", "message": message})
 
 
 # ---------------------------------------------------------------------------
@@ -707,3 +710,357 @@ class TestAccountingFailureNeverCorruptsPipelineResult:
         # its own key set never including it.
         assert "final_verdict" not in summary
         assert summary["coverage_status"] == "partial"
+
+
+# ---------------------------------------------------------------------------
+# Per-API-call deduplication (remediation, 2026-09-29): one API response is
+# written as several assistant lines sharing a message.id
+# ---------------------------------------------------------------------------
+
+
+class TestPerMessageIdDeduplication:
+    def _write(self, tmp_path, lines):
+        path = tmp_path / "t.jsonl"
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return path
+
+    def test_multi_block_response_is_one_call_last_line_wins(self, tmp_path):
+        # Real shape: thinking, tool_use, tool_use lines of ONE call; input/cache
+        # repeated on every line, output_tokens final only on the last line.
+        path = self._write(tmp_path, [
+            _assistant_line(message_id="msg_1", input_tokens=2, output_tokens=8, cache_creation_5m=14628),
+            _assistant_line(message_id="msg_1", input_tokens=2, output_tokens=8, cache_creation_5m=14628),
+            _assistant_line(message_id="msg_1", input_tokens=2, output_tokens=257, cache_creation_5m=14628),
+        ])
+        result = usage.parse_transcript_usage(path)
+        assert result.message_count == 1
+        assert result.assistant_line_count == 3
+        assert result.counts.input_tokens == 2
+        assert result.counts.output_tokens == 257
+        assert result.counts.cache_creation_5m_tokens == 14628
+        assert result.message_ids == ["msg_1"]
+
+    def test_distinct_ids_are_separate_calls(self, tmp_path):
+        path = self._write(tmp_path, [
+            _assistant_line(message_id="msg_1", input_tokens=2, output_tokens=10, cache_read=100),
+            _assistant_line(message_id="msg_2", input_tokens=3, output_tokens=20, cache_read=200),
+        ])
+        result = usage.parse_transcript_usage(path)
+        assert result.message_count == 2
+        assert result.counts.input_tokens == 5
+        assert result.counts.output_tokens == 30
+        assert result.counts.cache_read_tokens == 300
+
+    def test_resumed_turn_appending_to_same_file_counts_each_call_once(self, tmp_path):
+        # A route-back / SendMessage resume appends new calls to the same file; the
+        # original calls must not be counted again.
+        lines = [_assistant_line(message_id="msg_1", output_tokens=5), _assistant_line(message_id="msg_1", output_tokens=50)]
+        first = usage.parse_transcript_usage(self._write(tmp_path, lines))
+        lines += [_assistant_line(message_id="msg_2", output_tokens=7), _assistant_line(message_id="msg_2", output_tokens=70)]
+        second = usage.parse_transcript_usage(self._write(tmp_path, lines))
+        assert first.counts.output_tokens == 50
+        assert second.counts.output_tokens == 120
+        assert second.message_count == 2
+
+    def test_lines_without_id_are_counted_and_flagged(self, tmp_path):
+        path = self._write(tmp_path, [_assistant_line(), _assistant_line()])
+        result = usage.parse_transcript_usage(path)
+        assert result.message_count == 2
+        assert result.lines_without_message_id == 2
+
+    def test_synthetic_messages_are_not_api_calls(self, tmp_path):
+        path = self._write(tmp_path, [
+            _assistant_line(model=usage.SYNTHETIC_MODEL, message_id="syn", input_tokens=0, output_tokens=0),
+            _assistant_line(message_id="msg_1"),
+        ])
+        result = usage.parse_transcript_usage(path)
+        assert result.message_count == 1
+        assert result.synthetic_message_count == 1
+        assert result.models_seen == ["claude-sonnet-5"]
+
+    def test_usage_missing_required_fields_is_skipped_not_zeroed(self, tmp_path):
+        line = json.dumps({"type": "assistant", "message": {
+            "id": "msg_1", "model": "claude-sonnet-5", "usage": {"cache_read_input_tokens": 10},
+        }})
+        result = usage.parse_transcript_usage(self._write(tmp_path, [line]))
+        assert result.message_count == 0
+        assert "input_tokens" in result.skipped_lines[0]["reason"]
+
+    def test_counts_are_split_by_model(self, tmp_path):
+        path = self._write(tmp_path, [
+            _assistant_line(message_id="m1", model="claude-sonnet-5", input_tokens=1, output_tokens=2),
+            _assistant_line(message_id="m2", model="claude-haiku-4-5-20251001", input_tokens=3, output_tokens=4),
+        ])
+        result = usage.parse_transcript_usage(path)
+        assert result.counts_by_model["claude-sonnet-5"].output_tokens == 2
+        assert result.counts_by_model["claude-haiku-4-5-20251001"].input_tokens == 3
+
+
+class TestPerModelPricing:
+    def _pricing(self, tmp_path, **extra):
+        path = tmp_path / "pricing.json"
+        path.write_text(json.dumps({
+            "_meta": {"source": "test", "verified_date": "2026-09-29"},
+            "models": {"m-a": {"input": "1", "output": "10", "cache_write_5m": "1.25", "cache_write_1h": "2", "cache_read": "0.1"}},
+            **extra,
+        }), encoding="utf-8")
+        return usage.load_pricing(path)
+
+    def test_each_model_priced_at_its_own_rate(self):
+        pricing = usage.load_pricing(REAL_PRICING_PATH)
+        cost = usage.price_counts_by_model({
+            "claude-sonnet-5": usage.TokenCounts(input_tokens=1_000_000),
+            "claude-haiku-4-5": usage.TokenCounts(input_tokens=1_000_000),
+        }, pricing)
+        assert cost.priced is True
+        assert cost.amount == Decimal("3.00")  # $2 + $1
+
+    def test_one_unknown_model_makes_whole_cost_unknown_not_partial(self):
+        pricing = usage.load_pricing(REAL_PRICING_PATH)
+        cost = usage.price_counts_by_model({
+            "claude-sonnet-5": usage.TokenCounts(input_tokens=1_000_000),
+            "mystery-model": usage.TokenCounts(input_tokens=1),
+        }, pricing)
+        assert cost.priced is False
+        assert cost.amount is None
+        assert "mystery-model" in cost.reason
+
+    def test_alias_resolves_to_configured_key_only(self, tmp_path):
+        pricing = self._pricing(tmp_path, aliases={"m-a-20250101": "m-a"})
+        assert usage.price_usage("m-a-20250101", usage.TokenCounts(output_tokens=1_000_000), pricing).amount == Decimal("10")
+        # No prefix/fuzzy matching.
+        assert usage.price_usage("m-a-20990101", usage.TokenCounts(output_tokens=1), pricing).priced is False
+
+    def test_alias_to_unknown_key_is_a_load_error(self, tmp_path):
+        with pytest.raises(usage.PricingLoadError):
+            self._pricing(tmp_path, aliases={"x": "not-a-model"})
+
+    def test_real_pricing_prices_dated_haiku_id(self):
+        pricing = usage.load_pricing(REAL_PRICING_PATH)
+        # Reproduces the runtime's own costUSD observed 2026-09-29 for this exact usage.
+        counts = usage.TokenCounts(input_tokens=10, output_tokens=37, cache_creation_5m_tokens=16625)
+        assert usage.price_usage("claude-haiku-4-5-20251001", counts, pricing).amount == Decimal("0.02097625")
+
+
+class TestLegacyRecordsExcludedFromSubtotal:
+    def test_record_from_old_parser_is_listed_not_summed(self, tmp_path):
+        run_directory = evidence_io.run_dir(tmp_path, "run-1")
+        (run_directory / "usage").mkdir(parents=True)
+        (run_directory / "usage" / "old.json").write_text(json.dumps({
+            "record_kind": "agent_usage", "agent_id": "old",
+            "token_usage": {"input_tokens": 999, "output_tokens": 999},
+            "cost": {"priced": True, "amount": "9.99"},
+        }), encoding="utf-8")
+        summary = usage.build_run_usage_summary("run-1", repo_root=tmp_path)
+        sub = summary["subagent_subtotal"]
+        assert sub["agent_count"] == 0
+        assert sub["token_usage"]["input_tokens"] == 0
+        assert sub["cost"]["legacy_undeduplicated_agent_ids"] == ["old"]
+        assert sub["cost"]["priced"] is False
+
+
+# ---------------------------------------------------------------------------
+# Full pipeline total over one dedicated headless session
+# ---------------------------------------------------------------------------
+
+SESSION_ID = "11111111-2222-3333-4444-555555555555"
+
+
+class TestFinalizePipelineUsage:
+    """Builds a fake dedicated session on disk: <sid>.jsonl (orchestrator) plus
+    <sid>/subagents/agent-<id>.jsonl, a run with agent_dispatch events, and a
+    runtime result whose modelUsage is supplied per test."""
+
+    def _setup(self, tmp_path, *, agents, orchestrator_lines, dispatched=None):
+        (tmp_path / "harness").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "harness" / "model-pricing.json").write_text(
+            REAL_PRICING_PATH.read_text(encoding="utf-8"), encoding="utf-8",
+        )
+        run_directory = evidence_io.run_dir(tmp_path, "run-1")
+        evidence_io.ensure_run_dirs(run_directory)
+        roles = {"arch": ("research", "architect"), "eng": ("implementation", "engineer"),
+                 "qe": ("verification", "quality-engineer"), "qe2": ("verification", "quality-engineer")}
+        for seq, agent_id in enumerate(dispatched if dispatched is not None else agents, start=1):
+            phase, subagent_type = roles[agent_id]
+            evidence_io.retain_policy_event(run_directory, "agent_dispatch", {
+                "phase": phase, "subagent_type": subagent_type, "agent_id": agent_id, "dispatch_sequence": seq,
+            })
+        sessions = tmp_path / "sessions"
+        main = sessions / f"{SESSION_ID}.jsonl"
+        main.parent.mkdir(parents=True)
+        main.write_text(
+            json.dumps({"type": "user", "message": {"content": "/work Add a thing"}}) + "\n"
+            + "\n".join(orchestrator_lines) + "\n", encoding="utf-8",
+        )
+        sub_dir = sessions / SESSION_ID / "subagents"
+        sub_dir.mkdir(parents=True)
+        for agent_id, lines in agents.items():
+            (sub_dir / f"agent-{agent_id}.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return main
+
+    @staticmethod
+    def _runtime(model_usage, cost=None):
+        return {"type": "result", "subtype": "success", "session_id": SESSION_ID,
+                "total_cost_usd": cost, "modelUsage": model_usage}
+
+    @staticmethod
+    def _mu(i, o, cr, cc):
+        return {"inputTokens": i, "outputTokens": o, "cacheReadInputTokens": cr, "cacheCreationInputTokens": cc}
+
+    def _full_pipeline(self, tmp_path):
+        """Orchestrator + Architect + Engineer (with a repair-round resume in the same
+        file) + QE + a second QE dispatch (fresh retry identity)."""
+        line = _assistant_line
+        agents = {
+            "arch": [line(message_id="a1", output_tokens=5), line(message_id="a1", output_tokens=10)],
+            "eng": [line(message_id="e1", output_tokens=20),
+                    line(message_id="e2", output_tokens=30)],  # e2 = repair-round turn, same agent id
+            "qe": [line(message_id="q1", output_tokens=40)],
+            "qe2": [line(message_id="q2", output_tokens=50)],
+        }
+        orch = [line(message_id="o1", input_tokens=4, output_tokens=100, cache_creation_1h=1000, cache_read=5000),
+                line(message_id="o1", input_tokens=4, output_tokens=300, cache_creation_1h=1000, cache_read=5000)]
+        main = self._setup(tmp_path, agents=agents, orchestrator_lines=orch)
+        # Each subagent call: input 2; orchestrator: input 4.
+        return main, self._mu(4 + 2 * 5, 300 + 10 + 20 + 30 + 40 + 50, 5000, 1000)
+
+    def test_complete_session_reconciles_exactly_and_states_total(self, tmp_path):
+        main, mu = self._full_pipeline(tmp_path)
+        s = usage.finalize_pipeline_usage("run-1", repo_root=tmp_path, session_transcript=main,
+                                          runtime_result=self._runtime({"claude-sonnet-5": mu}))
+        assert s["reconciliation"]["status"] == "exact"
+        assert s["coverage_status"] == "complete"
+        assert s["orchestrator"]["status"] == "measured"
+        assert s["orchestrator"]["api_call_count"] == 1
+        assert s["orchestrator"]["token_usage"]["output_tokens"] == 300
+        roles = [(c["component"], c.get("agent_id"), c.get("api_call_count")) for c in s["components"]]
+        assert roles == [("orchestrator", None, 1), ("architect", "arch", 1), ("engineer", "eng", 2),
+                         ("quality-engineer", "qe", 1), ("quality-engineer", "qe2", 1)]
+        total = s["full_pipeline_total"]
+        assert total["token_usage"] == {"input_tokens": 14, "output_tokens": 450,
+                                        "cache_read_input_tokens": 5000, "cache_creation_input_tokens": 1000}
+        # Decimal total equals the sum of the per-component costs, exactly.
+        assert Decimal(total["cost"]["amount"]) == sum(Decimal(c["cost"]["amount"]) for c in s["components"])
+        # 14*2 + 450*10 + 5000*0.2 + 1000*4 (1h write) per MTok
+        assert Decimal(total["cost"]["amount"]) == Decimal("0.009528")
+        assert total["cost"]["status"] == "priced"
+
+    def test_corroboration_and_quarantine_records_never_add_to_total(self, tmp_path):
+        main, mu = self._full_pipeline(tmp_path)
+        before = usage.finalize_pipeline_usage("run-1", repo_root=tmp_path, session_transcript=main,
+                                               runtime_result=self._runtime({"claude-sonnet-5": mu}))
+        # Hook-side sidecars for the same agents, plus a captured canonical record.
+        for agent_id in ("arch", "eng"):
+            usage.record_post_tool_use_corroboration(
+                {"tool_response": {"agentId": agent_id, "usage": {"input_tokens": 999}}}, repo_root=tmp_path)
+        quarantine = tmp_path / "runs" / usage.UNMATCHED_USAGE_DIRNAME / "arch-x.json"
+        quarantine.parent.mkdir(parents=True, exist_ok=True)
+        quarantine.write_text(json.dumps({"record_kind": "agent_usage", "token_usage": {"input_tokens": 999}}))
+        usage.capture_subagent_usage({"hook_event_name": "SubagentStop", "agent_id": "arch",
+                                      "agent_transcript_path": str(main.with_suffix("") / "subagents" / "agent-arch.jsonl")},
+                                     repo_root=tmp_path)
+        after = usage.finalize_pipeline_usage("run-1", repo_root=tmp_path, session_transcript=main,
+                                              runtime_result=self._runtime({"claude-sonnet-5": mu}))
+        assert after["full_pipeline_total"] == before["full_pipeline_total"]
+        arch = next(c for c in after["components"] if c.get("agent_id") == "arch")
+        assert arch["hook_record_matches"] is True
+
+    def test_runtime_residual_without_cache_creation_is_priced_and_included(self, tmp_path):
+        main, mu = self._full_pipeline(tmp_path)
+        s = usage.finalize_pipeline_usage("run-1", repo_root=tmp_path, session_transcript=main, runtime_result=self._runtime({
+            "claude-sonnet-5": mu, "claude-haiku-4-5-20251001": self._mu(1000, 10, 0, 0),
+        }))
+        assert s["reconciliation"]["status"] == "runtime_residual"
+        assert s["coverage_status"] == "complete"
+        residual = s["components"][-1]
+        assert residual["component"] == "runtime_unattributed"
+        assert Decimal(residual["cost"]["amount"]) == Decimal("0.00105")  # 1000*$1 + 10*$5 per MTok
+        assert s["full_pipeline_total"]["token_usage"]["input_tokens"] == 1014
+
+    def test_residual_cache_creation_leaves_cost_unknown_not_zero(self, tmp_path):
+        main, mu = self._full_pipeline(tmp_path)
+        s = usage.finalize_pipeline_usage("run-1", repo_root=tmp_path, session_transcript=main, runtime_result=self._runtime({
+            "claude-sonnet-5": {**mu, "cacheCreationInputTokens": mu["cacheCreationInputTokens"] + 50},
+        }))
+        cost = s["full_pipeline_total"]["cost"]
+        assert cost["status"] == "unknown"
+        assert cost["amount"] is None
+        assert "5m/1h" in cost["reason"]
+
+    def test_transcripts_exceeding_runtime_withhold_total(self, tmp_path):
+        main, mu = self._full_pipeline(tmp_path)
+        s = usage.finalize_pipeline_usage("run-1", repo_root=tmp_path, session_transcript=main, runtime_result=self._runtime({
+            "claude-sonnet-5": {**mu, "outputTokens": mu["outputTokens"] - 1},
+        }))
+        assert s["reconciliation"]["status"] == "inconsistent"
+        assert s["coverage_status"] == "incomplete"
+        assert s["full_pipeline_total"] is None
+
+    def test_dispatched_agent_without_transcript_withholds_total(self, tmp_path):
+        agents = {"arch": [_assistant_line(message_id="a1")]}
+        main = self._setup(tmp_path, agents=agents, orchestrator_lines=[_assistant_line(message_id="o1")],
+                           dispatched=["arch", "eng"])
+        s = usage.finalize_pipeline_usage("run-1", repo_root=tmp_path, session_transcript=main,
+                                          runtime_result=self._runtime({"claude-sonnet-5": self._mu(4, 20, 0, 0)}))
+        assert s["reconciliation"]["missing_agent_transcripts"] == ["eng"]
+        assert s["full_pipeline_total"] is None
+
+    def test_same_call_in_two_transcripts_withholds_total(self, tmp_path):
+        agents = {"arch": [_assistant_line(message_id="dup")]}
+        main = self._setup(tmp_path, agents=agents, orchestrator_lines=[_assistant_line(message_id="dup")])
+        s = usage.finalize_pipeline_usage("run-1", repo_root=tmp_path, session_transcript=main,
+                                          runtime_result=self._runtime({"claude-sonnet-5": self._mu(4, 20, 0, 0)}))
+        assert s["reconciliation"]["cross_file_duplicate_message_ids"] == ["dup"]
+        assert s["full_pipeline_total"] is None
+
+    def test_unusable_assistant_line_withholds_total(self, tmp_path):
+        agents = {"arch": [_assistant_line(message_id="a1"), json.dumps({"type": "assistant"})]}
+        main = self._setup(tmp_path, agents=agents, orchestrator_lines=[_assistant_line(message_id="o1")])
+        s = usage.finalize_pipeline_usage("run-1", repo_root=tmp_path, session_transcript=main,
+                                          runtime_result=self._runtime({"claude-sonnet-5": self._mu(4, 20, 0, 0)}))
+        assert s["coverage_status"] == "incomplete"
+        assert s["full_pipeline_total"] is None
+
+    def test_unknown_model_gives_unknown_total_cost(self, tmp_path):
+        agents = {"arch": [_assistant_line(message_id="a1", model="mystery-model")]}
+        main = self._setup(tmp_path, agents=agents, orchestrator_lines=[_assistant_line(message_id="o1")])
+        s = usage.finalize_pipeline_usage("run-1", repo_root=tmp_path, session_transcript=main, runtime_result=self._runtime({
+            "claude-sonnet-5": self._mu(2, 10, 0, 0), "mystery-model": self._mu(2, 10, 0, 0),
+        }))
+        assert s["reconciliation"]["status"] == "exact"
+        assert s["full_pipeline_total"]["cost"]["status"] == "unknown"
+        assert s["full_pipeline_total"]["cost"]["amount"] is None
+
+    def test_unattributed_subagent_in_session_is_counted_and_labeled(self, tmp_path):
+        agents = {"arch": [_assistant_line(message_id="a1")], "zzz": [_assistant_line(message_id="z1")]}
+        main = self._setup(tmp_path, agents=agents, orchestrator_lines=[_assistant_line(message_id="o1")],
+                           dispatched=["arch"])
+        s = usage.finalize_pipeline_usage("run-1", repo_root=tmp_path, session_transcript=main,
+                                          runtime_result=self._runtime({"claude-sonnet-5": self._mu(6, 30, 0, 0)}))
+        assert [c["component"] for c in s["components"]] == ["orchestrator", "architect", "unattributed_subagent"]
+        assert s["full_pipeline_total"]["token_usage"]["output_tokens"] == 30
+
+    def test_session_mismatch_is_rejected(self, tmp_path):
+        main, mu = self._full_pipeline(tmp_path)
+        with pytest.raises(usage.PipelineUsageError):
+            usage.finalize_pipeline_usage("run-1", repo_root=tmp_path, session_transcript=main, runtime_result={
+                **self._runtime({"claude-sonnet-5": mu}), "session_id": "other-session",
+            })
+
+    def test_total_carries_the_runs_own_outcome(self, tmp_path):
+        main, mu = self._full_pipeline(tmp_path)
+        (evidence_io.run_dir(tmp_path, "run-1") / "run-summary.json").write_text(json.dumps({
+            "final_verdict": "blocked", "phases_completed": ["discovery", "research"],
+        }), encoding="utf-8")
+        s = usage.finalize_pipeline_usage("run-1", repo_root=tmp_path, session_transcript=main,
+                                          runtime_result=self._runtime({"claude-sonnet-5": mu}))
+        assert s["full_pipeline_total"]["run_final_verdict"] == "blocked"
+        assert s["full_pipeline_total"]["run_phases_completed"] == ["discovery", "research"]
+
+    def test_write_is_idempotent(self, tmp_path):
+        main, mu = self._full_pipeline(tmp_path)
+        kwargs = dict(repo_root=tmp_path, session_transcript=main, runtime_result=self._runtime({"claude-sonnet-5": mu}))
+        p1, s1 = usage.write_pipeline_usage_summary("run-1", **kwargs)
+        p2, s2 = usage.write_pipeline_usage_summary("run-1", **kwargs)
+        assert p1 == p2
+        assert s1["full_pipeline_total"] == s2["full_pipeline_total"]

@@ -1352,6 +1352,60 @@ class TestBuildUsageSummary:
         assert resp["status"] == "error"
 
 
+class TestFinalizePipelineUsage:
+    SESSION = "sess-1"
+
+    def _session(self, repo_root) -> Path:
+        (repo_root / "harness").mkdir(parents=True, exist_ok=True)
+        real_pricing = Path(__file__).resolve().parent.parent / "harness" / "model-pricing.json"
+        (repo_root / "harness" / "model-pricing.json").write_text(real_pricing.read_text(encoding="utf-8"), encoding="utf-8")
+        main = repo_root / "sessions" / f"{self.SESSION}.jsonl"
+        main.parent.mkdir(parents=True)
+        main.write_text(json.dumps({"type": "assistant", "message": {
+            "id": "m1", "model": "claude-sonnet-5",
+            "usage": {"input_tokens": 2, "output_tokens": 10, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0},
+        }}) + "\n", encoding="utf-8")
+        return main
+
+    def _result(self, output_tokens: int) -> dict:
+        return {"type": "result", "session_id": self.SESSION, "total_cost_usd": 0.000104, "modelUsage": {
+            "claude-sonnet-5": {"inputTokens": 2, "outputTokens": output_tokens,
+                                "cacheReadInputTokens": 0, "cacheCreationInputTokens": 0},
+        }}
+
+    def test_complete_session_writes_total_exit_0(self, repo_root, capsys) -> None:
+        main = self._session(repo_root)
+        _write(repo_root / "runs" / "run-1" / "session-result.json", self._result(10))
+        exit_code, resp = _run_main(repo_root, {
+            "operation": "finalize_pipeline_usage", "run_id": "run-1", "session_transcript": str(main),
+            "runtime_result_ref": "runs/run-1/session-result.json",
+        }, capsys)
+        assert exit_code == 0
+        assert resp["coverage_status"] == "complete"
+        assert resp["full_pipeline_total"]["cost"]["amount"] == "0.000104"
+        doc = json.loads((repo_root / "runs" / "run-1" / "usage-summary.json").read_text(encoding="utf-8"))
+        assert doc["pipeline_boundary"]["runtime_result_ref"] == "runs/run-1/session-result.json"
+
+    def test_unreconciled_session_is_exit_1_with_no_total(self, repo_root, capsys) -> None:
+        main = self._session(repo_root)
+        exit_code, resp = _run_main(repo_root, {
+            "operation": "finalize_pipeline_usage", "run_id": "run-1", "session_transcript": str(main),
+            "runtime_result": self._result(9),
+        }, capsys)
+        assert exit_code == 1
+        assert resp["status"] == "incomplete"
+        assert resp["full_pipeline_total"] is None
+
+    def test_wrong_session_is_a_usage_error(self, repo_root, capsys) -> None:
+        main = self._session(repo_root)
+        exit_code, resp = _run_main(repo_root, {
+            "operation": "finalize_pipeline_usage", "run_id": "run-1", "session_transcript": str(main),
+            "runtime_result": {**self._result(10), "session_id": "other"},
+        }, capsys)
+        assert exit_code == 2
+        assert resp["status"] == "error"
+
+
 # ---------------------------------------------------------------------------
 # run-summary integration: usage_summary_ref is optional and schema-valid
 # ---------------------------------------------------------------------------

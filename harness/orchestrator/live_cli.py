@@ -731,6 +731,37 @@ def op_build_usage_summary(req: dict) -> dict:
     return {"operation": "build_usage_summary", "status": "written", "path": _rel(path)}
 
 
+def op_finalize_pipeline_usage(req: dict) -> dict:
+    """Run AFTER the dedicated headless session that executed this run has exited (it
+    is never called from inside /work). Rewrites runs/<run_id>/usage-summary.json with
+    the orchestrator's measured usage and, if every model call in the session is
+    accounted for and reconciles with the runtime's own modelUsage, the
+    full_pipeline_total. Delegates entirely to usage.write_pipeline_usage_summary.
+    `session_transcript` is the absolute path of the session's main transcript;
+    `runtime_result`/`runtime_result_ref` is the headless `--output-format json` result.
+    Exit 1 (not 0) when coverage is incomplete, so no caller mistakes it for a total."""
+    run_id = _require_str(req, "run_id")
+    session_transcript = Path(_require_str(req, "session_transcript"))
+    runtime_result = _get_doc(req, "runtime_result")
+    try:
+        path, summary = usage.write_pipeline_usage_summary(
+            run_id, repo_root=REPO_ROOT, session_transcript=session_transcript,
+            runtime_result=runtime_result, runtime_result_ref=req.get("runtime_result_ref"),
+        )
+    except (usage.PipelineUsageError, usage.PricingLoadError, usage.TranscriptNotFoundError) as exc:
+        raise LiveCliUsageError(str(exc)) from exc
+    return {
+        "operation": "finalize_pipeline_usage",
+        "status": "written" if summary["coverage_status"] == "complete" else "incomplete",
+        "path": _rel(path),
+        "coverage_status": summary["coverage_status"],
+        "reconciliation_status": summary["reconciliation"]["status"],
+        "run_outcome": summary["run_outcome"],
+        "full_pipeline_total": summary["full_pipeline_total"],
+        "full_pipeline_total_reason": summary["full_pipeline_total_reason"],
+    }
+
+
 def op_reconcile_quarantined_usage(req: dict) -> dict:
     """17. Called immediately after retain_policy_event(kind: "agent_dispatch") for a
     fresh (non-staged) dispatch -- re-attempts identity matching for a per-agent usage
@@ -1625,6 +1656,7 @@ OPERATIONS = {
     "record_memory_applied": op_record_memory_applied,
     "summarize_memory": op_summarize_memory,
     "build_usage_summary": op_build_usage_summary,
+    "finalize_pipeline_usage": op_finalize_pipeline_usage,
     "reconcile_quarantined_usage": op_reconcile_quarantined_usage,
     "git_repo_identity": op_git_repo_identity,
     "retain_commit_evidence": op_retain_commit_evidence,

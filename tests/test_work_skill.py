@@ -640,7 +640,12 @@ class TestUsageAccounting:
         assert "never hand-authored token/cost totals" in self.flat_text.lower() or "never hand-author usage totals" in self.flat_text.lower()
 
     def test_full_pipeline_total_stays_null_and_is_reported_as_such(self) -> None:
-        assert "full_pipeline_total` is `null` for every run this milestone" in self.flat_text
+        assert "full_pipeline_total` is `null` in every summary written during the run" in self.flat_text
+
+    def test_full_total_is_finalized_only_after_the_session(self) -> None:
+        terminal_usage = self._phase_slice("## Terminal usage summary", "# Reporting")
+        assert "finalize_pipeline_usage" in terminal_usage
+        assert "Never call `finalize_pipeline_usage` from inside `/work`" in " ".join(terminal_usage.split())
 
     def test_subagent_subtotal_never_described_as_total_pipeline_cost(self) -> None:
         assert "never describe" in self.flat_text.lower() and "total pipeline cost" in self.flat_text.lower()

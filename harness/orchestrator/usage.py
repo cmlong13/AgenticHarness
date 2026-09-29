@@ -34,8 +34,10 @@ account this module implements):
   splitting `ephemeral_5m_input_tokens`/`ephemeral_1h_input_tokens` -- never
   the rounded `totalTokens` convenience figure, which this module never reads
   for accounting.
-- Aggregation semantics: each `assistant` line's `usage` is per-API-call, not
-  cumulative; the transcript file itself is cumulative and append-only
+- Aggregation semantics: `usage` is per-API-call, not cumulative -- but one
+  API call is written as several `assistant` lines (one per content block)
+  sharing a `message.id`, so usage is counted once per `message.id` (see
+  `parse_transcript_usage`); the transcript file itself is cumulative and append-only
   across every turn/resume that agent has taken. Every capture therefore
   recomputes the FULL sum from the entire current file and OVERWRITES (never
   adds to) the stored per-agent record -- this is what makes a duplicate or
@@ -48,13 +50,13 @@ account this module implements):
   Exactly one matching run -> the record belongs to that run. Zero or more
   than one matching run -> quarantined (`runs/_unmatched_usage/`), never
   guessed.
-- Coverage: only subagent usage is capturable this milestone -- the
-  orchestrator's own final token usage is not knowable while the run summary
-  is still being written in the same turn (the `Stop` event that would
-  reveal it fires only once this turn ends). `coverage_status` is therefore
-  always "partial" and a genuine `full_pipeline_total` is never computed;
-  only an explicitly labeled `subagent_subtotal` is reported. See
-  `build_run_usage_summary`.
+- Coverage: during the run only subagent usage is final -- the orchestrator's
+  own usage is still growing while the run summary is written, so the in-run
+  `build_run_usage_summary` is always "partial" with `full_pipeline_total: null`.
+  A full total exists only after the session ends, and only for a run executed
+  as one dedicated headless session: `finalize_pipeline_usage` then accounts the
+  orchestrator transcript and every subagent transcript of that session and
+  reconciles them against the runtime's own session `modelUsage`.
 """
 from __future__ import annotations
 
@@ -69,6 +71,10 @@ from . import evidence_io
 PRICING_FILENAME = "model-pricing.json"
 USAGE_DIRNAME = "usage"
 UNMATCHED_USAGE_DIRNAME = "_unmatched_usage"
+# Marks a record produced by the per-message-id deduplicating parser. Records
+# without it were produced by the earlier every-line parser, which double-counted
+# multi-block API responses (see parse_transcript_usage).
+ACCOUNTING_METHOD = "per_api_message_id"
 
 # The four exact structured token categories this module ever persists or
 # prices -- never a rounded/precomputed UI figure such as `totalTokens`.
@@ -131,12 +137,18 @@ class TokenCounts:
 
 @dataclass
 class TranscriptUsage:
-    """The full result of parsing one subagent transcript file at capture
-    time -- always a fresh, full recomputation (see module docstring), never
-    an incremental update against a prior capture."""
+    """The full result of parsing one transcript file at capture time --
+    always a fresh, full recomputation (see module docstring), never an
+    incremental update against a prior capture. `message_count` counts
+    distinct API calls (distinct `message.id`s), not transcript lines."""
 
     counts: TokenCounts = field(default_factory=TokenCounts)
+    counts_by_model: dict[str, TokenCounts] = field(default_factory=dict)
     message_count: int = 0
+    message_ids: list[str] = field(default_factory=list)
+    assistant_line_count: int = 0
+    lines_without_message_id: int = 0
+    synthetic_message_count: int = 0
     models_seen: list[str] = field(default_factory=list)
     skipped_lines: list[dict] = field(default_factory=list)  # {"line_no":..., "reason":...}
 
@@ -145,23 +157,40 @@ class TranscriptNotFoundError(Exception):
     pass
 
 
+# Client-generated assistant entries (e.g. an interrupted-turn placeholder) carry
+# this model string and are not API calls -- never counted or priced.
+SYNTHETIC_MODEL = "<synthetic>"
+
+
 def parse_transcript_usage(transcript_path: Path) -> TranscriptUsage:
-    """Reads a subagent transcript JSONL file end to end and sums the exact
-    structured usage categories across every `type: "assistant"` line.
-    Per-message usage is per-API-call (confirmed empirically, see module
-    docstring) -- summing every assistant line in the file at capture time is
-    therefore the correct full-recompute aggregation, not a double count.
+    """Reads a transcript JSONL file end to end and sums the exact structured
+    usage categories once per real API call.
+
+    Claude Code writes one API response as SEVERAL `type: "assistant"` lines --
+    one per content block (thinking / text / tool_use) -- all sharing the same
+    `message.id`, each repeating that call's input/cache usage, with
+    `output_tokens` growing as the stream progresses and final on the last
+    line (verified across every locally retained transcript on 2026-09-29:
+    2,640 message ids in 93 files, input/cache identical within every id,
+    output monotonic with the last line maximal). Summing every line therefore
+    double-counts; this parser keeps exactly one usage per `message.id` -- the
+    last line seen for that id. A line without a `message.id` cannot be
+    deduplicated and is counted as its own call; `lines_without_message_id`
+    records how many, so a session-level reconciliation against the runtime's
+    own totals (see `finalize_pipeline_usage`) can expose any overcount.
 
     A line that isn't `type: "assistant"` is not part of usage accounting at
     all and is silently skipped (not reported as an anomaly) -- only an
     `assistant`-type line that is malformed (bad JSON, missing `message`,
-    missing `message.usage`) is recorded in `skipped_lines`, never allowed to
-    block a later valid line in the same file from being summed."""
+    missing `message.usage`, missing `input_tokens`/`output_tokens`) is
+    recorded in `skipped_lines`, never allowed to block a later valid line in
+    the same file from being summed."""
     if not transcript_path.is_file():
         raise TranscriptNotFoundError(f"transcript file not found: {transcript_path}")
 
     result = TranscriptUsage()
     seen_models: list[str] = []
+    calls: dict[str, tuple[str | None, TokenCounts]] = {}  # message key -> (model, counts); insertion-ordered
 
     for line_no, raw_line in enumerate(transcript_path.read_text(encoding="utf-8").splitlines(), start=1):
         stripped = raw_line.strip()
@@ -179,12 +208,20 @@ def parse_transcript_usage(transcript_path: Path) -> TranscriptUsage:
         if not isinstance(message, dict):
             result.skipped_lines.append({"line_no": line_no, "reason": "assistant entry missing 'message' object"})
             continue
+        model = message.get("model")
+        if model == SYNTHETIC_MODEL:
+            result.synthetic_message_count += 1
+            continue
         usage = message.get("usage")
         if not isinstance(usage, dict):
             result.skipped_lines.append({"line_no": line_no, "reason": "message missing 'usage' object"})
             continue
+        missing = [k for k in ("input_tokens", "output_tokens") if k not in usage]
+        if missing:
+            result.skipped_lines.append({"line_no": line_no, "reason": f"usage missing field(s): {', '.join(missing)}"})
+            continue
 
-        model = message.get("model")
+        result.assistant_line_count += 1
         if isinstance(model, str) and model and model not in seen_models:
             seen_models.append(model)
 
@@ -208,9 +245,22 @@ def parse_transcript_usage(transcript_path: Path) -> TranscriptUsage:
             cache_creation_1h_tokens=int(cache_1h or 0),
             cache_read_tokens=int(usage.get("cache_read_input_tokens", 0) or 0),
         )
-        result.counts = result.counts + line_counts
-        result.message_count += 1
+        message_id = message.get("id")
+        if isinstance(message_id, str) and message_id:
+            key = message_id
+            calls.pop(key, None)  # last line for this id wins (see docstring)
+        else:
+            result.lines_without_message_id += 1
+            key = f"\0line-{line_no}"
+        calls[key] = (model if isinstance(model, str) and model else None, line_counts)
 
+    for key, (model, counts) in calls.items():
+        result.counts = result.counts + counts
+        model_key = model or "unknown"
+        result.counts_by_model[model_key] = result.counts_by_model.get(model_key, TokenCounts()) + counts
+        if not key.startswith("\0"):
+            result.message_ids.append(key)
+    result.message_count = len(calls)
     result.models_seen = seen_models
     return result
 
@@ -297,6 +347,14 @@ class PricingTable:
     models: dict[str, ModelRates]
     source: str
     verified_date: str
+    aliases: dict[str, str] = field(default_factory=dict)
+
+    def rates_for(self, model: str | None) -> ModelRates | None:
+        """Exact key first, then an explicitly configured alias (e.g. a dated
+        model id the runtime records) -- never a fuzzy/prefix match."""
+        if not model:
+            return None
+        return self.models.get(model) or self.models.get(self.aliases.get(model, ""))
 
 
 class PricingLoadError(Exception):
@@ -332,10 +390,17 @@ def load_pricing(path: Path) -> PricingTable:
         except (KeyError, TypeError, ValueError) as exc:
             raise PricingLoadError(f"pricing file {path}: malformed entry for {model_id!r}: {exc}") from exc
 
+    aliases = raw.get("aliases", {})
+    if not isinstance(aliases, dict) or any(
+        not isinstance(k, str) or not isinstance(v, str) or v not in models for k, v in aliases.items()
+    ):
+        raise PricingLoadError(f"pricing file {path}: 'aliases' must map model ids to keys of 'models'")
+
     return PricingTable(
         models=models,
         source=str(meta.get("source", "")),
         verified_date=str(meta.get("verified_date", "")),
+        aliases=dict(aliases),
     )
 
 
@@ -372,7 +437,7 @@ def price_usage(model: str | None, counts: TokenCounts, pricing: PricingTable) -
     than collapsing both into a single "cache write" rate."""
     if not model:
         return CostResult(priced=False, amount=None, reason="no model name recorded in transcript")
-    rates = pricing.models.get(model)
+    rates = pricing.rates_for(model)
     if rates is None:
         return CostResult(priced=False, amount=None, reason=f"unrecognized model {model!r} -- not in pricing table")
 
@@ -389,6 +454,25 @@ def price_usage(model: str | None, counts: TokenCounts, pricing: PricingTable) -
         amount=amount,
         pricing_source=pricing.source,
         pricing_verified_date=pricing.verified_date,
+    )
+
+
+def price_counts_by_model(counts_by_model: dict[str, TokenCounts], pricing: PricingTable) -> CostResult:
+    """Prices each model's tokens at that model's own rates and sums them. If
+    ANY model is unpriced the whole result is unpriced (`amount: None`) -- a
+    partially priced sum is never presented as the cost."""
+    total = Decimal(0)
+    unpriced: list[str] = []
+    for model, counts in counts_by_model.items():
+        cost = price_usage(model, counts, pricing)
+        if cost.priced:
+            total += cost.amount
+        else:
+            unpriced.append(cost.reason or model)
+    if unpriced:
+        return CostResult(priced=False, amount=None, reason="; ".join(unpriced))
+    return CostResult(
+        priced=True, amount=total, pricing_source=pricing.source, pricing_verified_date=pricing.verified_date,
     )
 
 
@@ -419,8 +503,9 @@ def build_usage_record(
 ) -> dict:
     model = transcript.models_seen[0] if transcript.models_seen else None
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "record_kind": "agent_usage",
+        "accounting_method": ACCOUNTING_METHOD,
         "agent_id": agent_id,
         "identity": {
             "match_status": match.status,
@@ -438,9 +523,13 @@ def build_usage_record(
         },
         "captured_at": captured_at,
         "message_count": transcript.message_count,
+        "assistant_line_count": transcript.assistant_line_count,
+        "lines_without_message_id": transcript.lines_without_message_id,
+        "synthetic_message_count": transcript.synthetic_message_count,
         "models_seen": transcript.models_seen,
         "primary_model": model,
         "token_usage": transcript.counts.as_dict(),
+        "token_usage_by_model": {m: c.as_dict() for m, c in transcript.counts_by_model.items()},
         "skipped_transcript_lines": transcript.skipped_lines,
         "cost": cost.as_dict(),
     }
@@ -478,8 +567,7 @@ def capture_subagent_usage(hook_payload: dict, *, repo_root: Path, captured_at: 
 
     try:
         pricing = load_pricing(_default_pricing_path(repo_root))
-        model = transcript.models_seen[0] if transcript.models_seen else None
-        cost = price_usage(model, transcript.counts, pricing)
+        cost = price_counts_by_model(transcript.counts_by_model, pricing)
     except PricingLoadError as exc:
         cost = CostResult(priced=False, amount=None, reason=f"pricing unavailable: {exc}")
 
@@ -608,7 +696,13 @@ def build_run_usage_summary(run_id: str, *, repo_root: Path) -> dict:
     priced_amount = Decimal(0)
     any_priced = False
     unpriced_agent_ids: list[str] = []
+    legacy_agent_ids: list[str] = []
     for record in agents:
+        if record.get("accounting_method") != ACCOUNTING_METHOD:
+            # Produced by the earlier every-line parser, which double-counted
+            # multi-block API responses -- never summed into a figure.
+            legacy_agent_ids.append(record.get("agent_id"))
+            continue
         tu = record.get("token_usage", {})
         breakdown = tu.get("cache_creation_breakdown", {})
         subtotal_counts = subtotal_counts + TokenCounts(
@@ -632,15 +726,17 @@ def build_run_usage_summary(run_id: str, *, repo_root: Path) -> dict:
         "generated_at": _utc_now_iso(),
         "agents": agents,
         "subagent_subtotal": {
-            "agent_count": len(agents),
+            "agent_count": len(agents) - len(legacy_agent_ids),
             "token_usage": subtotal_counts.as_dict(),
             "cost": {
-                "priced": any_priced and not unpriced_agent_ids,
+                "priced": any_priced and not unpriced_agent_ids and not legacy_agent_ids,
                 "amount": str(priced_amount) if any_priced else None,
                 "currency": "USD",
                 "unpriced_agent_ids": unpriced_agent_ids,
+                "legacy_undeduplicated_agent_ids": legacy_agent_ids,
                 "note": (
                     "partial: one or more agents are unpriced" if unpriced_agent_ids
+                    else "partial: legacy (double-counting) agent records excluded" if legacy_agent_ids
                     else ("complete over captured agents" if any_priced else "no priced agents")
                 ),
             },
@@ -648,11 +744,10 @@ def build_run_usage_summary(run_id: str, *, repo_root: Path) -> dict:
         "orchestrator": {
             "status": "not_measured",
             "reason": (
-                "The main orchestrator session's own token usage is not observable while "
-                "this run's own artifacts are still being written -- the Stop hook that "
-                "would reveal it fires only at the very end of the turn, after any "
-                "run-summary this milestone writes. Not captured this milestone; see "
-                "PROJECT_SPEC.md."
+                "The main orchestrator session is still running while this summary is "
+                "written, so its own usage is not final yet. It is measured only after the "
+                "session ends, by finalize_pipeline_usage, and only for a run executed as "
+                "one dedicated headless session (the pipeline boundary)."
             ),
             "token_usage": None,
             "cost": None,
@@ -660,7 +755,7 @@ def build_run_usage_summary(run_id: str, *, repo_root: Path) -> dict:
         "coverage_status": "partial",
         "full_pipeline_total": None,
         "full_pipeline_total_reason": (
-            "orchestrator usage was not captured this milestone -- a subagent subtotal is "
+            "orchestrator usage is not final until the session ends -- a subagent subtotal is "
             "never reported as the full pipeline cost"
         ),
     }
@@ -724,3 +819,333 @@ def write_run_usage_summary(run_id: str, *, repo_root: Path) -> Path:
     path = usage_summary_path(run_directory)
     evidence_io.atomic_write(path, (json.dumps(summary, indent=2) + "\n").encode("utf-8"))
     return path
+
+
+# ---------------------------------------------------------------------------
+# Full pipeline total (post-session finalization over one dedicated session)
+# ---------------------------------------------------------------------------
+#
+# Pipeline boundary: the run is executed as ONE dedicated headless Claude Code
+# session (`claude -p "/work ..." --output-format json`), so every model call made
+# while executing the pipeline belongs to that session. Once the process has
+# exited, both of the runtime's own records of that session are final:
+#
+# - per-call usage in the main transcript (`<session_id>.jsonl`, the orchestrator)
+#   and in each subagent transcript (`<session_id>/subagents/agent-<id>.jsonl`);
+# - the runtime's session-wide `modelUsage` (per model: input/output/cache-read/
+#   cache-creation tokens) in the headless `result` JSON.
+#
+# The transcripts give attribution (orchestrator / Architect / Engineer / QE); the
+# runtime's `modelUsage` is the completeness check. Verified live on 2026-09-29
+# that the two agree exactly for a headless session with one subagent. Any
+# difference is reported, never absorbed: runtime tokens that no transcript
+# accounts for become an explicit `runtime_unattributed` component, and
+# transcript tokens the runtime does not report make the reconciliation
+# `inconsistent`, in which case no full total is stated.
+
+_RUNTIME_CATEGORIES = (
+    ("inputTokens", "input_tokens"),
+    ("outputTokens", "output_tokens"),
+    ("cacheReadInputTokens", "cache_read_input_tokens"),
+    ("cacheCreationInputTokens", "cache_creation_input_tokens"),
+)
+
+
+class PipelineUsageError(Exception):
+    pass
+
+
+def _flat_counts(counts: TokenCounts) -> dict[str, int]:
+    return {
+        "input_tokens": counts.input_tokens,
+        "output_tokens": counts.output_tokens,
+        "cache_read_input_tokens": counts.cache_read_tokens,
+        "cache_creation_input_tokens": counts.cache_creation_input_tokens,
+    }
+
+
+def _run_agent_dispatches(run_directory: Path) -> dict[str, dict]:
+    events_path = run_directory / "logs" / "policy-events.jsonl"
+    dispatches: dict[str, dict] = {}
+    if not events_path.is_file():
+        return dispatches
+    for raw_line in events_path.read_text(encoding="utf-8").splitlines():
+        try:
+            event = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(event, dict) and event.get("kind") == "agent_dispatch" and isinstance(event.get("agent_id"), str):
+            dispatches.setdefault(event["agent_id"], event)
+    return dispatches
+
+
+def _first_user_prompt(transcript_path: Path) -> str | None:
+    for raw_line in transcript_path.read_text(encoding="utf-8").splitlines():
+        try:
+            entry = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(entry, dict) and entry.get("type") == "user":
+            content = (entry.get("message") or {}).get("content")
+            if isinstance(content, str):
+                return content[:300]
+            if isinstance(content, list):
+                texts = [c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text"]
+                if texts:
+                    return texts[0][:300]
+    return None
+
+
+def _session_component(role: str, path: Path, transcript: TranscriptUsage, pricing: PricingTable, **identity) -> dict:
+    return {
+        "component": role,
+        **identity,
+        "transcript_path": str(path),
+        "api_call_count": transcript.message_count,
+        "assistant_line_count": transcript.assistant_line_count,
+        "lines_without_message_id": transcript.lines_without_message_id,
+        "synthetic_message_count": transcript.synthetic_message_count,
+        "skipped_transcript_lines": transcript.skipped_lines,
+        "models_seen": transcript.models_seen,
+        "token_usage": transcript.counts.as_dict(),
+        "token_usage_by_model": {m: c.as_dict() for m, c in transcript.counts_by_model.items()},
+        "cost": price_counts_by_model(transcript.counts_by_model, pricing).as_dict(),
+    }
+
+
+def _price_residual(model: str, residual: dict[str, int], pricing: PricingTable) -> CostResult:
+    """Prices runtime-reported tokens no transcript accounts for. The runtime's
+    `modelUsage` does not split cache creation into 5m/1h, and those price
+    differently, so a residual with cache-creation tokens stays unpriced."""
+    rates = pricing.rates_for(model)
+    if rates is None:
+        return CostResult(priced=False, amount=None, reason=f"unrecognized model {model!r} -- not in pricing table")
+    if residual["cache_creation_input_tokens"]:
+        return CostResult(
+            priced=False, amount=None,
+            reason=f"{model}: runtime does not report the 5m/1h split of unattributed cache-creation tokens",
+        )
+    amount = (
+        Decimal(residual["input_tokens"]) * rates.input
+        + Decimal(residual["output_tokens"]) * rates.output
+        + Decimal(residual["cache_read_input_tokens"]) * rates.cache_read
+    ) / _MTOK
+    return CostResult(
+        priced=True, amount=amount, pricing_source=pricing.source, pricing_verified_date=pricing.verified_date,
+    )
+
+
+def finalize_pipeline_usage(
+    run_id: str, *, repo_root: Path, session_transcript: Path, runtime_result: dict, runtime_result_ref: str | None = None,
+) -> dict:
+    """Builds the full-pipeline usage summary for a run executed as one dedicated
+    headless session, after that session has exited. See the section comment
+    above for the boundary and reconciliation rules. Raises PipelineUsageError if
+    the inputs do not describe the same finished session."""
+    if runtime_result.get("type") != "result" or not isinstance(runtime_result.get("modelUsage"), dict):
+        raise PipelineUsageError("runtime_result is not a headless 'result' document with a 'modelUsage' object")
+    session_id = runtime_result.get("session_id")
+    if not isinstance(session_id, str) or session_transcript.stem != session_id:
+        raise PipelineUsageError(
+            f"session transcript {session_transcript.name!r} does not belong to runtime session {session_id!r}"
+        )
+    if not session_transcript.is_file():
+        raise PipelineUsageError(f"session transcript not found: {session_transcript}")
+
+    pricing = load_pricing(_default_pricing_path(repo_root))
+    run_directory = evidence_io.run_dir(repo_root, run_id)
+    dispatches = _run_agent_dispatches(run_directory)
+
+    parsed: list[tuple[dict, TranscriptUsage]] = []
+    orchestrator_usage = parse_transcript_usage(session_transcript)
+    parsed.append((_session_component("orchestrator", session_transcript, orchestrator_usage, pricing), orchestrator_usage))
+    subagent_dir = session_transcript.with_suffix("") / "subagents"
+    seen_agent_ids: list[str] = []
+    for path in sorted(subagent_dir.glob("agent-*.jsonl")) if subagent_dir.is_dir() else []:
+        agent_id = path.stem[len("agent-"):]
+        seen_agent_ids.append(agent_id)
+        dispatch = dispatches.get(agent_id)
+        transcript = parse_transcript_usage(path)
+        identity = {
+            "agent_id": agent_id,
+            "phase": dispatch.get("phase") if dispatch else None,
+            "subagent_type": dispatch.get("subagent_type") if dispatch else None,
+            "dispatch_sequence": dispatch.get("dispatch_sequence") if dispatch else None,
+        }
+        role = dispatch.get("subagent_type") if dispatch else "unattributed_subagent"
+        parsed.append((_session_component(role or "unattributed_subagent", path, transcript, pricing, **identity), transcript))
+
+    components = [c for c, _ in parsed]
+    problems: list[str] = []
+
+    # One API call is counted once across the whole session, not just within a file.
+    owners: dict[str, int] = {}
+    cross_file_duplicates: list[str] = []
+    for index, (_, transcript) in enumerate(parsed):
+        for message_id in transcript.message_ids:
+            if owners.setdefault(message_id, index) != index:
+                cross_file_duplicates.append(message_id)
+    if cross_file_duplicates:
+        problems.append(f"{len(cross_file_duplicates)} message id(s) appear in more than one transcript")
+
+    missing_agent_transcripts = sorted(set(dispatches) - set(seen_agent_ids))
+    if missing_agent_transcripts:
+        problems.append(f"dispatched agent(s) with no transcript in this session: {missing_agent_transcripts}")
+    for component, transcript in parsed:
+        if transcript.skipped_lines:
+            who = " ".join(filter(None, [component["component"], component.get("agent_id")]))
+            problems.append(f"{who}: {len(transcript.skipped_lines)} unusable assistant line(s)")
+        if component.get("agent_id"):
+            # Corroboration only: the SubagentStop hook's record for the same agent,
+            # compared, never summed.
+            record_path = usage_record_path(run_directory, component["agent_id"])
+            try:
+                record = json.loads(record_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                record = None
+            component["hook_record_matches"] = (
+                record.get("token_usage") == component["token_usage"]
+                if isinstance(record, dict) and record.get("accounting_method") == ACCOUNTING_METHOD else None
+            )
+
+    # Reconcile per model and category against the runtime's own session totals.
+    transcript_by_model: dict[str, TokenCounts] = {}
+    for _, transcript in parsed:
+        for model, counts in transcript.counts_by_model.items():
+            transcript_by_model[model] = transcript_by_model.get(model, TokenCounts()) + counts
+    runtime_by_model: dict[str, dict[str, int]] = {}
+    for model, mu in runtime_result["modelUsage"].items():
+        if not isinstance(mu, dict):
+            raise PipelineUsageError(f"runtime modelUsage entry for {model!r} is not an object")
+        runtime_by_model[model] = {ours: int(mu.get(theirs, 0) or 0) for theirs, ours in _RUNTIME_CATEGORIES}
+
+    per_model: dict[str, dict] = {}
+    residual_by_model: dict[str, dict[str, int]] = {}
+    inconsistent = False
+    for model in sorted(set(transcript_by_model) | set(runtime_by_model)):
+        ours = _flat_counts(transcript_by_model.get(model, TokenCounts()))
+        theirs = runtime_by_model.get(model, {k: 0 for _, k in _RUNTIME_CATEGORIES})
+        residual = {k: theirs[k] - ours[k] for k in ours}
+        per_model[model] = {"transcripts": ours, "runtime": theirs, "runtime_minus_transcripts": residual}
+        if any(v < 0 for v in residual.values()):
+            inconsistent = True
+            problems.append(f"{model}: transcripts report more tokens than the runtime ({residual})")
+        elif any(residual.values()):
+            residual_by_model[model] = residual
+
+    if inconsistent:
+        reconciliation_status = "inconsistent"
+    elif residual_by_model:
+        reconciliation_status = "runtime_residual"
+    else:
+        reconciliation_status = "exact"
+
+    if residual_by_model:
+        residual_costs = {m: _price_residual(m, r, pricing) for m, r in residual_by_model.items()}
+        components.append({
+            "component": "runtime_unattributed",
+            "note": (
+                "Tokens the runtime reports for this session that appear in no transcript "
+                "(e.g. runtime-internal auxiliary calls). Counted in the total; not attributable to a phase."
+            ),
+            "token_usage_by_model": residual_by_model,
+            "cost_by_model": {m: c.as_dict() for m, c in residual_costs.items()},
+            "cost": (
+                CostResult(
+                    priced=True, amount=sum((c.amount for c in residual_costs.values()), Decimal(0)),
+                    pricing_source=pricing.source, pricing_verified_date=pricing.verified_date,
+                )
+                if all(c.priced for c in residual_costs.values())
+                else CostResult(priced=False, amount=None, reason="; ".join(
+                    c.reason for c in residual_costs.values() if not c.priced
+                ))
+            ).as_dict(),
+        })
+
+    total_tokens = {k: sum(r[k] for r in runtime_by_model.values()) for _, k in _RUNTIME_CATEGORIES}
+    unpriced = [c for c in components if not c["cost"]["priced"]]
+    total_cost = (
+        {"status": "priced", "amount": str(sum((Decimal(c["cost"]["amount"]) for c in components), Decimal(0))),
+         "currency": "USD", "pricing_source": pricing.source, "pricing_verified_date": pricing.verified_date}
+        if not unpriced else
+        {"status": "unknown", "amount": None, "currency": "USD",
+         "reason": "; ".join(f"{c['component']}: {c['cost'].get('reason')}" for c in unpriced)}
+    )
+    complete = not problems
+
+    # Accounting coverage and pipeline completion are separate claims: a complete
+    # accounting of a run that stopped early is that run's total, not the cost of a
+    # full four-phase pipeline. The run's own outcome is carried alongside.
+    try:
+        run_summary = json.loads((run_directory / "run-summary.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        run_summary = {}
+    run_outcome = {
+        "final_verdict": run_summary.get("final_verdict"),
+        "phases_completed": run_summary.get("phases_completed"),
+    }
+
+    runtime_cost = runtime_result.get("total_cost_usd")
+    summary = build_run_usage_summary(run_id, repo_root=repo_root)
+    summary.update({
+        "schema_version": "2.0",
+        "pipeline_boundary": {
+            "kind": "dedicated_headless_session",
+            "definition": (
+                "Every model call made by the one headless Claude Code session that executed this "
+                "run: the main (orchestrator) transcript, every subagent transcript under that "
+                "session, and any runtime-reported usage no transcript accounts for."
+            ),
+            "session_id": session_id,
+            "session_transcript_path": str(session_transcript),
+            "subagent_transcript_dir": str(subagent_dir),
+            "runtime_result_ref": runtime_result_ref,
+            "runtime_result_subtype": runtime_result.get("subtype"),
+            "runtime_result_is_error": runtime_result.get("is_error"),
+            "first_user_prompt_excerpt": _first_user_prompt(session_transcript),
+        },
+        "run_outcome": run_outcome,
+        "orchestrator": {"status": "measured", **components[0]},
+        "components": components,
+        "reconciliation": {
+            "status": reconciliation_status,
+            "per_model": per_model,
+            "cross_file_duplicate_message_ids": cross_file_duplicates,
+            "missing_agent_transcripts": missing_agent_transcripts,
+            "problems": problems,
+            "runtime_reported_total_cost_usd": None if runtime_cost is None else str(runtime_cost),
+            "runtime_reported_cost_by_model_usd": {
+                m: str(mu.get("costUSD")) for m, mu in runtime_result["modelUsage"].items()
+            },
+            "note": (
+                "Runtime-reported costUSD is the runtime's own float estimate, retained for "
+                "corroboration only; the stated cost is computed with Decimal from "
+                "harness/model-pricing.json."
+            ),
+        },
+        "coverage_status": "complete" if complete else "incomplete",
+        "full_pipeline_total": (
+            {"token_usage": total_tokens, "token_usage_by_model": runtime_by_model, "cost": total_cost,
+             "run_final_verdict": run_outcome["final_verdict"],
+             "run_phases_completed": run_outcome["phases_completed"]}
+            if complete else None
+        ),
+        "full_pipeline_total_reason": (
+            None if complete else "full total withheld: " + "; ".join(problems)
+        ),
+    })
+    return summary
+
+
+def write_pipeline_usage_summary(
+    run_id: str, *, repo_root: Path, session_transcript: Path, runtime_result: dict, runtime_result_ref: str | None = None,
+) -> tuple[Path, dict]:
+    summary = finalize_pipeline_usage(
+        run_id, repo_root=repo_root, session_transcript=session_transcript,
+        runtime_result=runtime_result, runtime_result_ref=runtime_result_ref,
+    )
+    run_directory = evidence_io.run_dir(repo_root, run_id)
+    evidence_io.ensure_run_dirs(run_directory)
+    path = usage_summary_path(run_directory)
+    evidence_io.atomic_write(path, (json.dumps(summary, indent=2) + "\n").encode("utf-8"))
+    return path, summary
