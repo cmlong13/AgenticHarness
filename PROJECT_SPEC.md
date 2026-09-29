@@ -2694,6 +2694,17 @@ Demonstrated live, on a repo with ≥50 files:
       above). The two remain distinct proofs, not to be conflated: the false-push
       rejection above is deterministic-fixture-proven; a genuine successful push and
       its independent verification are now **live-proven** (§10).
+      **Live acceptance proof (2026-09-29)**: `runs/run-20260929-falsepush-001/`
+      (`FALSE-PUSH-PROOF.md`). A recorded `simulated_push_claim` said real local HEAD
+      `dd3c875…` was pushed to `origin` `refs/heads/falsepush/run-20260929-falsepush-001`.
+      No push was made. The production `verify_push` operation (real, unmocked
+      `git ls-remote origin <ref>` against `cmlong13/AgenticHarness`) returned exit 0
+      with empty stdout and classified the claim `remote_ref_missing` (CLI exit 1).
+      The orchestrator retained a `git_delivery_decision` of `rejected`. Controls
+      before and after verified the genuine `main` = `dd3c875…` as `verified`.
+      Full-remote `git ls-remote` snapshots before and after are identical (no remote
+      mutation). The `mismatch` branch stays covered by the deterministic fixtures
+      above only.
 - [~] Obsidian vault receives a run summary; `lessons-learned.md` gains ≤5 bullets; a
       second run visibly uses a lesson from the first. **Obsidian run-summary WRITE-BACK
       half: COMPLETE and LIVE-PROVEN (2026-09-08)** — `harness/orchestrator/obsidian.py`

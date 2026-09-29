@@ -1,0 +1,7 @@
+FP-1-identity exit_code=0
+FP-2-commit-evidence exit_code=0
+FP-3-control-pre exit_code=0
+FP-4-simulated-claim exit_code=0
+FP-5-verify-claim exit_code=1
+FP-6-control-post exit_code=0
+FP-7-delivery-decision exit_code=0

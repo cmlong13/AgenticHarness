@@ -1,0 +1,23 @@
+{
+  "task_id": "FALSEPUSH-001",
+  "run_id": "run-20260929-falsepush-001",
+  "target_repo_path": ".",
+  "verified_at": "2026-09-29T12:00:55Z",
+  "status": "verified",
+  "remote": "origin",
+  "ref": "refs/heads/main",
+  "expected_sha": "dd3c875129a46db7bd2e73331240ca5daf343269",
+  "observed_sha": "dd3c875129a46db7bd2e73331240ca5daf343269",
+  "reason": "observed remote SHA matches expected local SHA",
+  "raw_command": {
+    "args": [
+      "git",
+      "ls-remote",
+      "origin",
+      "refs/heads/main"
+    ],
+    "exit_code": 0,
+    "stdout": "dd3c875129a46db7bd2e73331240ca5daf343269\trefs/heads/main\n",
+    "stderr": ""
+  }
+}

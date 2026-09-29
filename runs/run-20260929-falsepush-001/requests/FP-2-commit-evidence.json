@@ -1,0 +1,1 @@
+{"operation": "retain_commit_evidence", "run_id": "run-20260929-falsepush-001", "task_id": "FALSEPUSH-001", "target_repo_path": ".", "expected_branch": "main"}

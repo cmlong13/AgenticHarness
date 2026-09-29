@@ -1,0 +1,6 @@
+{
+  "operation": "retain_commit_evidence",
+  "status": "retained",
+  "path": "runs/run-20260929-falsepush-001/git/commit-evidence.json",
+  "commit_sha": "dd3c875129a46db7bd2e73331240ca5daf343269"
+}

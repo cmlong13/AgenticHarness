@@ -1,0 +1,9 @@
+{
+  "operation": "git_repo_identity",
+  "status": "ok",
+  "repo_root": "C:/Users/caleb/Documents/Projects/AgenticHarness",
+  "current_branch": "main",
+  "local_head_sha": "dd3c875129a46db7bd2e73331240ca5daf343269",
+  "remote": "origin",
+  "remote_url": "https://github.com/cmlong13/AgenticHarness.git"
+}

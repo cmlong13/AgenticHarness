@@ -1,0 +1,8 @@
+{
+  "task_id": "FALSEPUSH-001",
+  "run_id": "run-20260929-falsepush-001",
+  "target_repo_path": ".",
+  "branch": "main",
+  "commit_sha": "dd3c875129a46db7bd2e73331240ca5daf343269",
+  "retained_at": "2026-09-29T12:00:51Z"
+}

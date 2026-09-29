@@ -1,0 +1,21 @@
+{
+  "operation": "verify_push",
+  "status": "verified",
+  "path": "runs/run-20260929-falsepush-001/git/push-verification-control-pre.json",
+  "remote": "origin",
+  "ref": "refs/heads/main",
+  "expected_sha": "dd3c875129a46db7bd2e73331240ca5daf343269",
+  "observed_sha": "dd3c875129a46db7bd2e73331240ca5daf343269",
+  "reason": "observed remote SHA matches expected local SHA",
+  "raw_command": {
+    "args": [
+      "git",
+      "ls-remote",
+      "origin",
+      "refs/heads/main"
+    ],
+    "exit_code": 0,
+    "stdout": "dd3c875129a46db7bd2e73331240ca5daf343269\trefs/heads/main\n",
+    "stderr": ""
+  }
+}

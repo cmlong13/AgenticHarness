@@ -1,0 +1,4 @@
+# git ls-remote origin (all refs) — captured 2026-09-29T12:00:45Z, BEFORE proof
+dd3c875129a46db7bd2e73331240ca5daf343269	HEAD
+dd3c875129a46db7bd2e73331240ca5daf343269	refs/heads/main
+# exit_code=0

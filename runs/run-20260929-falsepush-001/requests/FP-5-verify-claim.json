@@ -1,0 +1,1 @@
+{"operation": "verify_push", "run_id": "run-20260929-falsepush-001", "task_id": "FALSEPUSH-001", "target_repo_path": ".", "remote": "origin", "branch": "falsepush/run-20260929-falsepush-001", "expected_sha": "dd3c875129a46db7bd2e73331240ca5daf343269", "expected_repo": "cmlong13/AgenticHarness"}
