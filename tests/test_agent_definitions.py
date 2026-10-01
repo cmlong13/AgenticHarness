@@ -82,6 +82,53 @@ class TestEngineerFrontmatter:
         assert resolved_tools(self.fields).isdisjoint(FORBIDDEN_TOOLS)
 
 
+class TestEngineerCraftsmanshipIntegration:
+    """engineer.md wires in the code-craftsmanship skill by reference: the Engineer must Read
+    the canonical SKILL.md before its first edit, without the checklist being copied into
+    engineer.md, without a new tool, and without the skill being able to widen scope."""
+
+    SKILL_REF = ".claude/skills/code-craftsmanship/SKILL.md"
+
+    def setup_method(self) -> None:
+        self.text = (AGENTS_DIR / "engineer.md").read_text(encoding="utf-8")
+        self.flat_text = " ".join(self.text.split())
+        self.skill_flat = " ".join((REPO_ROOT / self.SKILL_REF).read_text(encoding="utf-8").split())
+
+    def _step(self, heading: str) -> str:
+        start = self.text.index(heading)
+        end = self.text.index("\n# Step", start + len(heading))
+        return " ".join(self.text[start:end].split())
+
+    def test_referenced_skill_file_exists(self) -> None:
+        assert (REPO_ROOT / self.SKILL_REF).is_file()
+
+    def test_engineer_reads_skill_before_first_edit(self) -> None:
+        step5 = self._step("# Step 5:")
+        assert f"`Read` `{self.SKILL_REF}`" in step5
+        assert "Before your first `Edit`/`Write`" in step5
+        # Step 5 (craftsmanship + ladder) comes before Step 6, where the first file is written.
+        assert self.text.index(self.SKILL_REF) < self.text.index("# Step 6: Write the failing test first")
+
+    def test_required_guidance_dimensions_are_named(self) -> None:
+        step5 = self._step("# Step 5:")
+        for phrase in ("minimal-change", "readability", "maintainability", "existing style"):
+            assert phrase in step5, phrase
+
+    def test_skill_cannot_expand_scope_or_grant_anything(self) -> None:
+        step5 = self._step("# Step 5:")
+        assert "It can only narrow a change" in step5
+        assert "It grants no tool and no path" in step5
+
+    def test_checklist_is_not_duplicated_into_engineer_md(self) -> None:
+        for item in ("No speculative abstraction", "No drive-by cleanup", "Behavior preservation"):
+            assert item in self.skill_flat, item
+            assert item not in self.flat_text, item
+
+    def test_skill_no_longer_marked_deferred(self) -> None:
+        assert "Deferred" not in self.skill_flat
+        assert "engineer.md Step 5" in self.skill_flat
+
+
 class TestEngineerCommandGrammar:
     """The Engineer's instructions must document test-runner's exact accepted command
     grammar so a live Engineer requests a conformant command on its first attempt

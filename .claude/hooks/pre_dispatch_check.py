@@ -15,13 +15,16 @@ identified, known-bad dispatch is blocked.
 Preconditions enforced (only for this harness's own three subagent types -- any other
 `subagent_type` is out of scope and always allowed):
 - "engineer" requires a promoted, schema-shaped runs/<run_id>/findings.json whose own
-  task_id/run_id match the ones the dispatch prompt itself names.
+  task_id/run_id match the ones the dispatch prompt itself names -- or, when Discovery
+  explicitly skipped Research (ASSIGNMENT.md §2.1), an approved, identity-matching
+  runs/<run_id>/scope.json that declares a non-blank `research_skip_reason`.
 - "quality-engineer" requires a promoted, schema-shaped runs/<run_id>/implementation-report.json
   whose status is "ready_for_verification" (a status the Quality Engineer's own contract
   requires before it can verify anything) and whose task_id/run_id match.
 - "architect" requires a promoted runs/<run_id>/scope.json with status "approved" and
   matching task_id/run_id -- Research must not start before Discovery has actually
-  produced and approved a scope.
+  produced and approved a scope -- and is refused when that scope declared Research
+  skipped (a skipped phase is never dispatched).
 - Every one of the three above additionally requires that the dispatch prompt itself name
   a run_id/task_id at all -- a controlled dispatch always includes these per
   architect.md/engineer.md/quality-engineer.md's own documented Input contracts, so their
@@ -66,6 +69,20 @@ def _extract(pattern: re.Pattern, prompt: str) -> str | None:
     return match.group(1) if match else None
 
 
+def _declared_research_skip(scope_path: Path, run_id: str, task_id: str) -> str | None:
+    """The approved, identity-matching scope.json's non-blank research_skip_reason, else None."""
+    try:
+        scope = json.loads(scope_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not isinstance(scope, dict) or scope.get("status") != "approved":
+        return None
+    if scope.get("task_id") != task_id or scope.get("run_id") != run_id:
+        return None
+    reason = scope.get("research_skip_reason")
+    return reason if isinstance(reason, str) and reason.strip() else None
+
+
 def _block(reason: str) -> int:
     sys.stderr.write(reason + "\n")
     return 2
@@ -96,7 +113,17 @@ def main() -> int:
         )
 
     filename, allowed_statuses = PRECONDITIONS[subagent_type]
-    artifact_path = REPO_ROOT / "runs" / run_id / filename
+    run_dir = REPO_ROOT / "runs" / run_id
+    if subagent_type in ("engineer", "architect"):
+        research_skip_reason = _declared_research_skip(run_dir / "scope.json", run_id, task_id)
+        if subagent_type == "architect" and research_skip_reason:
+            return _block(
+                f"pre-dispatch check: refusing to dispatch subagent_type='architect' for run_id={run_id!r} -- "
+                f"the approved scope.json declared Research skipped ({research_skip_reason!r})."
+            )
+        if subagent_type == "engineer" and research_skip_reason and not (run_dir / filename).exists():
+            filename, allowed_statuses = "scope.json", {"approved"}
+    artifact_path = run_dir / filename
 
     if not artifact_path.is_file():
         return _block(

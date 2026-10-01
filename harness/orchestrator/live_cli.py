@@ -245,9 +245,18 @@ def _validate_phase_doc(phase: str, schema_name: str, doc: dict, context_refs: d
     context: dict = {}
     if phase == "implementation":
         findings_ref = context_refs.get("findings")
-        if not findings_ref:
-            raise LiveCliUsageError("context_refs.findings is required to validate an implementation-report")
-        context["findings_doc"] = load_json(REPO_ROOT / findings_ref)
+        if findings_ref:
+            context["findings_doc"] = load_json(REPO_ROOT / findings_ref)
+        else:
+            # Allowed only when the promoted scope itself declared Research skipped.
+            scope_ref = context_refs.get("scope")
+            scope_doc = load_json(REPO_ROOT / scope_ref) if scope_ref else {}
+            if "research" not in checkpoint.skipped_phases_for(scope_doc):
+                raise LiveCliUsageError(
+                    "context_refs.findings is required to validate an implementation-report "
+                    "(omit it only with context_refs.scope naming a scope that declares research_skip_reason)"
+                )
+            context["findings_doc"] = None
     if phase == "verification":
         scope_ref = context_refs.get("scope")
         if not scope_ref:
@@ -568,8 +577,11 @@ def op_write_checkpoint(req: dict) -> dict:
     target_repo_path = _require_str(req, "target_repo_path")
     completed_phases = req.get("completed_phases", [])
     artifact_refs = req.get("artifact_refs", {})
+    skipped_phases = req.get("skipped_phases", [])
     if not isinstance(completed_phases, list) or not isinstance(artifact_refs, dict):
         raise LiveCliUsageError("'completed_phases' must be a list and 'artifact_refs' must be an object")
+    if not isinstance(skipped_phases, list):
+        raise LiveCliUsageError("'skipped_phases' must be a list")
 
     run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
     evidence_io.ensure_run_dirs(run_directory)
@@ -580,23 +592,24 @@ def op_write_checkpoint(req: dict) -> dict:
             path = checkpoint.record_phase_progress(
                 run_directory, task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
                 updated_at=updated_at, completed_phases=completed_phases, artifact_refs=artifact_refs,
+                skipped_phases=skipped_phases,
             )
         elif kind == "completion":
             path = checkpoint.record_completion(
                 run_directory, task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
-                updated_at=updated_at, artifact_refs=artifact_refs,
+                updated_at=updated_at, artifact_refs=artifact_refs, skipped_phases=skipped_phases,
             )
         elif kind == "interruption":
             path = checkpoint.record_interruption(
                 run_directory, task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
                 updated_at=updated_at, completed_phases=completed_phases, artifact_refs=artifact_refs,
-                note=req.get("note", ""),
+                note=req.get("note", ""), skipped_phases=skipped_phases,
             )
         else:  # "terminal_failure"
             path = checkpoint.record_terminal_failure(
                 run_directory, task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
                 updated_at=updated_at, completed_phases=completed_phases, artifact_refs=artifact_refs,
-                reason=_require_str(req, "reason"),
+                reason=_require_str(req, "reason"), skipped_phases=skipped_phases,
             )
     except checkpoint.CheckpointError as exc:
         return {"operation": "write_checkpoint", "status": "blocked", "error": exc.message, "code": exc.code}
@@ -636,6 +649,7 @@ def op_evaluate_resume(req: dict) -> dict:
     return {
         "operation": "evaluate_resume", "status": "resumable", "task_id": decision.task_id,
         "target_repo_path": decision.target_repo_path, "completed_phases": decision.completed_phases,
+        "skipped_phases": decision.skipped_phases,
         "next_phase": decision.next_phase, "artifact_refs": decision.artifact_refs,
     }
 

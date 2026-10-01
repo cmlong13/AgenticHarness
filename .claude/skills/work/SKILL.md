@@ -429,9 +429,9 @@ function's own docstring for the authoritative field-level contract):
 | `check_command_identity` | Compare a `command_result` against the request you sent, field-for-field (`task_id`, `run_id`, `command_id`, `command`, `working_directory`). |
 | `retain_rejection` | Persist a `command_rejected` from the test-runner Skill. |
 | `retain_policy_event` | Append an evidence event (mutation sentinels, agent-dispatch records, Skill-invocation records -- see "Agent and Skill evidence" below). |
-| `write_run_summary` | Schema-validate and write the terminal `run-summary.json`. Accepts either an explicit `final_verdict` or a `state` field (a `harness.orchestrator.state.State` value name) to derive it from the same table `harness/orchestrator/core.py` uses -- never restate that mapping by hand. |
+| `write_run_summary` | Schema-validate and write the terminal `run-summary.json` (include `phases_skipped: ["research"]` whenever Discovery declared Research skipped). Accepts either an explicit `final_verdict` or a `state` field (a `harness.orchestrator.state.State` value name) to derive it from the same table `harness/orchestrator/core.py` uses -- never restate that mapping by hand. |
 | `write_checkpoint` | Schema/semantically-validate and atomically write `runs/<run_id>/checkpoint.json`. `kind` selects the builder: `"progress"` (after Discovery/Research/Implementation, non-terminal), `"completion"` (after Verification passes), `"interruption"` (a deliberate, evidence-backed pause -- see "Checkpointing and resume" below), `"terminal_failure"` (any other terminal outcome). Refuses (`status: "blocked"`) rather than writing anything invalid. Retains its own `checkpoint_written` policy event automatically on every successful write -- do not additionally retain that event by hand. |
-| `evaluate_resume` | Load and fully revalidate `runs/<run_id>/checkpoint.json` against every Part 3 precondition (existence, schema/semantics, run_id match, terminal-status refusal, real `target_repo_path` re-check, per-artifact existence + revalidation + identity cross-check, predecessor-order enforcement). Retains `resume_requested` and `checkpoint_validated`/`resume_refused` itself -- do not additionally retain those two events by hand. Returns `completed_phases` (reuse, never redispatch) and `next_phase` (the one incomplete phase to restart) on `status: "resumable"`. |
+| `evaluate_resume` | Load and fully revalidate `runs/<run_id>/checkpoint.json` against every Part 3 precondition (existence, schema/semantics, run_id match, terminal-status refusal, real `target_repo_path` re-check, per-artifact existence + revalidation + identity cross-check, predecessor-order enforcement). Retains `resume_requested` and `checkpoint_validated`/`resume_refused` itself -- do not additionally retain those two events by hand. Returns `completed_phases` (reuse, never redispatch), `skipped_phases` (declared in Discovery; never dispatched) and `next_phase` (the one incomplete phase to restart) on `status: "resumable"`. |
 | `load_memory` | The one canonical memory-load operation, called once, before Discovery (see "Phase 0: Memory load" below). Reads `memory/facts.jsonl` and `memory/lessons-learned.md`, validates every entry, derives deterministic keywords from the raw task prompt, and returns `relevant_facts`/`relevant_lessons` by tag/keyword intersection -- never an LLM judgment call. Retains its own `memory_loaded` policy event automatically -- do not additionally retain that event by hand. Read-only otherwise: never touches `scope.json` or any other canonical artifact. |
 | `append_memory` | Appends new, evidence-backed memory. `kind: "fact"` appends at most one fact (`fact` field); `kind: "lesson"` appends up to 5 candidates (`candidates` field, in order -- the cap and duplicate suppression are enforced by the operation itself, not by counting carefully). Every candidate is independently validated (provenance, real evidence, no secrets, no duplicates, and for lessons, harness-workflow relevance) regardless of what you believe about it -- a rejected or duplicate candidate is a legitimate, well-formed negative result, not a bug. Retains its own `memory_fact_append`/`memory_lessons_append` policy event automatically. |
 | `record_memory_applied` | Retains a `memory_applied` event -- and only a `memory_applied` event -- when a concrete decision in this run genuinely used a specific prior fact or lesson. Refuses (`status: "blocked"`, retains `memory_applied_rejected` instead) unless `entry_id` resolves to a currently-valid fact/lesson and `evidence_path` resolves to a real, existing file. Never call this merely because a fact or lesson was included in a prompt -- see "Memory: loaded vs. applied" below. |
@@ -751,9 +751,12 @@ behavioral claim) or notes it in `open_questions`.
 
 1. Investigate the target area of the repository yourself (`Read`/`Grep`/`Glob`) enough
    to ground `objective`, `in_scope`, `out_of_scope`, `constraints`, `acceptance_criteria`,
-   and a `task_graph` covering the phases this request actually needs. A trivial request
-   may legitimately skip Research or Implementation -- say so explicitly in the task
-   graph rather than defaulting to all four phases unexamined. Any relevant fact or
+   and a `task_graph` covering the phases this request actually needs. Implementation and
+   Verification always run. Research is the one phase a trivial request (e.g. a typo fix,
+   ASSIGNMENT.md §2.1) may skip, and only explicitly: set `research_skip_reason` in the
+   scope candidate to a one-line reason and leave every `research` node out of the
+   `task_graph` (`validate_scope` enforces both). A phase is never skipped by omission --
+   without `research_skip_reason`, Research runs. Any relevant fact or
    lesson Phase 0 surfaced may inform this reasoning, but never substitutes for reading
    the actual repository yourself -- ground every scope field in real, current repository
    evidence, per standing rule 14. If prior design decisions or calibration context in
@@ -784,8 +787,16 @@ behavioral claim) or notes it in `open_questions`.
    `completed_phases: ["discovery"]`, `artifact_refs: {"discovery": "<scope.json path>"}`,
    `target_repo_path` as supplied to this run) before dispatching the Architect. This is
    the first of four progress checkpoints -- see "Checkpointing and resume" below.
+7. **Declared Research skip.** If the promoted `scope.json` has `research_skip_reason`,
+   pass `skipped_phases: ["research"]` on the step 6 checkpoint (and on every later
+   `write_checkpoint` for this run), `retain_policy_event` (`kind: "phase_skipped"`,
+   `phase: "research"`, `reason` = the declared reason), skip Phase 2 entirely, and go
+   straight to Phase 3. `pre_dispatch_check.py` then accepts the Engineer on the approved
+   scope alone and refuses any Architect dispatch for this run.
 
 # Phase 2: Research (real Architect dispatch)
+
+Skipped entirely -- no Architect dispatch -- only when Phase 1 step 7 applies.
 
 0. **Optional Obsidian consultation, before dispatch.** If `scope.json` indicates prior
    design/decision/calibration context could materially help this research, consult the
@@ -932,7 +943,11 @@ is not a completed four-phase run.
 2. Dispatch with `Agent`: `subagent_type: "engineer"`, `run_in_background: false`,
    `prompt` containing the exact Input fields `engineer.md` documents, including the
    `path_validation` attestation and `findings_ref.finding_ids` restricted to `found`
-   classifications from the promoted `findings.json`.
+   classifications from the promoted `findings.json` (omit `findings_ref` entirely when
+   Research was declared skipped -- there are no findings). Do not paste the
+   `code-craftsmanship` checklist into the prompt: `engineer.md` Step 5 has the Engineer
+   `Read` the canonical `.claude/skills/code-craftsmanship/SKILL.md` itself before its
+   first edit.
 3. Capture the agent identifier. `retain_policy_event` (`kind: "agent_dispatch"`,
    `phase: "implementation"`, `subagent_type: "engineer"`, the id, dispatch sequence).
    Then immediately call `reconcile_quarantined_usage` for this `agent_id`, per
@@ -971,14 +986,16 @@ is not a completed four-phase run.
    turn is simply invalid content.
 9. On the final artifact: `validate_artifact` then `promote_artifact`
    (`phase: "implementation"`, `context_refs.findings` pointing at the promoted
-   `findings.json`). Independently re-check `changed_files` against the Protected Path
+   `findings.json`; with Research declared skipped, pass `context_refs.scope` instead and
+   omit `context_refs.findings`). Independently re-check `changed_files` against the Protected Path
    list yourself (`build_path_attestation`/`live_cli` does not re-derive this for you;
    it is the same list `paths.py` enforces -- inspect the promoted report's
    `changed_files` directly). Once promoted (and only for a `ready_for_verification`
    report -- a `blocked` implementation report is a terminal outcome for this run, not
    forward progress), `write_checkpoint` (`kind: "progress"`, `completed_phases:
    ["discovery", "research", "implementation"]`, `artifact_refs` naming all three
-   promoted artifacts) -- the third progress checkpoint.
+   promoted artifacts -- or `["discovery", "implementation"]` plus `skipped_phases:
+   ["research"]` when Research was declared skipped) -- the third progress checkpoint.
 
 ## Engineer transport repair (Implementation phase, at most one correction total)
 
@@ -1397,7 +1414,13 @@ outcome gets exactly one more checkpoint write, made once the final verdict is k
 (never before, and never twice for the same terminal outcome):
 
 - `kind: "completion"` -- only on a genuine, independently-confirmed `pass` with
-  `artifact_refs` naming all four canonical artifacts.
+  `artifact_refs` naming all four canonical artifacts (three, plus `skipped_phases:
+  ["research"]`, when Discovery declared Research skipped).
+
+Every checkpoint write for a run whose scope declared `research_skip_reason` passes
+`skipped_phases: ["research"]`; `evaluate_resume` refuses a checkpoint whose
+`skipped_phases` differs from what the promoted `scope.json` declares, and never
+restarts a skipped phase.
 - `kind: "terminal_failure"` -- every other terminal outcome (Discovery invalid,
   Research blocked, Implementation blocked, Verification failed/inconclusive/blocked),
   with `completed_phases`/`artifact_refs` limited to the phases that actually produced a
@@ -1504,7 +1527,8 @@ triggered:
    `phases_reused` (exactly `completed_phases` from step 3) and `phases_restarted`
    (exactly `[next_phase]` from step 6 -- any phase *after* `next_phase` that also ran in
    this same resumed invocation is ordinary forward progress, not a restart, since no
-   process ever attempted it before). Retain `resume_completed`
+   process ever attempted it before), plus `phases_skipped` when `evaluate_resume`
+   returned a non-empty `skipped_phases`. Retain `resume_completed`
    (`kind: "resume_completed"`, payload naming the final verdict and `phases_completed`)
    immediately before reporting the run's outcome to the user. Call `summarize_memory`
    as part of the same terminal-reporting sequence "Terminal memory append" below
@@ -1725,7 +1749,8 @@ re-check clears it (the hook removes it itself once satisfied).
 ## What to state, every time
 
 State plainly, every time:
-- Which phases actually ran.
+- Which phases actually ran, and -- if Discovery declared Research skipped -- that it was
+  skipped and the exact `research_skip_reason` (`run-summary.json` `phases_skipped`).
 - Which canonical artifacts exist and validated, with their paths.
 - What independent checks you personally ran and what they showed (not what an agent
   claimed).

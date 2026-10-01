@@ -411,6 +411,8 @@ def render_run_summary_note(
     out.append(f"- **Phases completed:** {', '.join(phases) if phases else '(none)'}")
     if run_summary.get("phases_reused"):
         out.append(f"- **Phases reused (resume):** {', '.join(run_summary['phases_reused'])}")
+    if run_summary.get("phases_skipped"):
+        out.append(f"- **Phases skipped (declared in Discovery):** {', '.join(run_summary['phases_skipped'])}")
     out.append(f"- **Generated at:** {generated_at}")
     out.append("")
 

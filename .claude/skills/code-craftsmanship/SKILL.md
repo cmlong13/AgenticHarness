@@ -1,9 +1,9 @@
 ---
 name: code-craftsmanship
 description: Minimal-change and repository-convention checklist applied to a proposed
-  implementation plan or diff before it's accepted. Invoked externally by the controlled
-  caller/orchestrator in this milestone; see "Later integration" below for the deferred
-  skills:-frontmatter path onto the Engineer.
+  implementation plan or diff before it's accepted. Read by the Engineer before its first
+  edit in every Implementation phase (engineer.md Step 5); also usable by the controlled
+  caller/orchestrator to review a plan or diff.
 ---
 
 # Purpose
@@ -54,7 +54,9 @@ Research, Discovery, or Verification, and without approving or completing anythi
 - Override `scope.json`, `findings.json`, any artifact schema, or the Engineer's final
   `implementation-report.json` contract.
 
-# Later integration (not implemented in this milestone)
-Adding `skills: [code-craftsmanship]` to `engineer.md`'s frontmatter would preload this
-content into every Engineer invocation without granting the `Skill` tool. Requires
-rerunning Engineer permission-boundary verification afterward. Deferred.
+# How the Engineer uses this skill
+`engineer.md` Step 5 requires the Engineer to `Read` this file before its first `Edit`/`Write`
+in an Implementation phase and to apply the checklist to its plan and again to its diff.
+This file stays the single source of the checklist; `engineer.md` points here instead of
+copying it. No tool is granted: the Engineer reads it with the `Read` tool it already
+has, so its allowlist and permission boundary are unchanged.

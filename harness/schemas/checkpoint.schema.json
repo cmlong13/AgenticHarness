@@ -29,6 +29,11 @@
       "uniqueItems": true,
       "items": { "$ref": "#/$defs/phase" }
     },
+    "skipped_phases": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "const": "research" }
+    },
     "current_phase": {
       "oneOf": [
         { "$ref": "#/$defs/phase" },
@@ -72,7 +77,7 @@
       "current_phase": { "type": "null" },
       "next_phase": { "type": "null" },
       "next_resume_action": { "type": "null" },
-      "completed_phases": { "minItems": 4, "uniqueItems": true }
+      "completed_phases": { "minItems": 3, "uniqueItems": true }
     }
   },
   "else": {

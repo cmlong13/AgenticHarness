@@ -197,12 +197,35 @@ def validate_scope_semantics(doc: dict, *, artifact: str = "scope") -> list[Vali
     if doc.get("status") == "approved" and "refusal_reason" in doc:
         errors.append(ValidationError(artifact, "$.refusal_reason", "must not be present when status is 'approved'"))
 
+    # ASSIGNMENT.md §2.1: Discovery decides which phases are needed and says so explicitly
+    # when it skips one. Research is the only skippable phase; the skip is declared once,
+    # here, with a reason, and the task graph must then actually omit Research.
+    if "research_skip_reason" in doc:
+        if doc.get("status") != "approved":
+            errors.append(
+                ValidationError(artifact, "$.research_skip_reason", "only an approved scope may skip Research")
+            )
+        if not str(doc.get("research_skip_reason", "")).strip():
+            errors.append(ValidationError(artifact, "$.research_skip_reason", "must state a non-blank reason"))
+        for idx, node in enumerate(task_graph):
+            if node.get("phase") == "research":
+                errors.append(
+                    ValidationError(
+                        artifact,
+                        f"$.task_graph[{idx}].phase",
+                        "task_graph must not contain a research node when research_skip_reason is declared",
+                    )
+                )
+
     return errors
 
 
 def validate_implementation_report_semantics(
-    doc: dict, findings_doc: dict, *, artifact: str = "implementation-report"
+    doc: dict, findings_doc: dict | None, *, artifact: str = "implementation-report"
 ) -> list[ValidationError]:
+    """`findings_doc` is None only when the run's approved scope declared
+    research_skip_reason: there are then no findings to cite, so findings_ref must be
+    absent. Otherwise a ready_for_verification report must carry findings_ref."""
     errors: list[ValidationError] = []
     commands = doc.get("commands", [])
 
@@ -219,7 +242,18 @@ def validate_implementation_report_semantics(
     # before any findings were consulted). Only cross-check it when it's actually present --
     # its own field-level structure (path, finding_ids) is still enforced by the schema
     # whenever the key exists, regardless of status.
-    if "findings_ref" in doc:
+    if findings_doc is None:
+        if "findings_ref" in doc:
+            errors.append(
+                ValidationError(
+                    artifact, "$.findings_ref", "Research was skipped for this run, so there are no findings to cite"
+                )
+            )
+    elif "findings_ref" not in doc and doc.get("status") == "ready_for_verification":
+        errors.append(
+            ValidationError(artifact, "$.findings_ref", "a ready_for_verification report must cite its findings")
+        )
+    elif "findings_ref" in doc:
         found_ids = {f["id"] for f in findings_doc.get("findings", []) if f.get("classification") == "found"}
         findings_ref = doc.get("findings_ref", {})
         for idx, finding_id in enumerate(findings_ref.get("finding_ids", [])):
@@ -415,7 +449,18 @@ def validate_verification_report_semantics(
 def validate_checkpoint_semantics(doc: dict, *, artifact: str = "checkpoint") -> list[ValidationError]:
     errors: list[ValidationError] = []
     completed_phases = doc.get("completed_phases", [])
+    skipped_phases = doc.get("skipped_phases", [])
     current_phase = doc.get("current_phase")
+
+    for phase in skipped_phases:
+        if phase in completed_phases or phase in (current_phase, doc.get("next_phase")):
+            errors.append(
+                ValidationError(
+                    artifact,
+                    "$.skipped_phases",
+                    f"skipped phase {phase!r} must not also be completed, current, or next",
+                )
+            )
 
     if current_phase is not None and current_phase in completed_phases:
         errors.append(
@@ -454,8 +499,9 @@ def validate_checkpoint_semantics(doc: dict, *, artifact: str = "checkpoint") ->
     # scope.json," "Implementation requires valid scope.json and findings.json," and
     # "Verification requires scope, findings, and implementation report" true by
     # construction rather than by convention: a phase can only be complete if every
-    # phase before it in PHASE_ORDER is complete too.
-    completed_set = set(completed_phases)
+    # phase before it in PHASE_ORDER is complete too. A phase Discovery declared skipped
+    # (scope.json research_skip_reason) counts as satisfied for ordering purposes only.
+    completed_set = set(completed_phases) | set(skipped_phases)
     prefix_len = 0
     for phase in PHASE_ORDER:
         if phase not in completed_set:
@@ -466,13 +512,13 @@ def validate_checkpoint_semantics(doc: dict, *, artifact: str = "checkpoint") ->
             ValidationError(
                 artifact,
                 "$.completed_phases",
-                f"completed_phases must be a contiguous prefix of {list(PHASE_ORDER)} with no phase skipped "
+                f"completed_phases must be a contiguous prefix of {list(PHASE_ORDER)} with no undeclared phase skipped "
                 f"or out of order, got {completed_phases!r}",
             )
         )
 
     if doc.get("status") == "complete":
-        missing = [p for p in PHASE_ORDER if p not in completed_phases]
+        missing = [p for p in PHASE_ORDER if p not in completed_phases and p not in skipped_phases]
         if missing:
             errors.append(
                 ValidationError(

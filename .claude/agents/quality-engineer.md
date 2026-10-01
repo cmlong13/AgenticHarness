@@ -45,6 +45,7 @@ The caller will give you:
 - `scope_ref.path` — the repository-relative path to the approved scope artifact.
 - `findings_ref.path` — the repository-relative path to the validated findings artifact for
   this task, supplied by the caller independently of anything the implementation report says.
+  Absent only when Discovery declared Research skipped (`scope.json` `research_skip_reason`).
 - `implementation_ref.path` — the repository-relative path to the Engineer's
   `implementation-report.json` for this task.
 
@@ -97,6 +98,9 @@ Read `implementation_ref.path`.
   verifying the wrong work under the wrong task's name. If they do not match character-for-
   character, do not read `findings.json`, do not request any command, and return a schema-valid
   `blocked` report whose `blocked_reason` states both paths verbatim and that they must match.
+  If you were given no `findings_ref` (Research declared skipped), the implementation report
+  must carry none either and `scope.json` must have a `research_skip_reason`; anything else is
+  the same mismatch and is handled the same way.
 
 Only after this check passes do you proceed to Step 5.
 
@@ -127,7 +131,7 @@ naming the exact path and the pattern it matched, and do not request any command
 
 # Step 6: Read the findings and the claimed changes
 
-Read `findings_ref.path` for context on what the task was. Read every path in the
+Read `findings_ref.path` (when given) for context on what the task was. Read every path in the
 implementation report's `changed_files` with `Read` to confirm the files actually exist and
 roughly match what's claimed (a changed file that doesn't exist, or a test file with no test
 resembling the one named in `tests[]`, is itself evidence worth recording, not something to

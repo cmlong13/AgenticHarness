@@ -66,7 +66,7 @@ def _checkpoint_artifact_refs(phases_completed: list[str], artifact_refs: dict) 
     }
 
 
-def _checkpoint_progress(run_directory: Path, task_id: str, run_id: str, target_repo_path: str, phases_completed: list, artifact_refs: dict) -> None:
+def _checkpoint_progress(run_directory: Path, task_id: str, run_id: str, target_repo_path: str, phases_completed: list, artifact_refs: dict, skipped_phases: list = ()) -> None:
     """Called after a phase's canonical artifact is retained, validated, and promoted,
     and the run is continuing -- never called after Verification, whose outcome is
     always terminal and is instead handled by _finalize below."""
@@ -78,6 +78,7 @@ def _checkpoint_progress(run_directory: Path, task_id: str, run_id: str, target_
         updated_at=_now_iso(),
         completed_phases=list(phases_completed),
         artifact_refs=_checkpoint_artifact_refs(phases_completed, artifact_refs),
+        skipped_phases=list(skipped_phases),
     )
 
 SCHEMA_DIR = Path(__file__).resolve().parents[2] / "harness" / "schemas"
@@ -830,8 +831,10 @@ def _finalize(
     target_repo_path: str,
     phases_reused: list | None = None,
     phases_restarted: list | None = None,
+    skipped_phases: list | None = None,
 ) -> RunResult:
     artifact_refs = dict(artifact_refs)
+    skipped_phases = list(skipped_phases or [])
     if "scope" not in artifact_refs:
         # Every terminal outcome must still produce a schema-valid run-summary.json, and
         # artifact_refs.scope is unconditionally required by run-summary.schema.json even when
@@ -870,6 +873,8 @@ def _finalize(
         summary["phases_reused"] = list(phases_reused)
     if phases_restarted:
         summary["phases_restarted"] = list(phases_restarted)
+    if skipped_phases:
+        summary["phases_skipped"] = skipped_phases
 
     canonical_path = evidence_io.write_run_summary(run_directory, summary)
 
@@ -881,6 +886,7 @@ def _finalize(
         checkpoint.record_completion(
             run_directory, task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
             updated_at=_now_iso(), artifact_refs=_checkpoint_artifact_refs(phases_completed, artifact_refs),
+            skipped_phases=skipped_phases,
         )
     elif checkpoint.checkpoint_path(run_directory).exists():
         # phases_completed (run-summary's sense) can include the very phase whose
@@ -898,7 +904,7 @@ def _finalize(
                 run_directory, task_id=task_id, run_id=run_id, target_repo_path=target_repo_path,
                 updated_at=_now_iso(), completed_phases=checkpoint_completed_phases,
                 artifact_refs=_checkpoint_artifact_refs(checkpoint_completed_phases, artifact_refs),
-                reason=reason or state.value,
+                reason=reason or state.value, skipped_phases=skipped_phases,
             )
         except checkpoint.CheckpointError as exc:
             # Only reachable from a state raised deep inside the same-run logic-repair
@@ -969,13 +975,14 @@ def _do_implementation(
             State.IMPLEMENTATION_BLOCKED, reason=f"target_repo_path failed path safety re-check: {exc}"
         )
 
-    found_finding_ids = [f["id"] for f in findings_doc.get("findings", []) if f.get("classification") == "found"]
     engineer_payload = {
         "task_id": task_id, "run_id": run_id, "created_at": created_at,
         "target_repo_path": target_repo_path, "path_validation": path_validation,
         "scope_ref": {"path": artifact_refs["scope"]},
-        "findings_ref": {"path": artifact_refs["findings"], "finding_ids": found_finding_ids},
     }
+    if findings_doc is not None:  # None only when Discovery declared Research skipped
+        found_finding_ids = [f["id"] for f in findings_doc.get("findings", []) if f.get("classification") == "found"]
+        engineer_payload["findings_ref"] = {"path": artifact_refs["findings"], "finding_ids": found_finding_ids}
     impl_result = _run_agent_phase(
         agent_adapter=agent_adapter, test_runner_adapter=test_runner_adapter, agent_type="engineer",
         payload=engineer_payload, run_directory=run_directory, phase="implementation",
@@ -1016,9 +1023,10 @@ def _do_verification(
         "target_repo_path": target_repo_path,
         "path_validation": paths.build_path_validation_attestation(target_repo_path, repo_root=root),
         "scope_ref": {"path": artifact_refs["scope"]},
-        "findings_ref": {"path": artifact_refs["findings"]},
         "implementation_ref": {"path": artifact_refs["implementation_report"]},
     }
+    if "findings" in artifact_refs:
+        qe_payload["findings_ref"] = {"path": artifact_refs["findings"]}
     verify_result = _run_agent_phase(
         agent_adapter=agent_adapter, test_runner_adapter=test_runner_adapter, agent_type="quality_engineer",
         payload=qe_payload, run_directory=run_directory, phase="verification",
@@ -1067,10 +1075,13 @@ def _run_phases(
     phases_completed: list,
     start_time: float,
 ) -> RunResult:
+    skipped_phases: list = []
+
     def finalize(state: State, *, reason: str) -> RunResult:
         return _finalize(
             run_directory, root, state, task_id, run_id, created_at, artifact_refs, phases_completed,
             reason=reason, duration_seconds=time.monotonic() - start_time, target_repo_path=target_repo_path,
+            skipped_phases=skipped_phases,
         )
 
     # ---- Discovery ----
@@ -1096,18 +1107,27 @@ def _run_phases(
         return finalize(State.DISCOVERY_REFUSED, reason=scope_doc.get("refusal_reason", "scope refused"))
 
     phases_completed.append("discovery")
-    _checkpoint_progress(run_directory, task_id, run_id, target_repo_path, phases_completed, artifact_refs)
-
-    # ---- Research (Architect) ----
-    findings_doc, blocked = _do_research(
-        root=root, run_directory=run_directory, agent_adapter=agent_adapter,
-        test_runner_adapter=test_runner_adapter, task_id=task_id, run_id=run_id, created_at=created_at,
-        artifact_refs=artifact_refs, finalize=finalize,
+    skipped_phases.extend(checkpoint.skipped_phases_for(scope_doc))
+    _checkpoint_progress(
+        run_directory, task_id, run_id, target_repo_path, phases_completed, artifact_refs, skipped_phases
     )
-    if blocked:
-        return blocked
-    phases_completed.append("research")
-    _checkpoint_progress(run_directory, task_id, run_id, target_repo_path, phases_completed, artifact_refs)
+
+    # ---- Research (Architect), unless Discovery explicitly declared it unnecessary ----
+    if "research" in skipped_phases:
+        evidence_io.retain_policy_event(
+            run_directory, "phase_skipped", {"phase": "research", "reason": scope_doc["research_skip_reason"]}
+        )
+        findings_doc = None
+    else:
+        findings_doc, blocked = _do_research(
+            root=root, run_directory=run_directory, agent_adapter=agent_adapter,
+            test_runner_adapter=test_runner_adapter, task_id=task_id, run_id=run_id, created_at=created_at,
+            artifact_refs=artifact_refs, finalize=finalize,
+        )
+        if blocked:
+            return blocked
+        phases_completed.append("research")
+        _checkpoint_progress(run_directory, task_id, run_id, target_repo_path, phases_completed, artifact_refs)
 
     # ---- Implementation (Engineer) ----
     impl_doc, engineer_handle, blocked = _do_implementation(
@@ -1119,7 +1139,9 @@ def _run_phases(
     if blocked:
         return blocked
     phases_completed.append("implementation")
-    _checkpoint_progress(run_directory, task_id, run_id, target_repo_path, phases_completed, artifact_refs)
+    _checkpoint_progress(
+        run_directory, task_id, run_id, target_repo_path, phases_completed, artifact_refs, skipped_phases
+    )
 
     # ---- Verification (Quality Engineer) ----
     return _do_verification(
@@ -1223,6 +1245,7 @@ def resume(
     # process before now, so it is ordinary forward progress (like a fresh run()), not
     # a restart, even though it is also dispatched fresh in this loop.
     phases_restarted: list = [restarted_phase]
+    skipped_phases = list(decision.skipped_phases)
     artifact_refs = {_PHASE_TO_SUMMARY_KEY[phase]: rel for phase, rel in decision.artifact_refs.items()}
 
     def finalize(state: State, *, reason: str) -> RunResult:
@@ -1238,7 +1261,7 @@ def resume(
         result = _finalize(
             run_directory, root, state, task_id, run_id, created_at, artifact_refs, phases_completed,
             reason=reason, duration_seconds=time.monotonic() - start_time, target_repo_path=target_repo_path,
-            phases_reused=phases_reused, phases_restarted=phases_restarted,
+            phases_reused=phases_reused, phases_restarted=phases_restarted, skipped_phases=skipped_phases,
         )
         evidence_io.retain_policy_event(
             run_directory, "resume_completed",
@@ -1247,7 +1270,7 @@ def resume(
         return result
 
     for phase in PHASE_ORDER:
-        if phase in phases_completed:
+        if phase in phases_completed or phase in skipped_phases:
             continue
 
         if phase == "research":
@@ -1270,7 +1293,9 @@ def resume(
             if blocked:
                 return blocked
             phases_completed.append("implementation")
-            _checkpoint_progress(run_directory, task_id, run_id, target_repo_path, phases_completed, artifact_refs)
+            _checkpoint_progress(
+                run_directory, task_id, run_id, target_repo_path, phases_completed, artifact_refs, skipped_phases
+            )
         elif phase == "verification":
             # resume_completed is retained inside `finalize` above, not here -- every
             # terminal path _do_verification can take (including a same-run repair

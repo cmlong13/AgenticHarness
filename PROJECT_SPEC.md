@@ -1,10 +1,25 @@
 # Project Spec: Agentic Coding Harness
 
-See `docs/assignment-audit.md` for the final, independently-audited requirement-by-requirement
-status (2026-09-21) — treat that document, not this header, as the authoritative current
-status; this header has not been kept current as the project progressed.
+See `docs/assignment-audit.md` for the independently-audited requirement-by-requirement
+status (last audit 2026-10-01) — treat that document as the authoritative current status.
 
-Status: **Implementation in progress — artifact contracts, validation, all three phase
+Current status (2026-10-01): every component §3 lists is implemented — the four-phase
+`/work` pipeline (Research is skipped only when Discovery declares `research_skip_reason`),
+the three restricted subagents, all four skill packs (`github/` with its five procedures,
+`jira/` with read/create/edit + `FIELD_REFERENCE.md`, test-runner, code-craftsmanship, which
+the Engineer reads before its first edit), all four hooks (registered from
+`${CLAUDE_PROJECT_DIR}`), the memory loop, checkpoint/resume, and QE infrastructure-retry
+backoff (2 s / 4 s, at most 3 executions). Live acceptance proofs are retained for the
+planted logic bug (`run-20260918-logicrepair-003`), the planted flaky test
+(`run-20260919-flaky-001`), the completion-guardrail block (`completion-guardrail-live-001`),
+the false-push rejection (`run-20260929-falsepush-001`), the full-pipeline cost
+(`run-20260929-costproof-001`, $9.5721282), and the mid-Implementation kill and resume
+(`run-20261001-midimplresume-002`). Still not live-proven: a real Jira ticket (no
+credentials), and Obsidian write-back from inside a `/work` run. Jira status transitions and
+completion comments are not implemented. The 1–2 page write-up (§5) is not yet written.
+
+Historical status as of 2026-08-04 (kept for the record; superseded by the paragraph above):
+**Implementation in progress — artifact contracts, validation, all three phase
 subagents (Architect, Engineer, Quality Engineer, each with independently verified permission
 boundaries), the code-craftsmanship and test-runner skills (each live-verified through
 Claude Code's actual `Skill` mechanism, not just statically), and the deterministic orchestrator
@@ -2042,10 +2057,14 @@ reused rather than reimplemented.
 
 ### Orchestration
 - Orchestrator (main-session skill, Discovery phase): decomposes requests into a task graph,
-  decides which phases are actually needed, reads `lessons-learned.md` before dispatch, runs a
+  decides which phases are actually needed (Implementation and Verification always run;
+  Research is skipped only when the approved `scope.json` declares `research_skip_reason`
+  and omits any research task-graph node, which the checkpoint records as
+  `skipped_phases: ["research"]`), reads `lessons-learned.md` before dispatch, runs a
   pre-dispatch checklist, may refuse work with reasons, independently verifies all downstream
   completion claims.
-- `/work` slash command — two modes: `TICKET-ID repo` (Jira) and free-form prompt. **Not started.**
+- `/work` slash command — two modes: ticket ID (Jira) and free-form prompt. **Complete** —
+  `.claude/skills/work/SKILL.md`, live-verified from `run-20260804-riskband-003` onward.
 - Deterministic orchestrator core — **complete** at `harness/orchestrator/` (`core.py`,
   `state.py`, `paths.py`, `discovery.py`, `evidence_io.py`, `adapters.py`): a one-pass
   Discovery → Research → Implementation → Verification state machine that dispatches Architect,
@@ -2102,7 +2121,7 @@ reused rather than reimplemented.
   command for real, diagnosed the actual root cause from source, and routed it back
   (`docs/quality-engineer-permission-verification.md`).
 
-### Skills (≥4 packs — 3 of 4 complete; see §10)
+### Skills (≥4 packs — 4 of 4 complete; see §10)
 - `github/` — **complete for this milestone's actual scope** (2026-08-18):
   `.claude/skills/github/SKILL.md`, a procedural skill (no tool allowlist of its own)
   covering repository identity, working-tree/branch/diff inspection, staging, commit
@@ -2114,14 +2133,18 @@ reused rather than reimplemented.
   push-verification demonstration" milestone note above) — not deterministic-only. This
   satisfies `ASSIGNMENT.md` §2.3's github-skill
   requirement as this milestone scoped it (Git delivery + false-push detection); the
-  broader `pr-create`/`read-file`/`search-code`/`commit-history`/`pr-review` breadth
-  this file map originally sketched for GitHub-API code/PR access remains **not
-  started** and is separate, later work (§4 "Later integrations").
+  broader `pr-create`/`read-file`/`search-code`/`commit-history`/`pr-review` breadth is
+  **complete (2026-09-26)**: five single-purpose `live_cli.py` operations (`read_file`,
+  `search_code`, `commit_history`, `pr_review` read-only; `pr_create` explicit
+  authorization only, re-verified after creation), documented in `github/SKILL.md` §11 and
+  deterministically tested; none is yet exercised inside a live `/work` run.
 - `jira/` (Atlassian) — `create-ticket`, `read-ticket`, `edit-ticket`, plus a field-reference doc
   so agents don't guess custom field IDs. **Read-only `read-ticket` equivalent complete**
   (`.claude/skills/jira/SKILL.md` + `jira_connector.py`, ticket-mode intake milestone
-  2026-08-20); the write skills remain not started, per `ASSIGNMENT.md`'s and that
-  milestone's own exclusion of Jira writes.
+  2026-08-20). `create-ticket` and `edit-ticket` (REST only, explicit authorization,
+  re-read verification) and `.claude/skills/jira/FIELD_REFERENCE.md` are **complete
+  (2026-09-29)**, deterministically tested. Status transitions and comments are not
+  implemented, and no live Jira credentials have been available.
 - `obsidian/` — **the SKILL procedure covers both directions of the connector
   (2026-09-08)** (this is the *skill/mechanism* status, not a claim that every literal
   `ASSIGNMENT.md` Obsidian requirement is closed — the Architect's own literal §2.2
@@ -2157,7 +2180,9 @@ reused rather than reimplemented.
 - Code-craftsmanship skill — the minimal-change ladder and YAGNI rules as a standalone skill any
   agent can be held to. **Complete** — implemented at `.claude/skills/code-craftsmanship/`,
   structurally tested (`tests/test_skill_definitions.py`), live invoked via the `Skill` tool, and
-  behaviorally A/B-evaluated against fresh no-skill/skill-enabled agent pairs (§10).
+  behaviorally A/B-evaluated against fresh no-skill/skill-enabled agent pairs (§10). Since
+  2026-10-01 the Engineer `Read`s it before its first edit in every Implementation phase
+  (`engineer.md` Step 5; `tests/test_agent_definitions.py::TestEngineerCraftsmanshipIntegration`).
 
 ### MCP connectors (3, one built two ways)
 | Connector | Used in phase | Purpose |
@@ -2383,8 +2408,8 @@ Obsidian remain single connectors — `ASSIGNMENT.md` requires only "at least on
   - *MCP + REST dual connector:* **CLOSED 2026-09-09 for Jira** (see below); Obsidian is
     deliberately not that connector. A project-local read-only Obsidian MCP server now
     exists for the Architect's §2.2 tool, registered in `.mcp.json`.
-- Full `github/` skill pack breadth (`pr-review`, `commit-history`)
-- Full `jira/` skill pack + field-reference doc
+- ~~Full `github/` skill pack breadth (`pr-review`, `commit-history`)~~ **COMPLETE** (2026-09-26)
+- ~~Full `jira/` skill pack + field-reference doc~~ **COMPLETE** (2026-09-29; no live Jira yet)
 - ~~Skill-enforcement hook~~ **COMPLETE** (2026-08-05) — implemented ahead of this list's
   original schedule as part of the hooks milestone; see §3 "Hooks" and §10 "Hooks and same-run
   route-back milestone (2026-08-05)"
@@ -2393,8 +2418,14 @@ Obsidian remain single connectors — `ASSIGNMENT.md` requires only "at least on
 - ~~MCP-vs-REST dual implementation + write-up decision~~ **COMPLETE 2026-09-09 for Jira**
   (implementation + the kept-route decision, REST, with evidence) — see the "Milestone
   update (2026-09-09)" note above. The 1–2 page write-up itself (§5) is still open.
-- Flaky-vs-logic classification with retry/backoff
-- Planted-bug demo scenarios (flaky test, logic bug, deleted evidence, false push claim)
+- ~~Flaky-vs-logic classification with retry/backoff~~ **COMPLETE** — classification and
+  retry live-proven (`run-20260919-flaky-001`, `run-20260918-logicrepair-003`); bounded
+  2 s / 4 s backoff added 2026-10-01 (`core.py` / `live_cli.py`
+  `prepare_infrastructure_retry`; `tests/test_infrastructure_retry_backoff.py`), not yet
+  exercised by a live run
+- ~~Planted-bug demo scenarios (flaky test, logic bug, deleted evidence, false push claim)~~
+  **COMPLETE** — `run-20260919-flaky-001`, `run-20260918-logicrepair-003`,
+  `completion-guardrail-live-001`, `run-20260929-falsepush-001`
 
 ---
 
@@ -2608,7 +2639,8 @@ AgenticHarness/
     `run-20260804-riskband-003`, `final_verdict: "pass"`, all four canonical artifacts promoted,
     102 demo tests passing, no commit/push performed.
 12. Add Jira, Obsidian, cost tracking, connector comparison, broader skills, and
-    planted-defect demonstrations. **Not started.**
+    planted-defect demonstrations. **Complete**, except live Jira (no credentials) and
+    Obsidian write-back from inside a `/work` run — see the current-status header.
 
 ---
 
@@ -2638,9 +2670,11 @@ Still open — defaults will be applied unless redirected before the relevant bu
    unset, exactly like the Jira connector's missing-credentials case). No user-specific
    path is hard-coded in production logic. Live-proven once against the real configured
    vault under a dedicated `Harness Run Summaries/` subfolder. The Architect-side vault
-   **read** path is still unbuilt and would need its own configuration/decision.
-3. **Cost/token extraction mechanism** — depends on what usage data is actually readable (Claude
-   Code transcript JSONL vs. API response usage fields); not yet confirmed.
+   **read** path has since been built (2026-09-08/09: `obsidian_reader.py`,
+   `harness/mcp/obsidian_server.py`).
+3. **Cost/token extraction mechanism** — resolved: per-agent usage from subagent transcript
+   JSONL (`record_agent_usage.py`), and the full-pipeline total by reconciling every transcript
+   against the headless session's runtime-reported usage (`finalize_pipeline_usage`).
 4. **Write-up location** — assumed `docs/WRITEUP.md`; not explicitly specified, unless the
    assignment explicitly resolves it.
 
@@ -2670,9 +2704,13 @@ Demonstrated live, on a repo with ≥50 files:
       `runs/run-20260804-riskband-003/implementation-report.json`'s `findings_ref.finding_ids`
       is `["F-1", "F-2", "F-4"]` (all `found` classifications from the promoted
       `findings.json`); `dependency_changes` is empty.
-- [ ] A planted flaky test is classified as infrastructure and retried; a planted logic bug is
+- [x] A planted flaky test is classified as infrastructure and retried; a planted logic bug is
       classified as logic, not retried, and routed back to the engineer — fixed in the same run.
-      **Partial** (2026-08-05): the same-run logic-failure route-back mechanism itself now
+      **Live-proven**: `runs/run-20260919-flaky-001/` (infrastructure_flake, identical retry
+      passed, not routed back) and `runs/run-20260918-logicrepair-003/` (logic_bug, not
+      retried, same Engineer repaired it, re-verified pass). The 2 s / 4 s retry backoff
+      (2026-10-01) postdates the flaky run and is proven deterministically only.
+      Earlier status, kept for the record — **Partial** (2026-08-05): the same-run logic-failure route-back mechanism itself now
       exists and is deterministically verified (`classify_verification_outcome`,
       `_handle_verification_failure` in `harness/orchestrator/core.py`;
       `tests/test_orchestrator_core.py`, `tests/test_route_back_protocol.py`) — a genuine
@@ -2795,7 +2833,15 @@ Demonstrated live, on a repo with ≥50 files:
       such a resumed run can also reach a genuine passing Verification, remains covered by
       `tests/test_orchestrator_core.py`'s resume tests only — no live run has yet demonstrated a
       resumed pipeline completing through Verification with a passing verdict.
+      **Superseded (2026-10-01)**: `runs/run-20261001-midimplresume-002/` killed process 1
+      mid-Implementation (`interruption-proof/kill-driver-log.json`; identical pre-/post-kill
+      snapshots), a fresh `/work --resume` reused Discovery and Research and restarted
+      Implementation, and after two further unplanned interruptions (a driver timeout and an
+      API usage limit), each resumed from the checkpoint, the same run reached
+      `final_verdict: "pass"`.
 - [x] Total token/cost figure for one full pipeline run can be stated.
+      `runs/run-20260929-costproof-001/usage-summary.json` `full_pipeline_total`:
+      **$9.5721282**, reconciled against the runtime's own reported usage (2026-09-29).
 
 ## 9. What NOT to Build
 
@@ -4104,8 +4150,8 @@ documentation may require additional time after the working MVP closes.
 
 1. ~~Engineer agent.~~ **COMPLETE**
 2. ~~Quality Engineer agent.~~ **COMPLETE**
-3. ~~Code-craftsmanship and test-runner skills.~~ **COMPLETE** (2 of the assignment's required
-   ≥4 skill packs; `github/` and `jira/` remain future work — see §3, §10)
+3. ~~Code-craftsmanship and test-runner skills.~~ **COMPLETE** (with `github/` and `jira/`,
+   all 4 of the assignment's required skill packs are now complete — see §3, §10)
 4. ~~Deterministic orchestrator core.~~ **COMPLETE** as a standalone, fake-adapter-tested engine
    — `core.py` itself is not live-integrated (live dispatch runs through `/work`/`live_cli.py`
    instead, per Option C), but the harness overall is now end-to-end live-verified (see §10
@@ -4126,7 +4172,8 @@ documentation may require additional time after the working MVP closes.
    implemented, deterministic resume tests pass, and a genuine two-process live restart reused
    Discovery and Research and restarted Implementation with a fresh Engineer — that live
    resumed invocation later ended blocked during Implementation on transport-budget exhaustion;
-   a resumed run reaching a passing Verification remains deterministic-only. See the
+   a resumed run reaching a passing Verification is now also live-proven
+   (`run-20261001-midimplresume-002`, 2026-10-01). See the
    checkpoint/resume milestone notes above for the full, authoritative account. ~~The memory
    loop.~~ **COMPLETE (2026-08-06)**: `memory/facts.jsonl` and `memory/lessons-learned.md`
    are implemented, deterministically tested (62+ new tests, plus a post-audit hardening
@@ -4150,6 +4197,7 @@ documentation may require additional time after the working MVP closes.
    `jira_connector.py` + `connector_router.py`; kept route = REST) are complete;
    **still open:** a full four-phase `/work` run exercising the newer integrations
    (including the Architect consulting the vault in-pipeline via its `mcp__obsidian__*`
-   tool, and `resolve_jira_issue_routed`), the 1–2 page write-up (§5), and planted-defect
-   (flaky-test / false-push-in-a-live-run) demos. See the dated milestone notes above for
-   the authoritative per-item status.
+   tool, and `resolve_jira_issue_routed`) and the 1–2 page write-up (§5). The planted-defect
+   demos are since complete (flaky test `run-20260919-flaky-001`, false push
+   `run-20260929-falsepush-001`). See the dated milestone notes above for the authoritative
+   per-item status.

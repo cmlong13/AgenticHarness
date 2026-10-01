@@ -28,15 +28,16 @@ flowchart TD
         QE["Quality Engineer<br/>Read, Grep, Glob only<br/>(quality-engineer.md)"]
     end
 
-    DISPATCH -->|"dispatch + findings.json"| ARCH
+    DISPATCH -->|"dispatch + scope.json"| ARCH
     ARCH -->|"findings.json (file:line evidence)"| DISPATCH
     DISPATCH -->|"dispatch + findings_ref"| ENG
+    DISC -.->|"research_skip_reason declared:<br/>Research skipped, Engineer dispatched on scope.json"| ENG
     ENG -->|"implementation-report.json"| DISPATCH
     DISPATCH -->|"dispatch + implementation_ref"| QE
     QE -->|"verification-report.json"| DISPATCH
 
     QE -.->|"fail: logic_bug<br/>(same Engineer, SendMessage, max 1 repair)"| ENG
-    QE -.->|"inconclusive: infrastructure_flake<br/>(bounded retry, max 2, inside QE turn)"| QE
+    QE -.->|"infrastructure_flake: identical retry, max 2<br/>(orchestrator waits 2s / 4s backoff first)"| QE
 
     DISPATCH --> DONE["Independent re-verification<br/>(ORCH-* commands) → final verdict → checkpoint"]
 
@@ -51,7 +52,8 @@ flowchart TD
 
     DISPATCH -->|"mediates every test command"| SK_TR
     SK_TR -->|"command_result"| DISPATCH
-    DISPATCH -.->|"invoked before Git actions<br/>(not exercised this milestone)"| SK_GH
+    DISPATCH -->|"invoked before Git/GitHub actions<br/>(push verification; read-file, search-code,<br/>commit-history, pr-review, pr-create)"| SK_GH
+    ENG -->|"Reads before first edit<br/>(engineer.md Step 5)"| SK_CC
     DISPATCH -->|"invoked before ticket resolution"| SK_JIRA
     DISPATCH -->|"invoked before read/write-back"| SK_OBS
 
@@ -65,7 +67,7 @@ flowchart TD
     SK_JIRA --> ROUTER["Connector router<br/>REST (kept) + MCP (parity)"]
     ROUTER -->|"REST: jira_connector.py"| JIRA_EXT
     ROUTER -.->|"MCP: harness.mcp.jira_server"| JIRA_EXT
-    SK_GH -.-> GH_EXT
+    SK_GH -->|"git ls-remote / gh"| GH_EXT
     SK_OBS -->|"read (Discovery/Research)"| OBS_EXT
     SK_OBS -->|"write-back (run summary)"| OBS_EXT
     ARCH -.->|"mcp__obsidian__* (direct read-only)"| OBS_EXT
@@ -82,7 +84,7 @@ flowchart TD
         CKPT["checkpoint.json"]
         SUMM["run-summary.json"]
         LOGS["logs/ (command logs,<br/>policy-events.jsonl)"]
-        USAGE["usage/, usage-summary.json"]
+        USAGE["usage/, usage-summary.json<br/>(full_pipeline_total via post-session<br/>finalize_pipeline_usage)"]
     end
 
     DISPATCH -->|"retain_attempt → validate → promote_artifact"| ART
@@ -111,16 +113,29 @@ flowchart TD
     CKPT -->|"/work --resume <run_id>"| DISPATCH
 
     classDef exception stroke-dasharray: 4 3
-    class ARCH,ROUTER,SK_GH,GH_EXT exception
+    class ARCH,ROUTER exception
 ```
 
 ## Legend / notes
 
-- **Solid arrows** are the normal, always-taken pipeline path. **Dashed arrows** mark exceptional,
-  conditional, or not-yet-exercised-in-this-milestone paths: the logic-bug route-back, the flaky-test
-  retry, the Architect's direct Obsidian read tools, and the GitHub skill (built and documented per
-  `ASSIGNMENT.md` §2.4/§3.7's Git-delivery protocol, but this milestone's own tickets never authorize a
-  commit/push, so it is not live-exercised end-to-end here).
+- **Solid arrows** are the normal pipeline path. **Dashed arrows** mark exceptional or conditional
+  paths: the declared Research skip, the logic-bug route-back, the flaky-test retry, the Architect's
+  direct Obsidian read tools, and the Jira MCP route.
+- **All four phases run in order unless Discovery declares a Research skip.** Research is the only
+  skippable phase (`ASSIGNMENT.md` §2.1: "a typo fix doesn't need a full research phase — say so
+  explicitly and skip it"). The skip is declared once, as `research_skip_reason` in the approved
+  `scope.json` (with no `research` task-graph node); the checkpoint then records
+  `skipped_phases: ["research"]`, `pre_dispatch_check.py` admits the Engineer on the approved scope and
+  refuses any Architect dispatch, the Engineer's report carries no `findings_ref`, and
+  `run-summary.json` lists `phases_skipped`. Implementation and Verification always run.
+- **The GitHub skill** verifies every claimed push with an independent `git ls-remote` (live: a real
+  push in `runs/run-20260818-githubpush-001/`, a rejected fabricated push in
+  `runs/run-20260929-falsepush-001/`) and provides the five single-purpose `live_cli.py` procedures
+  `read_file`, `search_code`, `commit_history`, `pr_review` (read-only) and `pr_create` (explicit
+  authorization only).
+- **The code-craftsmanship skill** is the canonical minimal-change and convention checklist; the
+  Engineer reads it with its existing `Read` tool before its first edit (`engineer.md` Step 5). It
+  grants no tool and cannot widen scope.
 - **The main session is the orchestrator, not a subagent.** Discovery, phase dispatch, evidence
   promotion, and final verification all run in the same conversation that received `/work` — subagents
   cannot spawn nested subagents, so this is structural, not a style choice.
@@ -134,8 +149,12 @@ flowchart TD
 - **Logic bug vs. flaky/infrastructure failure are two different, visually distinct paths.** A
   `verification-report.json` with a genuine `logic_bug` attempt routes back to the *same* Engineer
   identity (`SendMessage`, never a new dispatch) for one repair cycle, then the *same* Quality Engineer
-  re-verifies. An `infrastructure_flake` is retried (max 2) entirely inside the Quality Engineer's own
-  turn and never reaches the Engineer — if still unresolved, it surfaces as `inconclusive`, not a route-back.
+  re-verifies. An `infrastructure_flake` is retried by the Quality Engineer re-requesting the identical
+  command (at most 2 retries, 3 executions); before executing each retry the orchestrator calls
+  `prepare_infrastructure_retry`, which waits a bounded backoff (2 s, then 4 s) and refuses undeclared,
+  non-identical, logic-bug, or over-ceiling retries, and `check_retry_consistency` reconciles the final
+  report against the retries actually executed. A flake never reaches the Engineer — if still
+  unresolved, it surfaces as `inconclusive`, not a route-back.
 - **All test execution is mediated through the `test-runner` skill**, which runs forked
   (`context: fork`) so its own `disallowed-tools` restriction never leaks into the orchestrator's or a
   resumed agent's own tool access.
@@ -148,11 +167,20 @@ flowchart TD
   `logs/policy-events.jsonl` records every dispatch, skill invocation, and policy decision independent
   of what any agent claims happened.
 - **Checkpoint/resume and memory are separate mechanisms.** `checkpoint.json` lets an interrupted run
-  restart at its next incomplete phase (`/work --resume <run_id>`) without redoing completed phases;
+  restart at its next incomplete phase (`/work --resume <run_id>`): `evaluate_resume` revalidates every
+  completed phase's artifact, reuses those phases without redispatch, never restarts a declared-skipped
+  phase, and dispatches a fresh agent for the one incomplete phase (live: a deliberate
+  mid-Implementation kill in `runs/run-20261001-midimplresume-002/`);
   `memory/facts.jsonl` and `memory/lessons-learned.md` are a longer-lived, cross-run corpus loaded once
   before every run's Discovery and appended to (≤5 lesson bullets) only on a genuine terminal outcome.
+- **Hooks resolve from the project root.** Each hook is registered as
+  `python "${CLAUDE_PROJECT_DIR}/.claude/hooks/<name>.py"`, so a hook runs the same whatever directory the
+  session's shell is in (`tests/test_hook_registration.py`).
+- **Full-pipeline cost** is stated only for a run executed as one dedicated headless session: after the
+  session exits, `finalize_pipeline_usage` reconciles every transcript against the runtime's own usage
+  and writes `full_pipeline_total` (live: $9.5721282 in `runs/run-20260929-costproof-001/`).
 - Implementation detail not shown, deliberately: the six JSON schemas (`harness/schemas/`), the per-request
-  file protocol (`runs/<run_id>/requests/*.json`), and the ~25 individual `live_cli.py` operations are
+  file protocol (`runs/<run_id>/requests/*.json`), and the ~40 individual `live_cli.py` operations are
   real and load-bearing but would clutter this diagram without adding to a first-time reader's
   understanding — see `harness/orchestrator/live_cli.py` and `.claude/skills/work/SKILL.md` for the
   full, authoritative protocol.

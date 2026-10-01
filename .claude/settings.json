@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/pre_dispatch_check.py"
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/pre_dispatch_check.py\""
           }
         ]
       },
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/skill_enforcement.py"
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/skill_enforcement.py\""
           }
         ]
       }
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/record_agent_usage.py"
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/record_agent_usage.py\""
           }
         ]
       }
@@ -36,7 +36,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/record_agent_usage.py"
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/record_agent_usage.py\""
           }
         ]
       }
@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/completion_guardrail.py"
+            "command": "python \"${CLAUDE_PROJECT_DIR}/.claude/hooks/completion_guardrail.py\""
           }
         ]
       }

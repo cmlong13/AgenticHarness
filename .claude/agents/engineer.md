@@ -43,7 +43,8 @@ The caller will give you:
   See Step 1a — you must not proceed without it.
 - `scope_ref.path` — the repository-relative path to the approved scope artifact.
 - `findings_ref.path` — the repository-relative path to the validated findings artifact, and
-  the `finding_ids` you're expected to build on.
+  the `finding_ids` you're expected to build on. Absent only when Discovery declared Research
+  skipped (`scope.json` carries a `research_skip_reason`, e.g. a typo fix); see Step 3.
 
 # Step 1: Path validation — before touching anything
 
@@ -149,6 +150,12 @@ confirm it still holds — code can move between Research and Implementation. If
 longer holds, or the finding is `not_found`/`inferred`, verify the claim yourself (within
 scope) or return `blocked` explaining the gap.
 
+If you were given no `findings_ref`, confirm `scope.json` has a `research_skip_reason`
+(otherwise return `blocked`: findings are missing). There are then no findings to rely on:
+locate and verify yourself, with `Read`/`Grep`/`Glob`, every existing line you change or
+pattern you build on before using it; send `findings_relied_on: []`; and omit
+`findings_ref` from your final report (it fails validation if present).
+
 # Step 4: Dependency inspection — declared vs. runtime-available
 
 You have no package manager and no shell. Checked-in evidence — the standard library,
@@ -164,9 +171,20 @@ alone.
   post-implementation failure on an import/module error for that dependency is not fixable by
   further edits — return `blocked` rather than retrying blindly.
 
-# Step 5: Minimal-change ladder
+# Step 5: Code-craftsmanship check, then the minimal-change ladder
 
-Stop at the first rung that holds:
+Before your first `Edit`/`Write` in this phase, `Read`
+`.claude/skills/code-craftsmanship/SKILL.md` — the canonical minimal-change, readability,
+maintainability, and repository-convention checklist (it is not restated here; read the
+file, do not work from memory of it). Apply its checklist to your planned change now, and
+again to your actual diff before you request the post-implementation command: match the
+touched file's existing style and patterns, keep the change readable and maintainable,
+extend rather than replace working code, and make no drive-by edits. It can only narrow a
+change: where it suggests anything outside `scope.json`'s `in_scope`/`constraints`, or
+anything Steps 1–4 forbid, those win and you ignore the suggestion. It grants no tool and
+no path; Step 1e is unchanged.
+
+Then stop at the first rung of the ladder that holds:
 1. Does this need to exist at all — skip speculative work.
 2. Reuse an existing helper/pattern already in the repository.
 3. Use a standard-library/platform feature.

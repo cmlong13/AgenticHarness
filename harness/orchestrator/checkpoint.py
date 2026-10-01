@@ -93,13 +93,28 @@ def _write(run_directory: Path, doc: dict) -> Path:
     return path
 
 
-def _remaining_after(completed_phases: list[str]) -> list[str]:
-    return [phase for phase in PHASE_ORDER if phase not in completed_phases]
+def _remaining_after(completed_phases: list[str], skipped_phases: list[str] = ()) -> list[str]:
+    return [phase for phase in PHASE_ORDER if phase not in completed_phases and phase not in skipped_phases]
+
+
+def skipped_phases_for(scope_doc: dict | None) -> list[str]:
+    """The phases an approved scope.json declared skipped -- today only Research, via
+    `research_skip_reason` (ASSIGNMENT.md §2.1). The single source every checkpoint
+    writer and the resume check derive `skipped_phases` from."""
+    return ["research"] if (scope_doc or {}).get("research_skip_reason") else []
+
+
+def _with_skips(doc: dict, skipped_phases: list[str]) -> dict:
+    # Only written when non-empty, so every checkpoint of a four-phase run is unchanged.
+    if skipped_phases:
+        doc["skipped_phases"] = list(skipped_phases)
+    return doc
 
 
 def record_phase_progress(
     run_directory: Path,
     *,
+    skipped_phases: list[str] = (),
     task_id: str,
     run_id: str,
     target_repo_path: str,
@@ -112,7 +127,7 @@ def record_phase_progress(
     "in_progress". `artifact_refs` is phase-keyed ("discovery"/"research"/
     "implementation"/"verification"), distinct from run-summary.json's artifact-name
     keys ("scope"/"findings"/...); callers holding the latter must remap first."""
-    remaining = _remaining_after(completed_phases)
+    remaining = _remaining_after(completed_phases, skipped_phases)
     if not remaining:
         raise CheckpointError("record_phase_progress called with all phases already completed", "invalid_call")
     current_phase = remaining[0]
@@ -131,12 +146,13 @@ def record_phase_progress(
         "next_resume_action": f"dispatch the {current_phase} phase",
         "status": "in_progress",
     }
-    return _write(run_directory, doc)
+    return _write(run_directory, _with_skips(doc, skipped_phases))
 
 
 def record_completion(
     run_directory: Path,
     *,
+    skipped_phases: list[str] = (),
     task_id: str,
     run_id: str,
     target_repo_path: str,
@@ -150,7 +166,7 @@ def record_completion(
         "run_id": run_id,
         "target_repo_path": target_repo_path,
         "updated_at": updated_at,
-        "completed_phases": list(PHASE_ORDER),
+        "completed_phases": [p for p in PHASE_ORDER if p not in skipped_phases],
         "current_phase": None,
         "next_phase": None,
         "artifact_refs": dict(artifact_refs),
@@ -158,12 +174,13 @@ def record_completion(
         "next_resume_action": None,
         "status": "complete",
     }
-    return _write(run_directory, doc)
+    return _write(run_directory, _with_skips(doc, skipped_phases))
 
 
 def record_interruption(
     run_directory: Path,
     *,
+    skipped_phases: list[str] = (),
     task_id: str,
     run_id: str,
     target_repo_path: str,
@@ -177,7 +194,7 @@ def record_interruption(
     that simply hasn't finished yet) and from "failed" (a genuine terminal error).
     `note`, if given, is retained as a blocker entry naming the current phase, purely as
     an honest record of why the run paused -- it is not itself a failure."""
-    remaining = _remaining_after(completed_phases)
+    remaining = _remaining_after(completed_phases, skipped_phases)
     if not remaining:
         raise CheckpointError("record_interruption called with all phases already completed", "invalid_call")
     current_phase = remaining[0]
@@ -196,12 +213,13 @@ def record_interruption(
         "next_resume_action": f"resume and dispatch the {current_phase} phase",
         "status": "interrupted",
     }
-    return _write(run_directory, doc)
+    return _write(run_directory, _with_skips(doc, skipped_phases))
 
 
 def record_terminal_failure(
     run_directory: Path,
     *,
+    skipped_phases: list[str] = (),
     task_id: str,
     run_id: str,
     target_repo_path: str,
@@ -214,7 +232,7 @@ def record_terminal_failure(
     Overwrites a previously written "in_progress"/"interrupted" checkpoint for this run
     so a later resume attempt sees the true, current terminal state rather than a stale
     "in progress" record that would otherwise look resumable."""
-    remaining = _remaining_after(completed_phases)
+    remaining = _remaining_after(completed_phases, skipped_phases)
     current_phase = remaining[0] if remaining else PHASE_ORDER[-1]
     next_phase = remaining[1] if len(remaining) > 1 else None
     doc = {
@@ -231,7 +249,7 @@ def record_terminal_failure(
         "next_resume_action": f"none: run terminated during {current_phase} ({reason}); not resumable",
         "status": "failed",
     }
-    return _write(run_directory, doc)
+    return _write(run_directory, _with_skips(doc, skipped_phases))
 
 
 @dataclass
@@ -252,6 +270,7 @@ class ResumeDecision:
     task_id: str | None = None
     target_repo_path: str | None = None
     completed_phases: list[str] = field(default_factory=list)
+    skipped_phases: list[str] = field(default_factory=list)
     next_phase: str | None = None
     artifact_refs: dict[str, str] = field(default_factory=dict)
     docs: dict[str, dict] = field(default_factory=dict)
@@ -268,7 +287,7 @@ def _revalidate_artifact(phase: str, doc: dict, docs_so_far: dict[str, dict]) ->
     if phase == "research":
         return [str(e) for e in validate_findings_semantics(doc)]
     if phase == "implementation":
-        findings_doc = docs_so_far.get("research", {})
+        findings_doc = docs_so_far.get("research")  # None only when Research was declared skipped
         return [str(e) for e in validate_implementation_report_semantics(doc, findings_doc)]
     if phase == "verification":
         scope_doc = docs_so_far.get("discovery", {})
@@ -395,7 +414,19 @@ def evaluate_resume(run_directory: Path, *, requested_run_id: str, repo_root: Pa
     # what to do next any more than it trusts its claims about what is already done. See
     # checkpoint.schema.json's $comment for why this also means next_phase is not part
     # of validate_checkpoint_semantics's independently-enforced rule set.
-    next_phase = next((phase for phase in PHASE_ORDER if phase not in completed_phases), None)
+    # The checkpoint's skipped_phases must be exactly what the revalidated scope.json
+    # declared -- a checkpoint can never skip a phase Discovery did not explicitly skip.
+    skipped_phases = list(doc.get("skipped_phases", []))
+    if "discovery" in docs and skipped_phases != skipped_phases_for(docs["discovery"]):
+        return ResumeDecision(
+            False,
+            "invalid_checkpoint",
+            f"checkpoint skipped_phases {skipped_phases!r} does not match the scope's declared "
+            f"skips {skipped_phases_for(docs['discovery'])!r}",
+        )
+    next_phase = next(
+        (phase for phase in PHASE_ORDER if phase not in completed_phases and phase not in skipped_phases), None
+    )
 
     return ResumeDecision(
         True,
@@ -405,6 +436,7 @@ def evaluate_resume(run_directory: Path, *, requested_run_id: str, repo_root: Pa
         task_id=task_id,
         target_repo_path=target_repo_path,
         completed_phases=completed_phases,
+        skipped_phases=skipped_phases,
         next_phase=next_phase,
         artifact_refs=artifact_refs,
         docs=docs,

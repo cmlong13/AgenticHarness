@@ -72,7 +72,6 @@
   },
   "then": {
     "required": [
-      "findings_ref",
       "minimal_change_rung",
       "minimal_change_rationale",
       "changed_files",
