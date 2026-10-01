@@ -175,8 +175,7 @@ On a valid `command_result` (apply the rejection rules below first):
     retried.
   - **`infrastructure_flake`** — you have concrete evidence the failure is transient and
     unrelated to the code under test (e.g., the output itself names a timeout, connection
-    reset, or resource-contention condition, or an immediate identical re-run of the same
-    command produced a different result). "It failed and a retry might help" is not evidence;
+    reset, or resource-contention condition). "It failed and a retry might help" is not evidence;
     a specific, cited reason is.
   - **`environment`** — the failure output shows a systemic problem with the execution
     environment (missing interpreter, unmet runtime dependency despite the Engineer's
@@ -193,8 +192,16 @@ invent a classification unsupported by the actual output text.
 attempt you classified `infrastructure_flake` with genuine supporting evidence per Step 9 —
 never for `logic_bug`, never for `environment`, and never merely because a test failed. To
 retry: request the identical `command`/`working_directory` again under a fresh `command_id`,
+with `requested_command.retry_of` set to `{"attempt_id": "<the failed attempt you are
+re-running — always its most recent execution>", "classification": "infrastructure_flake"}`,
 and mark the new attempt's `retried: true`. You may do this at most twice per criterion-blocking
-failure (three executions total). If the failure persists identically across retries, it was
+failure (2 retries after the initial attempt = at most 3 total executions). The caller waits a
+bounded backoff before executing each retry (2s before retry 1, 4s before retry 2) and refuses
+— blocking the phase — any retry that is undeclared, of a non-`infrastructure_flake` attempt,
+not identical, or beyond the ceiling. Your final report must agree with the retries actually
+executed: each re-run attempt classified `infrastructure_flake`, each retry marked `retried:
+true`, and nothing else marked retried. A `logic_bug` is never retried: it is reported
+`failed` and routed back to the Engineer (Step 12). If the failure persists identically across retries, it was
 not actually a flake — reclassify honestly based on what the repeated evidence now shows
 (typically `logic_bug` if it is now clearly deterministic, or leave it `infrastructure_flake`
 but stop retrying and let it surface as `inconclusive` in Step 12) rather than retrying forever
@@ -293,6 +300,8 @@ object per turn, no fence, no prose, `response_type` first.
   "rejected_reply": { "reason": "..." }
 }
 ```
+An infrastructure retry (Step 10 only) adds `"retry_of": {"attempt_id": "V-1",
+"classification": "infrastructure_flake"}` inside `requested_command`.
 
 ## Caller → you
 

@@ -1055,7 +1055,21 @@ before parsing, mediate every `attempt_requested` through
 the real `test-runner` Skill, resume the *same* Quality Engineer for every reply
 including any evidence-supported `infrastructure_flake` retry (max 2, per
 `quality-engineer.md`), `validate_artifact`/`promote_artifact` (`phase: "verification"`,
-`context_refs.scope` pointing at the promoted `scope.json`) on the final report. If a raw
+`context_refs.scope` pointing at the promoted `scope.json`) on the final report.
+
+Infrastructure retry backoff: before mediating **every** Quality Engineer
+`attempt_requested`, call `live_cli` operation `prepare_infrastructure_retry` (`run_id`,
+`requested_command` exactly as the Quality Engineer sent it, `prior_attempt_ids` = this
+verification round's already-executed attempt ids in order). It applies the same policy as
+`core.py`: an ordinary attempt returns `retry: null`; a declared `retry_of`
+infrastructure_flake retry waits its bounded backoff (2s before retry 1, 4s before retry 2 --
+2 retries = at most 3 total executions), then retains an `infrastructure_retry_backoff`
+policy event, and only then may the command go to the test-runner Skill. `status: "refused"`
+(undeclared re-run of a failed command, a non-infrastructure_flake classification such as
+`logic_bug`, a non-identical command, or the ceiling reached) blocks the phase -- never
+invoke the Skill for it. Logic bugs are never infrastructure retries; they follow the
+route-back below. Before `validate_artifact` on the final report, call
+`check_retry_consistency` (`run_id`, `doc_ref`); `status: "invalid"` blocks the phase. If a raw
 turn does not parse as strict JSON, or parses but is wrapped in a Markdown fence or
 carries leading/trailing prose, classify and handle it via "Quality Engineer transport
 repair" below -- do **not** treat it as merely "the same protocol as the Engineer's" by

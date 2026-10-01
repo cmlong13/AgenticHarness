@@ -449,6 +449,71 @@ def op_retain_policy_event(req: dict) -> dict:
     return {"operation": "retain_policy_event", "status": "retained", "path": _rel(path)}
 
 
+_REPORTED_EXIT_CODE_RE = re.compile(r"^reported_exit_code: (-?\d+)$", re.MULTILINE)
+
+
+def _retry_backoff_events(run_directory: Path) -> list[dict]:
+    events_path = run_directory / "logs" / "policy-events.jsonl"
+    if not events_path.exists():
+        return []
+    events = [json.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    return [e for e in events if e.get("kind") == "infrastructure_retry_backoff"]
+
+
+def op_prepare_infrastructure_retry(req: dict) -> dict:
+    """Called by /work before mediating every Quality Engineer attempt_requested. Delegates
+    to core.apply_infrastructure_retry_backoff -- the same policy, wait, and evidence the
+    deterministic core path applies -- with this round's prior attempts rebuilt from
+    retained evidence (requests/<id>.json, the test-runner's logs/<id>.log
+    reported_exit_code, and earlier infrastructure_retry_backoff events), never from
+    caller-stated exit codes. `prior_attempt_ids` lists, in execution order, the
+    attempt_requested command ids already executed in this Quality Engineer round."""
+    run_id = _require_str(req, "run_id")
+    requested_command = req.get("requested_command")
+    if not isinstance(requested_command, dict):
+        raise LiveCliUsageError("'requested_command' must be a JSON object")
+    prior_ids = req.get("prior_attempt_ids", [])
+    if not isinstance(prior_ids, list) or not all(isinstance(i, str) and i for i in prior_ids):
+        raise LiveCliUsageError("'prior_attempt_ids' must be a list of non-empty strings")
+    run_directory = evidence_io.run_dir(REPO_ROOT, run_id)
+    retry_numbers = {e["command_id"]: e["retry_number"] for e in _retry_backoff_events(run_directory)}
+
+    prior_attempts: dict[str, dict] = {}
+    for cid in prior_ids:
+        try:
+            request = load_json(run_directory / "requests" / f"{cid}.json")
+            log_text = (run_directory / "logs" / f"{cid}.log").read_text(encoding="utf-8")
+        except (OSError, json.JSONDecodeError) as exc:
+            raise LiveCliUsageError(f"retained evidence for prior attempt {cid!r} does not resolve: {exc}") from exc
+        match = _REPORTED_EXIT_CODE_RE.search(log_text)
+        if match is None:
+            raise LiveCliUsageError(f"logs/{cid}.log carries no reported_exit_code header")
+        prior_attempts[cid] = {
+            "command": request.get("command"),
+            "working_directory": request.get("working_directory"),
+            "exit_code": int(match.group(1)),
+            "retry_number": retry_numbers.get(cid, 0),
+        }
+
+    try:
+        plan = core.apply_infrastructure_retry_backoff(run_directory, requested_command, prior_attempts)
+    except core.InfrastructureRetryRefused as exc:
+        return {"operation": "prepare_infrastructure_retry", "status": "refused", "error": str(exc)}
+    return {"operation": "prepare_infrastructure_retry", "status": "ok", "retry": plan}
+
+
+def op_check_retry_consistency(req: dict) -> dict:
+    """Called by /work on a final verification-report before promoting it. Delegates to
+    core.check_retry_consistency -- the same check the deterministic core path runs --
+    against this run's retained infrastructure_retry_backoff events."""
+    run_id = _require_str(req, "run_id")
+    doc = _get_doc(req, "doc")
+    errors = core.check_retry_consistency(doc, _retry_backoff_events(evidence_io.run_dir(REPO_ROOT, run_id)))
+    if errors:
+        return {"operation": "check_retry_consistency", "status": "invalid", "errors": errors}
+    return {"operation": "check_retry_consistency", "status": "valid"}
+
+
 def op_write_run_summary(req: dict) -> dict:
     """9. Write a schema-valid run summary -- schema-validates (run-summary has no
     semantic validator in harness.evidence) then delegates to
@@ -1648,6 +1713,8 @@ OPERATIONS = {
     "check_command_identity": op_check_command_identity,
     "retain_rejection": op_retain_rejection,
     "retain_policy_event": op_retain_policy_event,
+    "prepare_infrastructure_retry": op_prepare_infrastructure_retry,
+    "check_retry_consistency": op_check_retry_consistency,
     "write_run_summary": op_write_run_summary,
     "write_checkpoint": op_write_checkpoint,
     "evaluate_resume": op_evaluate_resume,

@@ -95,6 +95,24 @@ MAX_STAGED_TURNS = 20
 # this requires a written contract reason, not a casual increase.
 MAX_LOGIC_REPAIR_ATTEMPTS = 1
 
+# Quality Engineer infrastructure_flake retry backoff: one delay per permitted retry, so
+# retry N waits INFRA_RETRY_BACKOFF_SECONDS[N - 1] before re-executing the identical
+# command. Two retries after the original execution = at most 3 total executions of a
+# command, matching quality-engineer.md's fixed retry_policy.max_retries of 2.
+INFRA_RETRY_BACKOFF_SECONDS = (2.0, 4.0)
+MAX_INFRA_RETRIES = len(INFRA_RETRY_BACKOFF_SECONDS)
+MAX_INFRA_ATTEMPTS = MAX_INFRA_RETRIES + 1
+
+
+def _backoff_sleep(seconds: float) -> None:
+    """The single real wait behind every infrastructure retry -- a module-level seam so
+    tests can replace it instead of sleeping."""
+    time.sleep(seconds)
+
+
+class InfrastructureRetryRefused(Exception):
+    """A Quality Engineer retry request that the orchestrator will not execute."""
+
 
 class OrchestrationError(Exception):
     """Raised only for genuinely unexpected internal failures -- caught by run() and
@@ -217,6 +235,125 @@ def _command_result_message(task_id: str, run_id: str, result: dict) -> dict:
     return message
 
 
+def plan_infrastructure_retry(requested_command: dict, prior_attempts: dict[str, dict]) -> dict | None:
+    """Decides whether a Quality Engineer `attempt_requested` is an infrastructure_flake
+    retry and, if so, which backoff precedes it. `prior_attempts` maps every command id
+    already executed in this Quality Engineer round, in execution order, to its
+    {command, working_directory, exit_code, retry_number} (retry_number 0 = not a retry).
+
+    Returns None for an ordinary attempt, or the retry's evidence record. Raises
+    InfrastructureRetryRefused for an undeclared re-run of a failed command, a retry of
+    anything but an infrastructure_flake (logic_bug and environment are never retried), a
+    non-identical command, or a retry beyond MAX_INFRA_RETRIES."""
+    command_id = requested_command.get("id")
+    command = requested_command.get("command")
+    working_directory = requested_command.get("working_directory")
+    identical = [
+        cid for cid, a in prior_attempts.items()
+        if a["command"] == command and a["working_directory"] == working_directory
+    ]
+    retry_of = requested_command.get("retry_of")
+    if retry_of is None:
+        failed = [cid for cid in identical if prior_attempts[cid]["exit_code"] != 0]
+        if failed:
+            raise InfrastructureRetryRefused(
+                f"{command_id!r} re-runs failed attempt {failed[-1]!r} without declaring retry_of -- "
+                "a re-run of a failed command is only ever a declared infrastructure_flake retry"
+            )
+        return None
+
+    if not isinstance(retry_of, dict):
+        raise InfrastructureRetryRefused("retry_of must be an object naming attempt_id and classification")
+    attempt_id = retry_of.get("attempt_id")
+    classification = retry_of.get("classification")
+    if classification != "infrastructure_flake":
+        raise InfrastructureRetryRefused(
+            f"only an infrastructure_flake attempt may be retried, not {classification!r}"
+        )
+    original = prior_attempts.get(attempt_id)
+    if original is None:
+        raise InfrastructureRetryRefused(f"retry_of.attempt_id {attempt_id!r} names no attempt executed in this round")
+    if original["command"] != command or original["working_directory"] != working_directory:
+        raise InfrastructureRetryRefused(
+            f"retry {command_id!r} must re-request the identical command and working_directory of {attempt_id!r}"
+        )
+    if identical[-1] != attempt_id:
+        raise InfrastructureRetryRefused(
+            f"retry_of must name the most recent execution of this command ({identical[-1]!r}), not {attempt_id!r}"
+        )
+    if original["exit_code"] == 0:
+        raise InfrastructureRetryRefused(f"{attempt_id!r} passed (exit_code 0) -- a passing attempt is never retried")
+    retry_number = original["retry_number"] + 1
+    if retry_number > MAX_INFRA_RETRIES:
+        raise InfrastructureRetryRefused(
+            f"retry ceiling reached: {attempt_id!r} was already execution {retry_number} of at most "
+            f"{MAX_INFRA_ATTEMPTS} (max_retries {MAX_INFRA_RETRIES})"
+        )
+    return {
+        "command_id": command_id,
+        "retry_of_attempt_id": attempt_id,
+        "retried_attempt_classification": classification,
+        "retried_attempt_exit_code": original["exit_code"],
+        "attempt_number": retry_number + 1,
+        "retry_number": retry_number,
+        "max_retries": MAX_INFRA_RETRIES,
+        "max_total_attempts": MAX_INFRA_ATTEMPTS,
+        "backoff_seconds": INFRA_RETRY_BACKOFF_SECONDS[retry_number - 1],
+        "command": command,
+        "working_directory": working_directory,
+        "command_identical": True,
+        "retries_remaining": MAX_INFRA_RETRIES - retry_number,
+    }
+
+
+def apply_infrastructure_retry_backoff(
+    run_directory: Path, requested_command: dict, prior_attempts: dict[str, dict]
+) -> dict | None:
+    """plan_infrastructure_retry, then -- for a genuine retry -- wait its backoff and only
+    afterwards retain an `infrastructure_retry_backoff` policy event, so the event never
+    claims a wait that did not happen. A refusal is retained as
+    `infrastructure_retry_refused` and re-raised; nothing is waited for or executed."""
+    try:
+        plan = plan_infrastructure_retry(requested_command, prior_attempts)
+    except InfrastructureRetryRefused as exc:
+        evidence_io.retain_policy_event(
+            run_directory, "infrastructure_retry_refused",
+            {"command_id": requested_command.get("id"), "retry_of": requested_command.get("retry_of"), "reason": str(exc)},
+        )
+        raise
+    if plan is None:
+        return None
+    _backoff_sleep(plan["backoff_seconds"])
+    evidence_io.retain_policy_event(run_directory, "infrastructure_retry_backoff", plan)
+    return plan
+
+
+def check_retry_consistency(verify_doc: dict, retry_events: list[dict]) -> list[str]:
+    """Binds the Quality Engineer's final verification report to the retries the
+    orchestrator actually executed, so a classification declared only to obtain a retry
+    cannot later be contradicted. `retry_events` are infrastructure_retry_backoff records
+    (plan_infrastructure_retry's output); events for attempts absent from this report
+    (e.g. an earlier round's) are ignored. Every attempt the report marks retried must have
+    been executed as a retry, every executed retry it reports must be marked retried, and
+    the attempt each retry re-ran must be reported as infrastructure_flake."""
+    attempts = {a.get("id"): a for a in verify_doc.get("attempts") or []}
+    executed = {e["command_id"]: e for e in retry_events if e.get("command_id") in attempts}
+    errors = []
+    for attempt_id, attempt in attempts.items():
+        if attempt.get("retried") is True and attempt_id not in executed:
+            errors.append(f"attempt {attempt_id!r} is marked retried but was never executed as an infrastructure retry")
+    for attempt_id, event in executed.items():
+        if attempts[attempt_id].get("retried") is not True:
+            errors.append(f"attempt {attempt_id!r} was executed as an infrastructure retry but is not marked retried")
+        original = attempts.get(event["retry_of_attempt_id"])
+        if original is None or original.get("classification") != "infrastructure_flake":
+            errors.append(
+                f"attempt {event['retry_of_attempt_id']!r} was retried as an infrastructure_flake but the report "
+                f"classifies it {(original or {}).get('classification')!r}"
+            )
+    return errors
+
+
 def _drive_staged_protocol(
     *,
     agent_adapter: AgentAdapter,
@@ -250,6 +387,8 @@ def _drive_staged_protocol(
     phase ("implementation"/"verification"), since that is what selects the schema and
     semantic validator; only the *filenames* differ for a repair round."""
     attempt_phase_label = attempt_phase_label or phase
+    qe_attempts: dict[str, dict] = {}  # this round's executed attempt_requested commands, in order
+    retry_events: list[dict] = []  # this round's executed infrastructure retries
 
     for offset in range(MAX_STAGED_TURNS):
         attempt_n = offset + 1
@@ -266,8 +405,13 @@ def _drive_staged_protocol(
         if response_type is None:
             # Final artifact -- the only message in the whole workflow that is not a
             # protocol envelope, per every agent's own contract.
+            validate_fn = semantic_validate_fn
+            if phase == "verification":
+                def validate_fn(doc):
+                    errors = list(semantic_validate_fn(doc)) if semantic_validate_fn else []
+                    return errors + check_retry_consistency(doc, retry_events)
             result = _validate_and_promote(
-                msg, run_directory, phase, schema_name, semantic_validate_fn, task_id, run_id,
+                msg, run_directory, phase, schema_name, validate_fn, task_id, run_id,
                 filename=canonical_filename,
             )
             result.handle = handle
@@ -303,6 +447,13 @@ def _drive_staged_protocol(
         if not requested_command:
             return PhaseResult(blocked=True, reason=f"{response_type} envelope missing requested_command", handle=handle)
 
+        retry_plan = None
+        if response_type == "attempt_requested":
+            try:
+                retry_plan = apply_infrastructure_retry_backoff(run_directory, requested_command, qe_attempts)
+            except InfrastructureRetryRefused as exc:
+                return PhaseResult(blocked=True, reason=f"infrastructure retry refused: {exc}", handle=handle)
+
         request = _build_canonical_request(
             task_id, run_id, requested_command, target_repo_path or "", purpose=f"{phase} {response_type}"
         )
@@ -330,6 +481,16 @@ def _drive_staged_protocol(
 
         if result.get("exit_code") == 125:
             evidence_io.retain_policy_event(run_directory, "mutation_detected", result)
+
+        if response_type == "attempt_requested":
+            qe_attempts[request["command_id"]] = {
+                "command": request["command"],
+                "working_directory": request["working_directory"],
+                "exit_code": result.get("exit_code"),
+                "retry_number": retry_plan["retry_number"] if retry_plan else 0,
+            }
+            if retry_plan:
+                retry_events.append(retry_plan)
 
         message = _command_result_message(task_id, run_id, result)
         try:
