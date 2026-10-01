@@ -764,7 +764,11 @@ behavioral claim) or notes it in `open_questions`.
 2. Author the scope candidate as a `scope.schema.json`-shaped object with
    `status: "approved"` (or `"refused"` with a `refusal_reason`, if the pre-dispatch
    checklist in `ASSIGNMENT.md` §2.1 fails -- e.g. the request targets a Protected Path
-   or isn't a real product change).
+   or isn't a real product change). Every `in_scope` entry must be a bare
+   repository-relative file path exactly as the Engineer will edit it (it is matched
+   character-for-character, `engineer.md` Step 1d) -- put any per-file restriction
+   (e.g. "only `classify_credit_score`") in `constraints` or `out_of_scope`, never as an
+   annotation inside the path string; `validate_scope` rejects annotated entries.
 3. `retain_attempt` (`phase: "discovery"`, `attempt_n: 1`, the candidate as JSON text)
    -- always, before validating.
 4. `validate_scope` against the candidate. If invalid, the run ends here: still write a

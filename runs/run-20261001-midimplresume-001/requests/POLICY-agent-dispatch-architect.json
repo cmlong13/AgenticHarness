@@ -1,0 +1,11 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20261001-midimplresume-001",
+  "kind": "agent_dispatch",
+  "payload": {
+    "phase": "research",
+    "subagent_type": "architect",
+    "agent_id": "a1648146aedda8b18",
+    "dispatch_sequence": 1
+  }
+}

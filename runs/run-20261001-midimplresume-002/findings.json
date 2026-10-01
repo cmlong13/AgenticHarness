@@ -1,0 +1,159 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-MIDIMPLRESUME",
+  "run_id": "run-20261001-midimplresume-002",
+  "created_at": "2026-10-01T13:09:43Z",
+  "scope_ref": {
+    "path": "runs/run-20261001-midimplresume-002/scope.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "classify_credit_score (demo-repo/src/loanflow/risk_bands.py:45-54) does not check the type of score. Its first statement is the range check `if not (300 <= score <= 850): raise ValidationError(...)`, followed by bucket thresholds <580 POOR, <670 FAIR, <740 GOOD, else EXCELLENT. So a float such as 700.5 passes the range check and returns CreditBucket.GOOD. Because bool is an int subclass, True/False (1/0) are rejected today only by the range check, not by a type check.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 45,
+          "end_line": 54,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "ValidationError is already imported in risk_bands.py from loanflow.errors, so no new import is needed. ValidationError is defined in demo-repo/src/loanflow/errors.py:14 as a subclass of LoanflowError.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 12,
+          "end_line": 12,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/src/loanflow/errors.py",
+          "start_line": 14,
+          "end_line": 14,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-3",
+      "claim": "Money.__post_init__ uses the integer-validation convention `if isinstance(self.cents, bool) or not isinstance(self.cents, int): raise ValidationError(\"Money.cents must be an integer number of cents\")` at primitives.py:24-25. Percentage.__post_init__ uses the same form for basis_points at primitives.py:54-55, and this type check runs before its separate negative-value check at primitives.py:56-57.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/primitives.py",
+          "start_line": 23,
+          "end_line": 25,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/src/loanflow/primitives.py",
+          "start_line": 53,
+          "end_line": 57,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-4",
+      "claim": "test_risk_bands.py imports pytest, ValidationError, and classify_credit_score (lines 3-6). The existing rejection test, test_credit_score_out_of_range_is_rejected (lines 47-51), takes no fixtures, is annotated `-> None`, and uses one `with pytest.raises(ValidationError):` block per bad input (299, 851). test_credit_bucket_boundaries (lines 37-44) asserts the 579/580/669/670/739/740 boundaries with `is` identity checks.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 3,
+          "end_line": 6,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 37,
+          "end_line": 51,
+          "evidence_tier": "test_assertion"
+        }
+      ]
+    },
+    {
+      "id": "F-5",
+      "claim": "A sibling regression test with the same convention already exists for Percentage: test_percentage_rejects_non_integer_and_bool_basis_points (demo-repo/tests/unit/test_primitives.py:47-53). It uses separate pytest.raises(ValidationError) blocks for 1.5, True and False, each marked `# type: ignore[arg-type]`.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_primitives.py",
+          "start_line": 47,
+          "end_line": 53,
+          "evidence_tier": "test_assertion"
+        }
+      ]
+    },
+    {
+      "id": "F-6",
+      "claim": "The only production call site of classify_credit_score is risk_profile.py:48 inside build_risk_profile, whose credit_score parameter is annotated int (line 41). The CLI path converts its input with `int(payload[\"credit_score\"])` at cli.py:45 before passing it on. Every test call site found passes integer literals (for example 780, 600, 560, 500).",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/risk_profile.py",
+          "start_line": 41,
+          "end_line": 48,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/src/loanflow/cli.py",
+          "start_line": 45,
+          "end_line": 45,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_underwriting_rules.py",
+          "start_line": 10,
+          "end_line": 18,
+          "evidence_tier": "test_assertion"
+        }
+      ]
+    },
+    {
+      "id": "F-7",
+      "claim": "No in-repo caller or test passes a float or bool credit score to classify_credit_score or build_risk_profile.",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "grep",
+          "query": "classify_credit_score",
+          "scope": "demo-repo/",
+          "result": "Code call sites only at risk_profile.py:48 and test_risk_bands.py:44,49,51 (all ints); other hits are docs/docstrings"
+        },
+        {
+          "method": "grep",
+          "query": "credit_score\\s*[=:(]|credit_score=",
+          "scope": "demo-repo/",
+          "result": "All credit_score arguments are integer literals or int-annotated/int()-converted values; none are float or bool"
+        },
+        {
+          "method": "grep",
+          "query": "700\\.5|credit_score=[0-9]+\\.|True|False",
+          "scope": "demo-repo/tests/",
+          "result": "Only matches are Percentage(True)/Percentage(False) in test_primitives.py:51,53; no float or bool credit scores"
+        }
+      ]
+    },
+    {
+      "id": "F-8",
+      "claim": "Adding the type check to classify_credit_score should not break any existing in-repo caller or test. Because the check runs before the range check, integer boundary behaviour (579/580/669/670/739/740) and the 299/851 rejections stay the same.",
+      "classification": "inferred",
+      "supporting_finding_ids": [
+        "F-1",
+        "F-4",
+        "F-6"
+      ],
+      "reasoning": "F-6 shows every caller and test supplies an int (or an int()-converted value). A plain int fails neither isinstance(score, bool) nor `not isinstance(score, int)`, so ints reach the unchanged range and threshold logic in F-1. The existing tests in F-4 pass only ints, so their results should not change."
+    }
+  ],
+  "open_questions": [
+    "Writing the regression test and the source change (N-IMPLEMENT) is implementation work outside the Architect's Research role. No patch or code is provided here.",
+    "Caller files (risk_profile.py, cli.py, test_underwriting_rules.py) were read only to answer the N-RESEARCH question about whether any caller relies on non-int scores. They are out of scope for modification, and no findings beyond that question are reported about them."
+  ]
+}

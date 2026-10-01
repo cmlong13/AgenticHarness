@@ -1,0 +1,9 @@
+{
+  "operation": "promote_artifact",
+  "phase": "discovery",
+  "run_id": "run-20261001-midimplresume-002",
+  "expected_task_id": "T-MIDIMPLRESUME",
+  "expected_run_id": "run-20261001-midimplresume-002",
+  "target_repo_path": "demo-repo",
+  "doc_ref": "runs/run-20261001-midimplresume-002/attempts/discovery-1-candidate.json"
+}

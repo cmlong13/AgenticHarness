@@ -1,0 +1,30 @@
+{
+  "process": "process-2 (resume; UNPLANNED termination)",
+  "prompt": "/work --resume run-20261001-midimplresume-002",
+  "launched_at": "2026-10-01T13:20Z (approx, resume_driver.py start)",
+  "session_id": "6d106461-c04c-4219-9b75-0d8dd44de57c",
+  "model": "claude-opus-5-5",
+  "stream_records": 519,
+  "has_result_record": false,
+  "orchestrator_agent_tool_calls_by_subagent_type": [
+    "engineer",
+    "engineer",
+    "quality-engineer"
+  ],
+  "termination": "NOT a deliberate proof step. The outer resume_driver.py was run as a Claude Code background task with a 6,000,000 ms limit; the tool runtime stopped it on reaching that limit, which also terminated this claude.exe child. Observed missing at 2026-10-01T14:56:02+00:00",
+  "checkpoint_at_termination": {
+    "status": "in_progress",
+    "completed_phases": [
+      "discovery",
+      "research",
+      "implementation"
+    ],
+    "current_phase": "verification"
+  },
+  "verification_evidence_at_termination": [
+    "V-1.json",
+    "V-2.json",
+    "V-1.log",
+    "V-2.log"
+  ]
+}

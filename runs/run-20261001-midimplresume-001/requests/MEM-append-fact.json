@@ -1,0 +1,13 @@
+{
+  "operation": "append_memory",
+  "kind": "fact",
+  "run_id": "run-20261001-midimplresume-001",
+  "fact": {
+    "id": "FACT-20261001-ANNOTATED-INSCOPE-BLOCKS-ENGINEER",
+    "content": "validate_scope accepts in_scope entries that carry parenthetical annotations (e.g. 'demo-repo/src/loanflow/risk_bands.py (classify_credit_score only)'), but engineer.md Step 1d requires exact character-for-character path equality, so a live Engineer (run-20261001-midimplresume-001, agent ac79cab0438d2884f) correctly returned a blocked implementation report before touching any file. The same annotated in_scope style was used by run-20260929-costproof-001 and was not enforced by that run's Engineer, so Engineer enforcement of Step 1d has been inconsistent across dispatches while the validator never enforces it.",
+    "evidence_ref": "runs/run-20261001-midimplresume-001/implementation-report.json",
+    "source_run_id": "run-20261001-midimplresume-001",
+    "recorded_at": "2026-10-01",
+    "status": "confirmed"
+  }
+}

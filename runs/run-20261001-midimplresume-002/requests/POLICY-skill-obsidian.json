@@ -1,0 +1,1 @@
+{"operation": "retain_policy_event", "run_id": "run-20261001-midimplresume-002", "kind": "skill_invocation", "payload": {"skill": "obsidian", "invoked_via": "Skill tool", "purpose": "run-summary publication", "process": "process-4"}}

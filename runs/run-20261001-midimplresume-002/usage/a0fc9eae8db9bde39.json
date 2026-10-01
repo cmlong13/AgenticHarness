@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.1",
+  "record_kind": "agent_usage",
+  "accounting_method": "per_api_message_id",
+  "agent_id": "a0fc9eae8db9bde39",
+  "identity": {
+    "match_status": "matched",
+    "run_id": "run-20261001-midimplresume-002",
+    "task_id": "T-MIDIMPLRESUME",
+    "phase": "research",
+    "subagent_type": "architect",
+    "dispatch_sequence": 1,
+    "candidate_run_ids": [
+      "run-20261001-midimplresume-002"
+    ]
+  },
+  "source": {
+    "hook_event_name": "SubagentStop",
+    "agent_transcript_path": "C:\\Users\\caleb\\.claude\\projects\\C--Users-caleb-Documents-Projects-AgenticHarness\\d17eea91-f8d0-4d79-b6b3-316ab86e67f7\\subagents\\agent-a0fc9eae8db9bde39.jsonl",
+    "agent_type": "architect"
+  },
+  "captured_at": "2026-10-01T13:12:53Z",
+  "message_count": 6,
+  "assistant_line_count": 16,
+  "lines_without_message_id": 0,
+  "synthetic_message_count": 0,
+  "models_seen": [
+    "claude-opus-5-5"
+  ],
+  "primary_model": "claude-opus-5-5",
+  "token_usage": {
+    "input_tokens": 12,
+    "output_tokens": 4172,
+    "cache_creation_input_tokens": 24351,
+    "cache_read_input_tokens": 92643,
+    "cache_creation_breakdown": {
+      "ephemeral_5m_input_tokens": 24351,
+      "ephemeral_1h_input_tokens": 0
+    }
+  },
+  "token_usage_by_model": {
+    "claude-opus-5-5": {
+      "input_tokens": 12,
+      "output_tokens": 4172,
+      "cache_creation_input_tokens": 24351,
+      "cache_read_input_tokens": 92643,
+      "cache_creation_breakdown": {
+        "ephemeral_5m_input_tokens": 24351,
+        "ephemeral_1h_input_tokens": 0
+      }
+    }
+  },
+  "skipped_transcript_lines": [],
+  "cost": {
+    "priced": false,
+    "amount": null,
+    "currency": "USD",
+    "reason": "unrecognized model 'claude-opus-5-5' -- not in pricing table",
+    "pricing_source": null,
+    "pricing_verified_date": null
+  }
+}

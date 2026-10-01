@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-MIDIMPLRESUME",
+  "run_id": "run-20261001-midimplresume-001",
+  "target_repo_path": "demo-repo",
+  "updated_at": "2026-10-01T13:02:20Z",
+  "completed_phases": [
+    "discovery",
+    "research"
+  ],
+  "current_phase": "implementation",
+  "next_phase": "verification",
+  "artifact_refs": {
+    "discovery": "runs/run-20261001-midimplresume-001/scope.json",
+    "research": "runs/run-20261001-midimplresume-001/findings.json"
+  },
+  "blockers": [
+    {
+      "description": "Implementation phase blocked: the Engineer (agent ac79cab0438d2884f) returned a schema-valid blocked implementation report at Step 1d (exact scope match) because scope.json's in_scope entries carry parenthetical annotations (e.g. 'demo-repo/src/loanflow/risk_bands.py (classify_credit_score only)') rather than bare repository-relative paths, so neither demo-repo/src/loanflow/risk_bands.py nor demo-repo/tests/unit/test_risk_bands.py matched character-for-character. No file under demo-repo was modified. This is an orchestrator Discovery authoring defect that validate_scope did not catch; a promoted scope.json cannot be rewritten in this run, so the task needs a fresh /work run with bare in_scope paths. Verification was never dispatched.",
+      "phase": "implementation"
+    }
+  ],
+  "next_resume_action": "none: run terminated during implementation (Implementation phase blocked: the Engineer (agent ac79cab0438d2884f) returned a schema-valid blocked implementation report at Step 1d (exact scope match) because scope.json's in_scope entries carry parenthetical annotations (e.g. 'demo-repo/src/loanflow/risk_bands.py (classify_credit_score only)') rather than bare repository-relative paths, so neither demo-repo/src/loanflow/risk_bands.py nor demo-repo/tests/unit/test_risk_bands.py matched character-for-character. No file under demo-repo was modified. This is an orchestrator Discovery authoring defect that validate_scope did not catch; a promoted scope.json cannot be rewritten in this run, so the task needs a fresh /work run with bare in_scope paths. Verification was never dispatched.); not resumable",
+  "status": "failed"
+}

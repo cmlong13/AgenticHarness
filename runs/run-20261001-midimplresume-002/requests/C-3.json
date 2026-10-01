@@ -1,0 +1,9 @@
+{
+  "task_id": "T-MIDIMPLRESUME",
+  "run_id": "run-20261001-midimplresume-002",
+  "command_id": "C-3",
+  "command": "python -m pytest tests/unit/test_risk_bands.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Restarted-phase Engineer (ab8aad27d2634043c) post_test_requested: confirm the regression test and existing risk_bands tests pass after the classify_credit_score type check."
+}

@@ -1,0 +1,36 @@
+{"operation": "write_run_summary", "run_id": "run-20261001-midimplresume-002", "state": "completed", "summary": {
+  "schema_version": "1.0",
+  "task_id": "T-MIDIMPLRESUME",
+  "run_id": "run-20261001-midimplresume-002",
+  "created_at": "2026-10-01T13:09:43Z",
+  "objective_summary": "classify_credit_score in demo-repo/src/loanflow/risk_bands.py now rejects any score that is not a plain int (float such as 700.5/700.0, and bool) with ValidationError before the unchanged 300-850 range check, mirroring the Money/Percentage __post_init__ convention; regression test test_credit_score_non_integer_and_bool_is_rejected added to demo-repo/tests/unit/test_risk_bands.py (+2/+11 lines). The run spanned four /work processes: process 1 did Discovery and Research; process 2 restarted Implementation with a fresh Engineer and was terminated unplanned mid-Verification; process 3 restarted Verification and ended on an API 429 before its V-3 command ran; process 4 (this one) reused Discovery/Research/Implementation and restarted Verification with a fresh Quality Engineer (a989861e51b00a2c7), which passed AC-1..AC-4 via V-4 (9 passed) and V-5 (105 passed). The orchestrator independently re-ran ORCH-1 (9 passed) and ORCH-2 (105 passed) through the test-runner Skill with matching command identity, and confirmed the git diff of demo-repo equals the retained implementation.diff.",
+  "artifact_refs": {
+    "scope": "runs/run-20261001-midimplresume-002/scope.json",
+    "findings": "runs/run-20261001-midimplresume-002/findings.json",
+    "implementation_report": "runs/run-20261001-midimplresume-002/implementation-report.json",
+    "verification_report": "runs/run-20261001-midimplresume-002/verification-report.json",
+    "checkpoint": "runs/run-20261001-midimplresume-002/checkpoint.json"
+  },
+  "phases_completed": ["discovery", "research", "implementation", "verification"],
+  "phases_reused": ["discovery", "research", "implementation"],
+  "phases_restarted": ["verification"],
+  "lessons_learned_appended": [
+    "On a resumed /work invocation, list runs/<run_id>/requests/ before writing any orchestrator request file (including the evaluate_resume request itself) and pick a name no earlier process used (e.g. a process-numbered prefix): earlier processes' request files are untracked evidence, and writing a conventional name like RESUME-2.json blindly silently overwrote a prior process's file with no way to recover it.",
+    "Write a staged subagent's dispatch inputs as a JSON object (\"task_id\": \"...\", \"run_id\": \"...\") in the Agent prompt, not as markdown bullets: the pre_dispatch_check hook extracts only JSON-quoted task_id/run_id pairs and refuses a dispatch whose identifiers it cannot find, before any precondition artifact is checked.",
+    "Use the Write tool, not Bash echo/heredoc redirects, for orchestrator request and attempt-source files whose content mentions the target repo directory: the skill_enforcement hook treats any Bash command whose text names that directory alongside a write as an attempted application-source edit and refuses it, even when the target file is under runs/.",
+    "record_memory_applied requires its evidence_path file to literally contain the applied entry_id; a dispatch prompt that merely acts on a lesson without naming it is refused. Retain a decision policy event that names the entry id (e.g. resume_command_id_sequencing with memory_entry) first, then cite logs/policy-events.jsonl as the evidence_path."
+  ],
+  "memory_loaded": true,
+  "memory_influenced_run": true,
+  "memory_refs_used": ["L-20261001-INSCOPE-BARE-PATHS", "L-20260918-FRESH-DISPATCH-COMMAND-ID-COLLISION"],
+  "remaining_risks": [
+    "Process 4 overwrote an earlier process's runs/run-20261001-midimplresume-002/requests/RESUME-2.json with its own evaluate_resume request; the original content is unrecoverable (recorded as an orchestrator_evidence_overwrite policy event).",
+    "Interrupted Quality Engineer evidence from processes 2 and 3 (V-1..V-3 requests/logs, verification-1..3 attempts) is retained but superseded; it never produced a promoted verification report.",
+    "Per-agent cost is unpriced for all six subagents and orchestrator usage is not measured in-session, so full_pipeline_total is null."
+  ],
+  "follow_up_actions": [
+    "Changes in demo-repo are uncommitted; commit/push is not authorized by this run.",
+    "Consider having /work name orchestrator request files with a per-process prefix on resume to prevent request-file collisions."
+  ],
+  "usage_summary_ref": "runs/run-20261001-midimplresume-002/usage-summary.json"
+}}

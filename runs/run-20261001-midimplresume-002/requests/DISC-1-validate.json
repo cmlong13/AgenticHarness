@@ -1,0 +1,7 @@
+{
+  "operation": "validate_scope",
+  "expected_task_id": "T-MIDIMPLRESUME",
+  "expected_run_id": "run-20261001-midimplresume-002",
+  "target_repo_path": "demo-repo",
+  "candidate_ref": "runs/run-20261001-midimplresume-002/attempts/discovery-1-candidate.json"
+}

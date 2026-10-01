@@ -1,0 +1,13 @@
+{
+  "operation": "write_checkpoint",
+  "kind": "terminal_failure",
+  "run_id": "run-20261001-midimplresume-001",
+  "task_id": "T-MIDIMPLRESUME",
+  "target_repo_path": "demo-repo",
+  "completed_phases": ["discovery", "research"],
+  "artifact_refs": {
+    "discovery": "runs/run-20261001-midimplresume-001/scope.json",
+    "research": "runs/run-20261001-midimplresume-001/findings.json"
+  },
+  "reason": "Implementation phase blocked: the Engineer (agent ac79cab0438d2884f) returned a schema-valid blocked implementation report at Step 1d (exact scope match) because scope.json's in_scope entries carry parenthetical annotations (e.g. 'demo-repo/src/loanflow/risk_bands.py (classify_credit_score only)') rather than bare repository-relative paths, so neither demo-repo/src/loanflow/risk_bands.py nor demo-repo/tests/unit/test_risk_bands.py matched character-for-character. No file under demo-repo was modified. This is an orchestrator Discovery authoring defect that validate_scope did not catch; a promoted scope.json cannot be rewritten in this run, so the task needs a fresh /work run with bare in_scope paths. Verification was never dispatched."
+}

@@ -1,0 +1,18 @@
+{
+  "process": "process-1 (interrupted)",
+  "session_id": "d17eea91-f8d0-4d79-b6b3-316ab86e67f7",
+  "model": "claude-opus-5-5",
+  "permissionMode": "bypassPermissions",
+  "cwd": "C:\\Users\\caleb\\Documents\\Projects\\AgenticHarness",
+  "stream_records": 291,
+  "has_result_record": false,
+  "orchestrator_tool_use_count": 50,
+  "last_orchestrator_tool_uses": [
+    "Write",
+    "Write",
+    "Write",
+    "Bash",
+    "Write",
+    "Skill"
+  ]
+}

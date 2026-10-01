@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-MIDIMPLRESUME",
+  "run_id": "run-20261001-midimplresume-002",
+  "created_at": "2026-10-01T13:09:43Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "In demo-repo (task T-MIDIMPLRESUME, run run-20261001-midimplresume-002), loanflow.risk_bands.classify_credit_score accepts non-integer scores: for example classify_credit_score(700.5) silently returns CreditBucket.GOOD instead of failing. Make classify_credit_score reject any score that is not a plain int (including float and bool) with ValidationError, following the same integer-validation convention Money.__post_init__ and Percentage.__post_init__ already use in loanflow.primitives, and add a regression test for it in demo-repo/tests/unit/test_risk_bands.py."
+  },
+  "objective": "Make loanflow.risk_bands.classify_credit_score (demo-repo/src/loanflow/risk_bands.py:45-54) reject any score that is not a plain int -- including float (e.g. 700.5, which currently silently returns CreditBucket.GOOD) and bool -- by raising loanflow.errors.ValidationError before the existing 300-850 range check, mirroring the isinstance(x, bool) or not isinstance(x, int) convention already used by Money.__post_init__ and Percentage.__post_init__ in demo-repo/src/loanflow/primitives.py (lines 24 and 54), and add a regression test in demo-repo/tests/unit/test_risk_bands.py.",
+  "in_scope": [
+    "demo-repo/src/loanflow/risk_bands.py",
+    "demo-repo/tests/unit/test_risk_bands.py"
+  ],
+  "out_of_scope": [
+    "classify_dti, classify_ltv, Band, CreditBucket, or any definition in demo-repo/src/loanflow/risk_bands.py other than classify_credit_score",
+    "demo-repo/src/loanflow/primitives.py (Money/Percentage are the convention to follow, not to change)",
+    "Callers of classify_credit_score (demo-repo/src/loanflow/risk_profile.py) and demo-repo/src/loanflow/late_fee_tier.py",
+    "Changing the 300-850 range bounds or the bucket thresholds",
+    "Adding a new dependency or a shared validation helper"
+  ],
+  "constraints": [
+    "In demo-repo/src/loanflow/risk_bands.py, modify only the body of classify_credit_score",
+    "In demo-repo/tests/unit/test_risk_bands.py, only add a regression test for non-int score rejection following the existing test_credit_score_out_of_range_is_rejected pattern; do not modify existing tests",
+    "Reuse the existing primitives.py integer-validation pattern exactly (isinstance(score, bool) or not isinstance(score, int)) rather than inventing a new style",
+    "Raise loanflow.errors.ValidationError (already imported in risk_bands.py), never TypeError or ValueError",
+    "The type check must run before the range check, and the existing out-of-range behavior and bucket boundaries must be preserved unchanged",
+    "Follow TDD: add the failing regression test before the source change",
+    "No new dependency for a change this small"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "classify_credit_score(700.5) raises loanflow.errors.ValidationError instead of returning CreditBucket.GOOD; an integral float such as 700.0 is also rejected"
+    },
+    {
+      "id": "AC-2",
+      "description": "classify_credit_score(True) and classify_credit_score(False) raise loanflow.errors.ValidationError, since bool is an int subclass and must be explicitly excluded as Money/Percentage already do"
+    },
+    {
+      "id": "AC-3",
+      "description": "Existing behavior is preserved: integer scores still map to the same CreditBucket at every boundary (579/580/669/670/739/740), and 299/851 still raise ValidationError"
+    },
+    {
+      "id": "AC-4",
+      "description": "A regression test covering the non-int rejection exists in demo-repo/tests/unit/test_risk_bands.py and passes, and the full demo-repo unit suite remains green"
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-RESEARCH",
+      "description": "Confirm the exact Money/Percentage __post_init__ pattern (file:line), the current classify_credit_score body, the existing test conventions in test_risk_bands.py, and whether any in-repo caller relies on passing a non-int score.",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-IMPLEMENT",
+      "description": "Add a failing regression test for float and bool scores, then add the type check at the top of classify_credit_score mirroring the primitives.py pattern.",
+      "phase": "implementation",
+      "depends_on": ["N-RESEARCH"]
+    },
+    {
+      "id": "N-VERIFY",
+      "description": "Independently re-run the narrow test file and the full unit suite and confirm every acceptance criterion.",
+      "phase": "verification",
+      "depends_on": ["N-IMPLEMENT"]
+    }
+  ],
+  "status": "approved"
+}

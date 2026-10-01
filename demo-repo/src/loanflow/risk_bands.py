@@ -43,6 +43,8 @@ class CreditBucket(str, Enum):
 
 
 def classify_credit_score(score: int) -> CreditBucket:
+    if isinstance(score, bool) or not isinstance(score, int):
+        raise ValidationError("credit score must be an integer")
     if not (300 <= score <= 850):
         raise ValidationError("credit score must be between 300 and 850")
     if score < 580:

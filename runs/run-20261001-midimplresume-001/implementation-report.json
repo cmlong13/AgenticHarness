@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-MIDIMPLRESUME",
+  "run_id": "run-20261001-midimplresume-001",
+  "created_at": "2026-10-01T12:55:22Z",
+  "scope_ref": {
+    "path": "runs/run-20261001-midimplresume-001/scope.json"
+  },
+  "dependency_changes": [],
+  "status": "blocked",
+  "blocked_reason": "Step 1d exact-scope-match failure: the required edit targets 'demo-repo/tests/unit/test_risk_bands.py' and 'demo-repo/src/loanflow/risk_bands.py' do not appear character-for-character in scope.json in_scope, whose only entries are the annotated strings 'demo-repo/src/loanflow/risk_bands.py (classify_credit_score only)' and 'demo-repo/tests/unit/test_risk_bands.py (add a regression test for non-int score rejection, following the existing test_credit_score_out_of_range_is_rejected pattern)', so no file is eligible for Edit/Write and no test or source change was made; the Architect must re-issue scope.json with bare repository-relative paths in in_scope (moving the parenthetical restrictions into constraints or out_of_scope) before Implementation can proceed."
+}

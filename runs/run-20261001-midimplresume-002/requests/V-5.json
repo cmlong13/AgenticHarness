@@ -1,0 +1,1 @@
+{"task_id": "T-MIDIMPLRESUME", "run_id": "run-20261001-midimplresume-002", "command_id": "V-5", "command": "python -m pytest tests/unit -v", "working_directory": "demo-repo", "target_repo_path": "demo-repo", "purpose": "Quality Engineer (a989861e51b00a2c7) attempt_requested: full demo-repo unit suite for AC-4."}

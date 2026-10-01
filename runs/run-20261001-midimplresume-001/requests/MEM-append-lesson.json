@@ -1,0 +1,15 @@
+{
+  "operation": "append_memory",
+  "kind": "lesson",
+  "run_id": "run-20261001-midimplresume-001",
+  "candidates": [
+    {
+      "id": "L-20261001-INSCOPE-BARE-PATHS",
+      "text": "When authoring scope.json in Discovery, write every in_scope entry as a bare repository-relative path (e.g. 'demo-repo/src/loanflow/risk_bands.py') and put any narrowing such as 'classify_credit_score only' into constraints or out_of_scope. engineer.md Step 1d matches in_scope by exact string equality, validate_scope does not reject annotated entries, and a promoted scope.json cannot be corrected inside the same run, so one annotation costs the whole run at Implementation.",
+      "source_run_id": "run-20261001-midimplresume-001",
+      "evidence_ref": "runs/run-20261001-midimplresume-001/implementation-report.json",
+      "date": "2026-10-01",
+      "tags": ["discovery", "scope", "validation", "engineer"]
+    }
+  ]
+}

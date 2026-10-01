@@ -1,0 +1,9 @@
+{
+  "task_id": "T-MIDIMPLRESUME",
+  "run_id": "run-20261001-midimplresume-002",
+  "command_id": "V-1",
+  "command": "python -m pytest tests/unit/test_risk_bands.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Quality Engineer (a96537686397081c7) attempt_requested: independently re-execute AC-1..AC-4 against the implemented classify_credit_score type check."
+}

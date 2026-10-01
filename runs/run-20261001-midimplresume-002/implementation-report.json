@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-MIDIMPLRESUME",
+  "run_id": "run-20261001-midimplresume-002",
+  "created_at": "2026-10-01T13:09:43Z",
+  "scope_ref": {
+    "path": "runs/run-20261001-midimplresume-002/scope.json"
+  },
+  "findings_ref": {
+    "path": "runs/run-20261001-midimplresume-002/findings.json",
+    "finding_ids": [
+      "F-1",
+      "F-2",
+      "F-3",
+      "F-4",
+      "F-5",
+      "F-6"
+    ]
+  },
+  "minimal_change_rung": 2,
+  "minimal_change_rationale": "Copied the existing Money/Percentage check (isinstance(x, bool) or not isinstance(x, int) -> ValidationError, primitives.py:24 and :54) into the top of classify_credit_score as a 2-line guard before the unchanged range check. No helper or dependency was added.",
+  "changed_files": [
+    {
+      "path": "demo-repo/src/loanflow/risk_bands.py",
+      "change_type": "modified",
+      "lines_added": 2,
+      "lines_removed": 0
+    },
+    {
+      "path": "demo-repo/tests/unit/test_risk_bands.py",
+      "change_type": "modified",
+      "lines_added": 11,
+      "lines_removed": 0
+    }
+  ],
+  "diff_ref": "runs/run-20261001-midimplresume-002/logs/implementation.diff",
+  "commands": [
+    {
+      "id": "C-2",
+      "stage": "pre_implementation",
+      "command": "python -m pytest tests/unit/test_risk_bands.py -k test_credit_score_non_integer_and_bool_is_rejected -v",
+      "exit_code": 1,
+      "output_ref": "runs/run-20261001-midimplresume-002/logs/C-2.log"
+    },
+    {
+      "id": "C-3",
+      "stage": "post_implementation",
+      "command": "python -m pytest tests/unit/test_risk_bands.py -v",
+      "exit_code": 0,
+      "output_ref": "runs/run-20261001-midimplresume-002/logs/C-3.log"
+    }
+  ],
+  "test_first_evidence": {
+    "pre_implementation_command_id": "C-2",
+    "post_implementation_command_id": "C-3"
+  },
+  "tests": [
+    {
+      "test_file": "demo-repo/tests/unit/test_risk_bands.py",
+      "test_name": "test_credit_score_non_integer_and_bool_is_rejected",
+      "status": "added"
+    }
+  ],
+  "dependency_changes": [],
+  "status": "ready_for_verification"
+}

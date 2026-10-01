@@ -1,0 +1,21 @@
+{
+  "task_id": "T-MIDIMPLRESUME",
+  "run_id": "run-20261001-midimplresume-002",
+  "connector": "filesystem_vault",
+  "attempted_at": "2026-10-01T17:31:36Z",
+  "note_name": "run-summary-run-20261001-midimplresume-002.md",
+  "destination": {
+    "configured": false,
+    "vault_path": null,
+    "summary_dir": null,
+    "note_relpath": null,
+    "raw_env_value": null
+  },
+  "content_bytes": 3536,
+  "status": "connector_unavailable",
+  "note_relpath": "run-summary-run-20261001-midimplresume-002.md",
+  "reason": "no Obsidian vault is configured in this environment (OBSIDIAN_VAULT_PATH is not set)",
+  "absolute_path": null,
+  "content_sha256": null,
+  "bytes_written": null
+}

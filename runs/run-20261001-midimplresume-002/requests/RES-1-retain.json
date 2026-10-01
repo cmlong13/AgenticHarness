@@ -1,0 +1,8 @@
+{
+  "operation": "retain_attempt",
+  "run_id": "run-20261001-midimplresume-002",
+  "task_id": "T-MIDIMPLRESUME",
+  "phase": "research",
+  "attempt_n": 1,
+  "raw_text_ref": "runs/run-20261001-midimplresume-002/attempts/research-1.json"
+}

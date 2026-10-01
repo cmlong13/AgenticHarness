@@ -1,0 +1,6 @@
+{
+  "operation": "load_memory",
+  "run_id": "run-20261001-midimplresume-002",
+  "task_id": "T-MIDIMPLRESUME",
+  "raw_prompt": "In demo-repo (task T-MIDIMPLRESUME, run run-20261001-midimplresume-002), loanflow.risk_bands.classify_credit_score accepts non-integer scores: for example classify_credit_score(700.5) silently returns CreditBucket.GOOD instead of failing. Make classify_credit_score reject any score that is not a plain int (including float and bool) with ValidationError, following the same integer-validation convention Money.__post_init__ and Percentage.__post_init__ already use in loanflow.primitives, and add a regression test for it in demo-repo/tests/unit/test_risk_bands.py."
+}

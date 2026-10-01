@@ -1,0 +1,1 @@
+{"task_id": "T-MIDIMPLRESUME", "run_id": "run-20261001-midimplresume-002", "command_id": "ORCH-1", "command": "python -m pytest tests/unit/test_risk_bands.py -v", "working_directory": "demo-repo", "target_repo_path": "demo-repo", "purpose": "orchestrator independent re-run of the narrow verification command"}

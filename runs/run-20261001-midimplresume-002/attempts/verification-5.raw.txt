@@ -1,0 +1,1 @@
+{"response_type": "attempt_requested", "task_id": "T-MIDIMPLRESUME", "run_id": "run-20261001-midimplresume-002", "requested_command": {"id": "V-5", "command": "python -m pytest tests/unit -v", "working_directory": "demo-repo", "criteria_ids_targeted": ["AC-4"], "rationale": "AC-4 requires the whole demo-repo unit suite to stay green, and V-4 only ran test_risk_bands.py."}}

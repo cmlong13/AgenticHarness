@@ -1130,3 +1130,12 @@ def test_scope_approved_with_refusal_reason_is_caught():
     errors = validate_scope_semantics(doc, artifact="scope")
 
     assert any("must not be present when status is 'approved'" in e.message for e in errors)
+
+
+def test_scope_annotated_in_scope_entry_is_caught():
+    doc = copy.deepcopy(_load("scope"))
+    doc["in_scope"] = ["demo-repo/src/loanflow/risk_bands.py (classify_credit_score only)"]
+
+    errors = validate_scope_semantics(doc, artifact="scope")
+
+    assert any(e.json_path == "$.in_scope[0]" and "bare repository-relative path" in e.message for e in errors)

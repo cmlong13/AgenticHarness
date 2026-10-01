@@ -1,0 +1,1 @@
+{"operation": "retain_policy_event", "run_id": "run-20261001-midimplresume-002", "kind": "resume_completed", "payload": {"process": "process-4", "final_verdict": "pass", "phases_completed": ["discovery", "research", "implementation", "verification"], "phases_reused": ["discovery", "research", "implementation"], "phases_restarted": ["verification"]}}

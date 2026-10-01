@@ -1,0 +1,32 @@
+diff --git a/demo-repo/src/loanflow/risk_bands.py b/demo-repo/src/loanflow/risk_bands.py
+index f59dc1d..db300ab 100644
+--- a/demo-repo/src/loanflow/risk_bands.py
++++ b/demo-repo/src/loanflow/risk_bands.py
+@@ -43,6 +43,8 @@ class CreditBucket(str, Enum):
+ 
+ 
+ def classify_credit_score(score: int) -> CreditBucket:
++    if isinstance(score, bool) or not isinstance(score, int):
++        raise ValidationError("credit score must be an integer")
+     if not (300 <= score <= 850):
+         raise ValidationError("credit score must be between 300 and 850")
+     if score < 580:
+diff --git a/demo-repo/tests/unit/test_risk_bands.py b/demo-repo/tests/unit/test_risk_bands.py
+index a902e26..13e40a9 100644
+--- a/demo-repo/tests/unit/test_risk_bands.py
++++ b/demo-repo/tests/unit/test_risk_bands.py
+@@ -49,3 +49,14 @@ def test_credit_score_out_of_range_is_rejected() -> None:
+         classify_credit_score(299)
+     with pytest.raises(ValidationError):
+         classify_credit_score(851)
++
++
++def test_credit_score_non_integer_and_bool_is_rejected() -> None:
++    with pytest.raises(ValidationError):
++        classify_credit_score(700.5)  # type: ignore[arg-type]
++    with pytest.raises(ValidationError):
++        classify_credit_score(700.0)  # type: ignore[arg-type]
++    with pytest.raises(ValidationError):
++        classify_credit_score(True)  # type: ignore[arg-type]
++    with pytest.raises(ValidationError):
++        classify_credit_score(False)  # type: ignore[arg-type]

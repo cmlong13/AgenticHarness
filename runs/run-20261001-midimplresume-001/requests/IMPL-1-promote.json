@@ -1,0 +1,9 @@
+{
+  "operation": "promote_artifact",
+  "phase": "implementation",
+  "run_id": "run-20261001-midimplresume-001",
+  "doc_ref": "runs/run-20261001-midimplresume-001/attempts/implementation-1.source.txt",
+  "context_refs": {
+    "findings": "runs/run-20261001-midimplresume-001/findings.json"
+  }
+}

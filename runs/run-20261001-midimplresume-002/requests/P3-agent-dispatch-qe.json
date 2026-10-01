@@ -1,0 +1,1 @@
+{"operation": "retain_policy_event", "run_id": "run-20261001-midimplresume-002", "kind": "agent_dispatch", "payload": {"phase": "verification", "subagent_type": "quality-engineer", "agent_id": "ab19946808073dc32", "dispatch_sequence": 2, "process": "process-3", "note": "fresh dispatch for restarted Verification phase; not a continuation of a96537686397081c7"}}

@@ -49,3 +49,14 @@ def test_credit_score_out_of_range_is_rejected() -> None:
         classify_credit_score(299)
     with pytest.raises(ValidationError):
         classify_credit_score(851)
+
+
+def test_credit_score_non_integer_and_bool_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        classify_credit_score(700.5)  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        classify_credit_score(700.0)  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        classify_credit_score(True)  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        classify_credit_score(False)  # type: ignore[arg-type]

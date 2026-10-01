@@ -1,0 +1,13 @@
+{
+  "run_id": "run-20261001-midimplresume-002",
+  "task_id": "T-MIDIMPLRESUME",
+  "phase": "discovery",
+  "decisions": [
+    {
+      "memory_entry_id": "L-20261001-INSCOPE-BARE-PATHS",
+      "decision": "scope.json in_scope written as bare repository-relative paths ['demo-repo/src/loanflow/risk_bands.py', 'demo-repo/tests/unit/test_risk_bands.py']; the per-file narrowing ('modify only the body of classify_credit_score', 'only add a regression test') moved into constraints[0] and constraints[1].",
+      "instead_of": "the annotated in_scope style used by run-20261001-midimplresume-001 (e.g. 'demo-repo/src/loanflow/risk_bands.py (classify_credit_score only)'), which blocked that run's Engineer at Step 1d exact-match",
+      "visible_in": "runs/run-20261001-midimplresume-002/scope.json"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20261001-midimplresume-002",
+  "kind": "agent_dispatch",
+  "payload": {
+    "phase": "implementation",
+    "subagent_type": "engineer",
+    "agent_id": "aec739880aee94672",
+    "dispatch_sequence": 1
+  }
+}

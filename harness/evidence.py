@@ -176,6 +176,21 @@ def validate_scope_semantics(doc: dict, *, artifact: str = "scope") -> list[Vali
                     ValidationError(artifact, path, f"depends_on references unknown task_graph node id {dependency_id!r}")
                 )
 
+    # The Engineer matches candidate paths against in_scope by exact string equality
+    # (engineer.md Step 1d), so an annotated entry such as "src/x.py (foo only)" matches no
+    # real file and silently blocks Implementation. Per-file restrictions belong in
+    # constraints/out_of_scope, never inside the path string (run-20261001-midimplresume-001).
+    for idx, entry in enumerate(doc.get("in_scope", [])):
+        if isinstance(entry, str) and any(ch.isspace() for ch in entry):
+            errors.append(
+                ValidationError(
+                    artifact,
+                    f"$.in_scope[{idx}]",
+                    f"in_scope entry {entry!r} must be a bare repository-relative path with no whitespace "
+                    "or annotation; move restrictions into constraints or out_of_scope",
+                )
+            )
+
     # The schema's own if/then only requires refusal_reason to be PRESENT when status is
     # 'refused' -- it does not forbid the field when status is 'approved'. A refusal_reason on
     # an approved scope is contradictory on its face, so that direction is enforced here.
