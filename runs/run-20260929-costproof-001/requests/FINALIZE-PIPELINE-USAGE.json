@@ -1,0 +1,6 @@
+{
+  "operation": "finalize_pipeline_usage",
+  "run_id": "run-20260929-costproof-001",
+  "session_transcript": "C:\\Users\\caleb\\.claude\\projects\\C--Users-caleb-Documents-Projects-AgenticHarness\\42463cc4-44a9-46b2-9a46-1b78a761b413.jsonl",
+  "runtime_result_ref": "runs/run-20260929-costproof-001/session-result.json"
+}

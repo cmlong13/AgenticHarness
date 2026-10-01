@@ -1,0 +1,15 @@
+{
+  "operation": "append_memory",
+  "run_id": "run-20260929-costproof-001",
+  "kind": "lesson",
+  "candidates": [
+    {
+      "id": "L-20260929-EXPLICIT-CONTRACT-REMINDER-PER-TURN",
+      "text": "Appending the exact output-contract sentence (raw JSON only, no fence, no prose, first/last char {/}) to the end of every single Agent dispatch prompt and every SendMessage reply -- not just the initial dispatch -- correlates with a staged Engineer/Quality-Engineer/Architect protocol completing with zero transport_parse_failure events across an entire four-phase run (run-20260929-costproof-001), in contrast to the immediately preceding attempt at the same underlying fix (run-20260929-percentage-001), which hit two independent transport-contract violations from the same Engineer identity across two different staged turns without that per-turn reminder. This does not prove causation from a single before/after pair, but it is cheap, harmless, and directly targets the exact failure mode L-20260929-TRANSPORT-BUDGET-PER-PHASE-NOT-PER-TURN documents -- worth doing by default on every staged dispatch/resume, not only when a transport failure has already occurred once in the run.",
+      "source_run_id": "run-20260929-costproof-001",
+      "evidence_ref": "runs/run-20260929-costproof-001/logs/policy-events.jsonl",
+      "date": "2026-09-29",
+      "tags": ["transport", "validation", "dispatch-prompt", "correction-budget"]
+    }
+  ]
+}

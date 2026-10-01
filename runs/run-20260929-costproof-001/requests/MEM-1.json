@@ -1,0 +1,6 @@
+{
+  "operation": "load_memory",
+  "run_id": "run-20260929-costproof-001",
+  "task_id": "T-COSTPROOF",
+  "raw_prompt": "In demo-repo, loanflow.primitives.Percentage accepts non-integer basis_points (for example Percentage(1.5) or Percentage(True)) and only fails later inside as_percent_string with a raw ValueError. Make Percentage reject non-integer basis_points, including bool, at construction time with ValidationError, the same way Money.__post_init__ already validates Money.cents, and add a regression test for it in demo-repo/tests/unit/test_primitives.py."
+}

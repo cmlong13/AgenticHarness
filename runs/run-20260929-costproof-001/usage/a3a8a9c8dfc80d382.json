@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.1",
+  "record_kind": "agent_usage",
+  "accounting_method": "per_api_message_id",
+  "agent_id": "a3a8a9c8dfc80d382",
+  "identity": {
+    "match_status": "matched",
+    "run_id": "run-20260929-costproof-001",
+    "task_id": "T-COSTPROOF",
+    "phase": "research",
+    "subagent_type": "architect",
+    "dispatch_sequence": 1,
+    "candidate_run_ids": [
+      "run-20260929-costproof-001"
+    ]
+  },
+  "source": {
+    "hook_event_name": "SubagentStop",
+    "agent_transcript_path": "C:\\Users\\caleb\\.claude\\projects\\C--Users-caleb-Documents-Projects-AgenticHarness\\42463cc4-44a9-46b2-9a46-1b78a761b413\\subagents\\agent-a3a8a9c8dfc80d382.jsonl",
+    "agent_type": "architect"
+  },
+  "captured_at": "2026-09-29T17:04:12Z",
+  "message_count": 9,
+  "assistant_line_count": 24,
+  "lines_without_message_id": 0,
+  "synthetic_message_count": 0,
+  "models_seen": [
+    "claude-sonnet-5"
+  ],
+  "primary_model": "claude-sonnet-5",
+  "token_usage": {
+    "input_tokens": 18,
+    "output_tokens": 8989,
+    "cache_creation_input_tokens": 26458,
+    "cache_read_input_tokens": 162804,
+    "cache_creation_breakdown": {
+      "ephemeral_5m_input_tokens": 26458,
+      "ephemeral_1h_input_tokens": 0
+    }
+  },
+  "token_usage_by_model": {
+    "claude-sonnet-5": {
+      "input_tokens": 18,
+      "output_tokens": 8989,
+      "cache_creation_input_tokens": 26458,
+      "cache_read_input_tokens": 162804,
+      "cache_creation_breakdown": {
+        "ephemeral_5m_input_tokens": 26458,
+        "ephemeral_1h_input_tokens": 0
+      }
+    }
+  },
+  "skipped_transcript_lines": [],
+  "cost": {
+    "priced": true,
+    "amount": "0.1886318",
+    "currency": "USD",
+    "reason": null,
+    "pricing_source": "https://platform.claude.com/docs/en/about-claude/pricing",
+    "pricing_verified_date": "2026-08-14"
+  }
+}

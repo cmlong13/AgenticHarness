@@ -1,0 +1,9 @@
+{
+  "task_id": "T-COSTPROOF",
+  "run_id": "run-20260929-costproof-001",
+  "command_id": "C-2",
+  "command": "python -m pytest tests/unit/test_primitives.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Post-implementation check: confirm the full narrow test file (demo-repo/tests/unit/test_primitives.py) passes after adding the Percentage.__post_init__ type check."
+}

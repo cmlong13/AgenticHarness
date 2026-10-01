@@ -1,0 +1,9 @@
+{
+  "task_id": "T-COSTPROOF",
+  "run_id": "run-20260929-costproof-001",
+  "command_id": "V-1",
+  "command": "python -m pytest tests/unit/test_primitives.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Independent Quality Engineer verification of all acceptance criteria via the full narrow test_primitives.py file."
+}

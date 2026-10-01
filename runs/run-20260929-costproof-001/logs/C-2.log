@@ -1,0 +1,31 @@
+command: python -m pytest tests/unit/test_primitives.py -v
+executed_as: C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe -m pytest tests/unit/test_primitives.py -v
+working_directory: demo-repo
+timeout_seconds: 300
+real_pytest_exit_code: 0
+reported_exit_code: 0
+
+--- STDOUT ---
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo
+configfile: pyproject.toml
+collecting ... collected 9 items
+
+tests/unit/test_primitives.py::test_money_from_dollars_converts_to_cents PASSED [ 11%]
+tests/unit/test_primitives.py::test_money_add_and_subtract PASSED        [ 22%]
+tests/unit/test_primitives.py::test_money_rejects_non_integer_cents PASSED [ 33%]
+tests/unit/test_primitives.py::test_money_is_negative PASSED             [ 44%]
+tests/unit/test_primitives.py::test_money_as_dollars_formats_with_sign PASSED [ 55%]
+tests/unit/test_primitives.py::test_percentage_from_ratio_and_display PASSED [ 66%]
+tests/unit/test_primitives.py::test_percentage_rejects_negative_basis_points PASSED [ 77%]
+tests/unit/test_primitives.py::test_percentage_rejects_non_integer_and_bool_basis_points PASSED [ 88%]
+tests/unit/test_primitives.py::test_fixed_clock_returns_the_same_instant_every_call PASSED [100%]
+
+============================== 9 passed in 0.06s ==============================
+
+--- STDERR ---
+
+--- MUTATION CHECK ---
+no persistent non-cache file addition, deletion, or modification detected

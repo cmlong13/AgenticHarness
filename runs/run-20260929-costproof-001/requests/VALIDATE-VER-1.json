@@ -1,0 +1,8 @@
+{
+  "operation": "validate_artifact",
+  "phase": "verification",
+  "doc_ref": "runs/run-20260929-costproof-001/attempts/verification-2-raw.json",
+  "context_refs": {
+    "scope": "runs/run-20260929-costproof-001/scope.json"
+  }
+}

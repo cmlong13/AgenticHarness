@@ -1,0 +1,12 @@
+{
+  "operation": "write_checkpoint",
+  "kind": "progress",
+  "run_id": "run-20260929-costproof-001",
+  "task_id": "T-COSTPROOF",
+  "target_repo_path": "demo-repo",
+  "completed_phases": ["discovery", "research"],
+  "artifact_refs": {
+    "discovery": "runs/run-20260929-costproof-001/scope.json",
+    "research": "runs/run-20260929-costproof-001/findings.json"
+  }
+}

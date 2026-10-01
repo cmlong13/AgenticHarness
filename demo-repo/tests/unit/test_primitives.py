@@ -44,6 +44,15 @@ def test_percentage_rejects_negative_basis_points() -> None:
         Percentage(-1)
 
 
+def test_percentage_rejects_non_integer_and_bool_basis_points() -> None:
+    with pytest.raises(ValidationError):
+        Percentage(1.5)  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        Percentage(True)  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        Percentage(False)  # type: ignore[arg-type]
+
+
 def test_fixed_clock_returns_the_same_instant_every_call() -> None:
     clock = FixedClock(datetime(2026, 1, 1, tzinfo=timezone.utc))
     assert clock.now() == clock.now()

@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-COSTPROOF",
+  "run_id": "run-20260929-costproof-001",
+  "created_at": "2026-09-29T16:59:44.500196+00:00",
+  "scope_ref": { "path": "runs/run-20260929-costproof-001/scope.json" },
+  "implementation_ref": { "path": "runs/run-20260929-costproof-001/implementation-report.json" },
+  "attempts": [
+    {
+      "id": "V-1",
+      "command": "python -m pytest tests/unit/test_primitives.py -v",
+      "exit_code": 0,
+      "classification": "pass",
+      "output_ref": "runs/run-20260929-costproof-001/logs/V-1.log",
+      "retried": false
+    }
+  ],
+  "retry_policy": { "max_retries": 2 },
+  "acceptance_criteria_results": [
+    {
+      "criteria_id": "AC-1",
+      "result": "passed",
+      "attempt_refs": ["V-1"],
+      "evidence_summary": "test_percentage_rejects_non_integer_and_bool_basis_points (which asserts Percentage(1.5) raises ValidationError) PASSED in the V-1 run (exit_code 0, 9 passed in 0.05s)."
+    },
+    {
+      "criteria_id": "AC-2",
+      "result": "passed",
+      "attempt_refs": ["V-1"],
+      "evidence_summary": "The same test_percentage_rejects_non_integer_and_bool_basis_points also asserts Percentage(True) and Percentage(False) each raise ValidationError; it PASSED in the V-1 run (exit_code 0)."
+    },
+    {
+      "criteria_id": "AC-3",
+      "result": "passed",
+      "attempt_refs": ["V-1"],
+      "evidence_summary": "test_percentage_rejects_negative_basis_points (Percentage(-1) raises ValidationError) PASSED in the V-1 run, confirming the pre-existing negative-value check remains intact and unregressed."
+    },
+    {
+      "criteria_id": "AC-4",
+      "result": "passed",
+      "attempt_refs": ["V-1"],
+      "evidence_summary": "test_percentage_from_ratio_and_display (asserting Percentage.from_ratio(0.365).as_percent_string() == '36.50%') PASSED in the V-1 run, and Percentage(3650) construction is exercised without error throughout the suite; no regression to valid construction paths."
+    },
+    {
+      "criteria_id": "AC-5",
+      "result": "passed",
+      "attempt_refs": ["V-1"],
+      "evidence_summary": "Independent re-run of the full narrow test file demo-repo/tests/unit/test_primitives.py (working_directory demo-repo) returned exit_code 0 with all 9 tests passed, including the new regression test test_percentage_rejects_non_integer_and_bool_basis_points confirmed present at lines 47-53 of the test file."
+    }
+  ],
+  "final_verdict": "pass",
+  "routed_back_to_engineer": { "routed": false }
+}

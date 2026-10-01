@@ -1,0 +1,20 @@
+{
+  "operation": "check_command_identity",
+  "request": {
+    "task_id": "T-COSTPROOF",
+    "run_id": "run-20260929-costproof-001",
+    "command_id": "V-1",
+    "command": "python -m pytest tests/unit/test_primitives.py -v",
+    "working_directory": "demo-repo"
+  },
+  "result": {
+    "message_type": "command_result",
+    "task_id": "T-COSTPROOF",
+    "run_id": "run-20260929-costproof-001",
+    "command_id": "V-1",
+    "command": "python -m pytest tests/unit/test_primitives.py -v",
+    "working_directory": "demo-repo",
+    "exit_code": 0,
+    "output_ref": "runs/run-20260929-costproof-001/logs/V-1.log"
+  }
+}

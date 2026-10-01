@@ -1,0 +1,11 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260929-costproof-001",
+  "kind": "agent_dispatch",
+  "payload": {
+    "phase": "implementation",
+    "subagent_type": "engineer",
+    "agent_id": "a2e9726aabca6b3fb",
+    "dispatch_sequence": 1
+  }
+}

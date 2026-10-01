@@ -51,6 +51,8 @@ class Percentage:
     basis_points: int
 
     def __post_init__(self) -> None:
+        if isinstance(self.basis_points, bool) or not isinstance(self.basis_points, int):
+            raise ValidationError("Percentage.basis_points must be an integer number of basis points")
         if self.basis_points < 0:
             raise ValidationError("Percentage.basis_points must not be negative")
 

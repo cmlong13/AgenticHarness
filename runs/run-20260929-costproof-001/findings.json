@@ -1,0 +1,194 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-COSTPROOF",
+  "run_id": "run-20260929-costproof-001",
+  "created_at": "2026-09-29T16:59:44.500196+00:00",
+  "scope_ref": {
+    "path": "runs/run-20260929-costproof-001/scope.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "Money.__post_init__ validates cents by checking `isinstance(self.cents, bool) or not isinstance(self.cents, int)` and raises loanflow.errors.ValidationError, rejecting both non-int and bool values -- this is the exact pattern the new Percentage check must mirror.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/primitives.py",
+          "start_line": 23,
+          "end_line": 25,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "Percentage.__post_init__ currently only checks `self.basis_points < 0` and raises ValidationError for negative values; it contains no isinstance/type check at all, so a non-int or bool basis_points value passes through construction unvalidated.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/primitives.py",
+          "start_line": 53,
+          "end_line": 55,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-3",
+      "claim": "Percentage.as_percent_string computes `divmod(self.basis_points, 100)` and formats the remainder with an `:02d` format spec, which is the code path that later fails when basis_points was allowed to be a non-int at construction time.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/primitives.py",
+          "start_line": 62,
+          "end_line": 64,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-4",
+      "claim": "loanflow.errors.ValidationError is defined as a subclass of LoanflowError, and primitives.py already imports it (`from loanflow.errors import ValidationError`), so the new Percentage check can raise it without adding any new import.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/errors.py",
+          "start_line": 14,
+          "end_line": 15,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/src/loanflow/primitives.py",
+          "start_line": 16,
+          "end_line": 16,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-5",
+      "claim": "Percentage.from_ratio always produces an int basis_points value: it quantizes a Decimal and casts the result with `int(value)` before calling `cls(...)`, so this classmethod cannot be affected by (and does not need) the new type check.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/primitives.py",
+          "start_line": 58,
+          "end_line": 60,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-6",
+      "claim": "No call site in demo-repo/src constructs Percentage with a non-int value: both production callers (collateral.py's calculate_ltv and dti.py's calculate_dti) explicitly wrap the constructor argument in `int(...)` after Decimal quantization.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/collateral.py",
+          "start_line": 27,
+          "end_line": 30,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/src/loanflow/dti.py",
+          "start_line": 36,
+          "end_line": 37,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-7",
+      "claim": "demo-repo/src/loanflow/underwriting_rules.py does not construct Percentage at all -- it only calls `.as_percent_string()` on Percentage instances already produced by dti.py/collateral.py -- so this file is unaffected by adding a construction-time type check to Percentage.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/underwriting_rules.py",
+          "start_line": 38,
+          "end_line": 39,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/src/loanflow/underwriting_rules.py",
+          "start_line": 53,
+          "end_line": 54,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-8",
+      "claim": "In the existing test suite, the only direct `Percentage(...)` constructor calls outside primitives.py are in test_risk_bands.py (adding 1 to an existing Percentage's int `.basis_points` attribute) and test_primitives.py's `Percentage(-1)` negative-rejection test -- all pass int arguments, none pass a float or bool.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 15,
+          "end_line": 15,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 24,
+          "end_line": 24,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 33,
+          "end_line": 33,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_primitives.py",
+          "start_line": 42,
+          "end_line": 44,
+          "evidence_tier": "test_assertion"
+        }
+      ]
+    },
+    {
+      "id": "F-9",
+      "claim": "demo-repo/tests/unit/test_primitives.py already contains the exact shape the new regression test should follow: test_money_rejects_non_integer_cents (lines 21-23) uses `with pytest.raises(ValidationError): Money(1.5)`, and test_percentage_rejects_negative_basis_points (lines 42-44) uses the identical pattern for Percentage's existing negative-value check.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_primitives.py",
+          "start_line": 21,
+          "end_line": 23,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_primitives.py",
+          "start_line": 42,
+          "end_line": 44,
+          "evidence_tier": "test_assertion"
+        }
+      ]
+    },
+    {
+      "id": "F-10",
+      "claim": "test_primitives.py already imports ValidationError, Money, and Percentage at module level, so a new regression test using pytest.raises(ValidationError) with Percentage requires no new import.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_primitives.py",
+          "start_line": 7,
+          "end_line": 8,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    }
+  ],
+  "open_questions": [
+    "N-IMPLEMENT (adding the isinstance(bool)/isinstance(int) check to Percentage.__post_init__ and writing the new regression test) and N-VERIFY (running demo-repo/tests/unit/test_primitives.py and confirming AC-1 through AC-5 against real command output) both require file-editing and test-execution capability that is outside the Architect research role -- no code, patch, or implementation instructions are provided here; those phases need an implementation/verification agent with Write/Edit/Bash tools.",
+    "An mcp__obsidian__search_notes call for 'Percentage basis_points validation' was attempted to check for prior design/calibration context but the tool call was not permitted in this session (connector_unavailable); no vault evidence was consulted or relied upon for these findings."
+  ],
+  "obsidian_reads": [
+    {
+      "tool": "mcp__obsidian__search_notes",
+      "query_or_note_path": "Percentage basis_points validation",
+      "status": "connector_unavailable"
+    }
+  ]
+}

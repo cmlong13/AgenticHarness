@@ -1,0 +1,47 @@
+{
+  "operation": "finalize_pipeline_usage",
+  "status": "written",
+  "path": "runs/run-20260929-costproof-001/usage-summary.json",
+  "coverage_status": "complete",
+  "reconciliation_status": "runtime_residual",
+  "run_outcome": {
+    "final_verdict": "pass",
+    "phases_completed": [
+      "discovery",
+      "research",
+      "implementation",
+      "verification"
+    ]
+  },
+  "full_pipeline_total": {
+    "token_usage": {
+      "input_tokens": 474,
+      "output_tokens": 89034,
+      "cache_read_input_tokens": 36151441,
+      "cache_creation_input_tokens": 434902
+    },
+    "token_usage_by_model": {
+      "claude-sonnet-5": {
+        "input_tokens": 474,
+        "output_tokens": 89034,
+        "cache_read_input_tokens": 36151441,
+        "cache_creation_input_tokens": 434902
+      }
+    },
+    "cost": {
+      "status": "priced",
+      "amount": "9.5721282",
+      "currency": "USD",
+      "pricing_source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "pricing_verified_date": "2026-08-14"
+    },
+    "run_final_verdict": "pass",
+    "run_phases_completed": [
+      "discovery",
+      "research",
+      "implementation",
+      "verification"
+    ]
+  },
+  "full_pipeline_total_reason": null
+}

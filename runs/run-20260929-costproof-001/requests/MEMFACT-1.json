@@ -1,0 +1,13 @@
+{
+  "operation": "append_memory",
+  "run_id": "run-20260929-costproof-001",
+  "kind": "fact",
+  "fact": {
+    "id": "FACT-20260929-COSTPROOF-CLEAN-RUN",
+    "content": "run-20260929-costproof-001 (T-COSTPROOF) completed all four phases (Discovery/Research/Implementation/Verification) end-to-end with a genuine final_verdict: pass and zero transport_parse_failure policy events across 21 retained policy events -- the same Percentage.__post_init__ validation fix that run-20260929-percentage-001's Engineer produced correctly but could not deliver (blocked by two independent transport-contract violations within one Implementation phase, see FACT-20260929-ENGINEER-DOUBLE-TRANSPORT-FAILURE). The only procedural difference in this run's Agent/SendMessage dispatch prompts was appending an explicit reminder sentence restating the raw-JSON, no-fence, no-prose output contract to every dispatch and every SendMessage reply (per this run's own explicit orchestrator instruction) -- every staged turn from the Architect, Engineer, and Quality Engineer parsed as strict JSON on the first attempt.",
+    "evidence_ref": "runs/run-20260929-costproof-001/logs/policy-events.jsonl",
+    "recorded_at": "2026-09-29",
+    "source_run_id": "run-20260929-costproof-001",
+    "status": "confirmed"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-COSTPROOF",
+  "run_id": "run-20260929-costproof-001",
+  "created_at": "2026-09-29T16:59:44.500196+00:00",
+  "objective_summary": "Task: make loanflow.primitives.Percentage reject non-integer/bool basis_points at construction time with ValidationError (instead of silently constructing an invalid Percentage that later raises a raw ValueError inside as_percent_string), mirroring the existing Money.__post_init__ validation pattern in demo-repo/src/loanflow/primitives.py, plus a regression test in demo-repo/tests/unit/test_primitives.py. All four phases ran and completed cleanly: Discovery (scope.json, approved), Research (findings.json, 10 found claims all file:line cited), Implementation (implementation-report.json, ready_for_verification -- Engineer added the isinstance(bool)/isinstance(int) type check verbatim mirroring Money's pattern, preceded by a genuine TDD failing test confirmed via C-1 (DID NOT RAISE ValidationError), followed by a passing post-implementation run C-2, 9/9 tests), Verification (verification-report.json, final_verdict: pass, all 5 acceptance criteria passed on V-1). Every staged turn from the Architect, Engineer, and Quality Engineer was valid strict JSON on the first attempt -- zero transport_parse_failure events across this run's 21+ retained policy events, in contrast to the immediately prior attempt at this same fix (run-20260929-percentage-001), which blocked on two independent transport-contract violations. Independently re-verified by the orchestrator: ORCH-1 (re-run of the narrow test file) and ORCH-2 (full demo-repo suite health check) both passed with exit_code 0, both check_command_identity calls matched, and git status/diff confirmed the only demo-repo changes are exactly the two files the implementation report claims (demo-repo/src/loanflow/primitives.py: +2/-0; demo-repo/tests/unit/test_primitives.py: +9/-0), with no Protected Path touched.",
+  "artifact_refs": {
+    "scope": "runs/run-20260929-costproof-001/scope.json",
+    "findings": "runs/run-20260929-costproof-001/findings.json",
+    "implementation_report": "runs/run-20260929-costproof-001/implementation-report.json",
+    "verification_report": "runs/run-20260929-costproof-001/verification-report.json",
+    "checkpoint": "runs/run-20260929-costproof-001/checkpoint.json"
+  },
+  "final_verdict": "pass",
+  "phases_completed": [
+    "discovery",
+    "research",
+    "implementation",
+    "verification"
+  ],
+  "lessons_learned_appended": [
+    "Appending the exact output-contract sentence (raw JSON only, no fence, no prose, first/last char {/}) to the end of every single Agent dispatch prompt and every SendMessage reply -- not just the initial dispatch -- correlates with a staged Engineer/Quality-Engineer/Architect protocol completing with zero transport_parse_failure events across an entire four-phase run (run-20260929-costproof-001), in contrast to the immediately preceding attempt at the same underlying fix (run-20260929-percentage-001), which hit two independent transport-contract violations from the same Engineer identity across two different staged turns without that per-turn reminder. This does not prove causation from a single before/after pair, but it is cheap, harmless, and directly targets the exact failure mode L-20260929-TRANSPORT-BUDGET-PER-PHASE-NOT-PER-TURN documents -- worth doing by default on every staged dispatch/resume, not only when a transport failure has already occurred once in the run."
+  ],
+  "memory_loaded": true,
+  "memory_influenced_run": false,
+  "memory_refs_used": [],
+  "remaining_risks": [],
+  "follow_up_actions": [],
+  "usage_summary_ref": "runs/run-20260929-costproof-001/usage-summary.json"
+}

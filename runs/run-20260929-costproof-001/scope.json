@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-COSTPROOF",
+  "run_id": "run-20260929-costproof-001",
+  "created_at": "2026-09-29T16:59:44.500196+00:00",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "In demo-repo, loanflow.primitives.Percentage accepts non-integer basis_points (for example Percentage(1.5) or Percentage(True)) and only fails later inside as_percent_string with a raw ValueError. Make Percentage reject non-integer basis_points, including bool, at construction time with ValidationError, the same way Money.__post_init__ already validates Money.cents, and add a regression test for it in demo-repo/tests/unit/test_primitives.py."
+  },
+  "objective": "Add a type-check to loanflow.primitives.Percentage.__post_init__ (demo-repo/src/loanflow/primitives.py:53-55) so that a non-int basis_points value, including bool (which is a subclass of int in Python), raises loanflow.errors.ValidationError at construction time -- mirroring the existing pattern in Money.__post_init__ (demo-repo/src/loanflow/primitives.py:23-25) -- instead of silently constructing an invalid Percentage that later raises a raw, undocumented ValueError inside as_percent_string's divmod call (demo-repo/src/loanflow/primitives.py:62-64). Add a regression test for the new rejection in demo-repo/tests/unit/test_primitives.py, alongside the existing test_percentage_rejects_negative_basis_points test (line 42-44).",
+  "in_scope": [
+    "demo-repo/src/loanflow/primitives.py (Percentage.__post_init__ only)",
+    "demo-repo/tests/unit/test_primitives.py (add one new regression test)"
+  ],
+  "out_of_scope": [
+    "Money.__post_init__ and any other primitive type in primitives.py (already correctly validated; not being changed)",
+    "Percentage.from_ratio, Percentage.as_percent_string, or any other Percentage method body (behavior unchanged; from_ratio already only ever produces an int via Decimal.quantize's int() cast)",
+    "demo-repo/src/loanflow/underwriting_rules.py, collateral.py, dti.py, or any other caller of Percentage/as_percent_string (no call site currently constructs Percentage with a non-int value; confirmed by repo-wide search -- these callers are unaffected and are not touched)",
+    "Any change to Money's existing validation, which already correctly rejects non-int/bool cents and is not part of this defect"
+  ],
+  "constraints": [
+    "Minimal change: only add the type check inside Percentage.__post_init__; do not restructure the dataclass, add new methods, or refactor Money",
+    "Must reuse the exact validation pattern Money.__post_init__ already establishes (isinstance(x, bool) or not isinstance(x, int)) rather than inventing a new validation idiom",
+    "Must raise loanflow.errors.ValidationError (already imported in primitives.py), not a bare ValueError/TypeError",
+    "New regression test belongs in demo-repo/tests/unit/test_primitives.py, following the existing test_money_rejects_non_integer_cents test's shape (pytest.raises(ValidationError))",
+    "No new dependency; stdlib isinstance check only",
+    "TDD: a failing regression test must exist and be run before the production code change lands"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "Percentage(1.5) raises loanflow.errors.ValidationError (not a bare ValueError) at construction time."
+    },
+    {
+      "id": "AC-2",
+      "description": "Percentage(True) and Percentage(False) each raise loanflow.errors.ValidationError at construction time (bool must be rejected even though bool is an int subclass in Python)."
+    },
+    {
+      "id": "AC-3",
+      "description": "Percentage(-1) still raises loanflow.errors.ValidationError (the existing negative-value validation in __post_init__ must remain intact and unregressed)."
+    },
+    {
+      "id": "AC-4",
+      "description": "Valid construction paths are unaffected: Percentage(3650) succeeds, and Percentage.from_ratio(0.365).as_percent_string() still returns '36.50%' exactly as before."
+    },
+    {
+      "id": "AC-5",
+      "description": "demo-repo/tests/unit/test_primitives.py contains at least one new regression test asserting the non-integer/bool basis_points rejection, and the full narrow test file (demo-repo/tests/unit/test_primitives.py) passes."
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-RESEARCH",
+      "description": "Confirm, with file:line citations, the exact shape of Money.__post_init__'s validation pattern, Percentage's current __post_init__ and as_percent_string bodies, the ValidationError import path, and that no existing call site constructs Percentage with a non-int value (so this fix cannot regress any current caller).",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-IMPLEMENT",
+      "description": "Add the isinstance(bool)/isinstance(int) type check to Percentage.__post_init__ mirroring Money's pattern, preceded by a failing regression test in demo-repo/tests/unit/test_primitives.py written first (TDD).",
+      "phase": "implementation",
+      "depends_on": [
+        "N-RESEARCH"
+      ]
+    },
+    {
+      "id": "N-VERIFY",
+      "description": "Independently re-run the narrow test file (demo-repo/tests/unit/test_primitives.py) and confirm every acceptance criterion against real command output.",
+      "phase": "verification",
+      "depends_on": [
+        "N-IMPLEMENT"
+      ]
+    }
+  ],
+  "status": "approved"
+}

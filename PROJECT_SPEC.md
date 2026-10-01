@@ -1940,6 +1940,27 @@ the first time against a real (if unconfigured) Obsidian connector, demo-repo's 
 passes including the two new regression tests, and no commit or push has been made pending
 the user's own decision to do so.
 
+**Milestone update (2026-09-29): full-pipeline token/cost total proven (`run-20260929-costproof-001`).**
+A real four-phase `/work` run (Discovery → Research → Implementation → Verification, all
+completed; `run-summary.json` `final_verdict: "pass"`) executed in a dedicated headless
+session, with the exact usage accounting from `e28032c` aggregating its usage.
+`runs/run-20260929-costproof-001/usage-summary.json` reports `coverage_status: "complete"`
+and a non-null `full_pipeline_total` of **$9.5721282** (Decimal, from
+`harness/model-pricing.json`; 474 input / 89,034 output / 36,151,441 cache-read / 434,902
+cache-creation tokens, all `claude-sonnet-5`). This matches the runtime's own reported
+`costUSD` of `9.572128199999998` (kept for corroboration only), and the runtime's token totals
+are fully accounted for. The only reconciliation difference
+(`reconciliation.status: "runtime_residual"`) is **500 output tokens ($0.005)** kept as the
+`runtime_unattributed` component and counted in the total. They come from two known
+transcript calls whose last streaming update was never persisted (`stop_reason: null`), so
+the transcripts are 500 output tokens short of what the runtime reports. This affects only
+per-component attribution, not the session total. The run's legitimate side effects are
+kept unchanged: the `demo-repo` Percentage validation fix plus its regression test, and the
+run's `memory/` appends. **Assignment criterion "Total token/cost figure for one full
+pipeline run can be stated" (§8) is considered satisfied at the full-pipeline-total level.**
+`docs/assignment-audit.md` is deliberately not yet updated; the final re-audit will update
+it. No commit or push.
+
 This document is the authoritative internal reference for what is being built. It is derived
 from the assignment brief ("Build Your Own Agentic Harness") and the planning discussion that
 followed. Implementation should track this spec; if the two diverge, update this file first.
@@ -2774,7 +2795,7 @@ Demonstrated live, on a repo with ≥50 files:
       such a resumed run can also reach a genuine passing Verification, remains covered by
       `tests/test_orchestrator_core.py`'s resume tests only — no live run has yet demonstrated a
       resumed pipeline completing through Verification with a passing verdict.
-- [ ] Total token/cost figure for one full pipeline run can be stated.
+- [x] Total token/cost figure for one full pipeline run can be stated.
 
 ## 9. What NOT to Build
 

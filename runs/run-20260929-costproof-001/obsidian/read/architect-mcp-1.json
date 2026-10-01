@@ -1,0 +1,18 @@
+{
+  "run_id": "run-20260929-costproof-001",
+  "task_id": "T-COSTPROOF",
+  "phase": "research",
+  "source": "architect_direct_mcp",
+  "tool": "mcp__obsidian__search_notes",
+  "query_or_note_path": "Percentage basis_points validation",
+  "status": "connector_unavailable",
+  "note_path": null,
+  "content_sha256": null,
+  "retained_at": "2026-09-29T17:05:13Z",
+  "verification": {
+    "performed": false,
+    "result": "architect_reported",
+    "independent_content_sha256": null,
+    "reason": "search observations are Architect-reported metadata only; a vault-wide search is never automatically repeated for evidence retention (least privilege)"
+  }
+}
