@@ -1,0 +1,22 @@
+{
+  "operation": "check_command_identity",
+  "request": {
+    "task_id": "T-OBSLIVEA",
+    "run_id": "run-20261001-obsidianlive-002",
+    "command_id": "ORCH-4",
+    "command": "python -m pytest tests/unit -q",
+    "working_directory": "demo-repo",
+    "target_repo_path": "demo-repo",
+    "purpose": "Orchestrator's own full demo-repo unit-suite health check, to catch any regression outside this task's narrow scope."
+  },
+  "result": {
+    "message_type": "command_result",
+    "task_id": "T-OBSLIVEA",
+    "run_id": "run-20261001-obsidianlive-002",
+    "command_id": "ORCH-4",
+    "command": "python -m pytest tests/unit -q",
+    "working_directory": "demo-repo",
+    "exit_code": 0,
+    "output_ref": "runs/run-20261001-obsidianlive-002/logs/ORCH-4.log"
+  }
+}

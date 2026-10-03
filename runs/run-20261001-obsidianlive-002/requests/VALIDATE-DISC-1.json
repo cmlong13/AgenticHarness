@@ -1,0 +1,7 @@
+{
+  "operation": "validate_scope",
+  "candidate_ref": "runs/run-20261001-obsidianlive-002/attempts/discovery-1-candidate.json",
+  "expected_task_id": "T-OBSLIVEA",
+  "expected_run_id": "run-20261001-obsidianlive-002",
+  "target_repo_path": "demo-repo"
+}

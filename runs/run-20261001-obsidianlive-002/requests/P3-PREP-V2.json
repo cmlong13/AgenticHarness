@@ -1,0 +1,6 @@
+{
+  "operation": "prepare_infrastructure_retry",
+  "run_id": "run-20261001-obsidianlive-002",
+  "requested_command": {"id": "V-2", "command": "python -m pytest tests/unit/test_late_fee_tier.py tests/unit/test_late_fee_tier_regression.py -v", "working_directory": "demo-repo", "criteria_ids_targeted": ["AC-1", "AC-2", "AC-3", "AC-4"], "rationale": "This run covers all four criteria at once: it runs the new regression test test_non_integer_and_bool_days_past_due_is_rejected for float 10.5 and both bools (AC-1, AC-2), the unchanged boundary and negative tests (AC-3), and both late-fee test files (AC-4)."},
+  "prior_attempt_ids": []
+}

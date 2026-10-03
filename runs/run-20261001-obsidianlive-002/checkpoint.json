@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-OBSLIVEA",
+  "run_id": "run-20261001-obsidianlive-002",
+  "target_repo_path": "demo-repo",
+  "updated_at": "2026-10-02T16:18:00Z",
+  "completed_phases": [
+    "discovery",
+    "research",
+    "implementation",
+    "verification"
+  ],
+  "current_phase": null,
+  "next_phase": null,
+  "artifact_refs": {
+    "discovery": "runs/run-20261001-obsidianlive-002/scope.json",
+    "research": "runs/run-20261001-obsidianlive-002/findings.json",
+    "implementation": "runs/run-20261001-obsidianlive-002/implementation-report.json",
+    "verification": "runs/run-20261001-obsidianlive-002/verification-report.json"
+  },
+  "blockers": [],
+  "next_resume_action": null,
+  "status": "complete"
+}

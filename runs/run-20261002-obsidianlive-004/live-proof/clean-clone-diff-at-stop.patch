@@ -1,0 +1,15 @@
+diff --git a/demo-repo/tests/unit/test_applicants.py b/demo-repo/tests/unit/test_applicants.py
+index 4718c6c..f42f300 100644
+--- a/demo-repo/tests/unit/test_applicants.py
++++ b/demo-repo/tests/unit/test_applicants.py
+@@ -34,3 +34,10 @@ def test_business_rejects_empty_legal_name() -> None:
+ def test_business_rejects_negative_years_in_operation() -> None:
+     with pytest.raises(ValidationError):
+         Business(business_id="BZ-000456", legal_name="Rivera Bakery LLC", years_in_operation=-2)
++
++
++def test_business_rejects_non_integer_and_bool_years_in_operation() -> None:
++    with pytest.raises(ValidationError):
++        Business(business_id="BZ-000456", legal_name="Rivera Bakery LLC", years_in_operation=3.5)
++    with pytest.raises(ValidationError):
++        Business(business_id="BZ-000456", legal_name="Rivera Bakery LLC", years_in_operation=True)

@@ -1,0 +1,27 @@
+{
+  "label": "runC-resume",
+  "launched_at": "2026-10-03T06:27:13.823372+00:00",
+  "cwd": "C:\\Users\\caleb\\Documents\\Projects\\AgenticHarness-obslive004-clean",
+  "prompt": "/work --resume run-20261002-obsidianlive-004",
+  "argv_without_prompt": [
+    "claude",
+    "--permission-mode",
+    "bypassPermissions",
+    "--output-format",
+    "stream-json",
+    "--verbose"
+  ],
+  "env_overrides": {
+    "OBSIDIAN_VAULT_PATH": "C:\\Users\\caleb\\Documents\\Obsidian Vault",
+    "VIRTUAL_ENV": "C:\\Users\\caleb\\Documents\\Projects\\AgenticHarness-obslive004-clean\\.venv",
+    "PATH_prepended": "C:\\Users\\caleb\\Documents\\Projects\\AgenticHarness-obslive004-clean\\.venv\\Scripts"
+  },
+  "PATH_entries_removed_main_repo": [
+    "C:\\Users\\caleb\\Documents\\Projects\\AgenticHarness\\.venv\\Scripts"
+  ],
+  "child_env_mentions_main_repo": [],
+  "pid": 28492,
+  "exited_at": "2026-10-03T07:22:47.882599+00:00",
+  "returncode": 0,
+  "stderr_tail": ""
+}

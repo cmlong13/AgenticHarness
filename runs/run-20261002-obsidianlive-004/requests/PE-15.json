@@ -1,0 +1,1 @@
+{"operation": "retain_policy_event", "run_id": "run-20261002-obsidianlive-004", "task_id": "T-OBSLIVEC", "kind": "skill_invocation", "payload": {"skill": "test-runner", "request_path": "runs/run-20261002-obsidianlive-004/requests/ORCH-2.json", "command_id": "ORCH-2", "invoked_via": "Skill tool", "phase": "verification", "purpose": "orchestrator full-suite health check"}}

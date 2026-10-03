@@ -1,0 +1,1 @@
+{"operation": "retain_policy_event", "run_id": "run-20261001-obsidianlive-003", "kind": "skill_invocation", "payload": {"skill": "test-runner", "command_id": "ORCH-1", "request_path": "runs/run-20261001-obsidianlive-003/requests/ORCH-1.json", "invoked_via": "Skill tool"}}

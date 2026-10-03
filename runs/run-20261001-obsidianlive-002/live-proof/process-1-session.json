@@ -1,0 +1,26 @@
+{
+  "process": "process-1 (terminated externally)",
+  "session_id": "e51fa716-7b9e-4196-b494-4a87c21dee55",
+  "model": "claude-opus-5-5",
+  "permissionMode": "bypassPermissions",
+  "mcp_servers": [
+    {
+      "name": "jira",
+      "status": "connected",
+      "source": "project"
+    },
+    {
+      "name": "obsidian",
+      "status": "connected",
+      "source": "project"
+    },
+    {
+      "name": "claude.ai Claude Docs",
+      "status": "connected",
+      "source": "claudeai"
+    }
+  ],
+  "stream_records": 627,
+  "has_result_record": false,
+  "termination": "Claude Code reaped the background driver shell under low system memory (~812 MB free of 15526 MB at check); the headless child claude -p process is no longer running and its transcript stopped growing at 2026-10-01T22:28:55Z during a Verification test-runner command."
+}

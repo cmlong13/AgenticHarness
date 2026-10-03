@@ -1,0 +1,45 @@
+diff --git a/demo-repo/src/loanflow/applicants.py b/demo-repo/src/loanflow/applicants.py
+index cd28782..eb93683 100644
+--- a/demo-repo/src/loanflow/applicants.py
++++ b/demo-repo/src/loanflow/applicants.py
+@@ -32,5 +32,7 @@ class Business:
+     def __post_init__(self) -> None:
+         if not self.legal_name.strip():
+             raise ValidationError("Business.legal_name must not be empty")
++        if isinstance(self.years_in_operation, bool) or not isinstance(self.years_in_operation, int):
++            raise ValidationError("Business.years_in_operation must be an integer")
+         if self.years_in_operation < 0:
+             raise ValidationError("Business.years_in_operation must not be negative")
+diff --git a/demo-repo/tests/unit/test_applicants.py b/demo-repo/tests/unit/test_applicants.py
+index 4718c6c..f42f300 100644
+--- a/demo-repo/tests/unit/test_applicants.py
++++ b/demo-repo/tests/unit/test_applicants.py
+@@ -34,3 +34,10 @@ def test_business_rejects_empty_legal_name() -> None:
+ def test_business_rejects_negative_years_in_operation() -> None:
+     with pytest.raises(ValidationError):
+         Business(business_id="BZ-000456", legal_name="Rivera Bakery LLC", years_in_operation=-2)
++
++
++def test_business_rejects_non_integer_and_bool_years_in_operation() -> None:
++    with pytest.raises(ValidationError):
++        Business(business_id="BZ-000456", legal_name="Rivera Bakery LLC", years_in_operation=3.5)
++    with pytest.raises(ValidationError):
++        Business(business_id="BZ-000456", legal_name="Rivera Bakery LLC", years_in_operation=True)
+diff --git a/memory/facts.jsonl b/memory/facts.jsonl
+index 2d2a4bb..4131c73 100644
+--- a/memory/facts.jsonl
++++ b/memory/facts.jsonl
+@@ -8,3 +8,4 @@
+ {"content": "run-20260929-costproof-001 (T-COSTPROOF) completed all four phases (Discovery/Research/Implementation/Verification) end-to-end with a genuine final_verdict: pass and zero transport_parse_failure policy events across 21 retained policy events -- the same Percentage.__post_init__ validation fix that run-20260929-percentage-001's Engineer produced correctly but could not deliver (blocked by two independent transport-contract violations within one Implementation phase, see FACT-20260929-ENGINEER-DOUBLE-TRANSPORT-FAILURE). The only procedural difference in this run's Agent/SendMessage dispatch prompts was appending an explicit reminder sentence restating the raw-JSON, no-fence, no-prose output contract to every dispatch and every SendMessage reply (per this run's own explicit orchestrator instruction) -- every staged turn from the Architect, Engineer, and Quality Engineer parsed as strict JSON on the first attempt.", "evidence_ref": "runs/run-20260929-costproof-001/logs/policy-events.jsonl", "id": "FACT-20260929-COSTPROOF-CLEAN-RUN", "recorded_at": "2026-09-29", "source_run_id": "run-20260929-costproof-001", "status": "confirmed"}
+ {"content": "validate_scope accepts in_scope entries that carry parenthetical annotations (e.g. 'demo-repo/src/loanflow/risk_bands.py (classify_credit_score only)'), but engineer.md Step 1d requires exact character-for-character path equality, so a live Engineer (run-20261001-midimplresume-001, agent ac79cab0438d2884f) correctly returned a blocked implementation report before touching any file. The same annotated in_scope style was used by run-20260929-costproof-001 and was not enforced by that run's Engineer, so Engineer enforcement of Step 1d has been inconsistent across dispatches while the validator never enforces it.", "evidence_ref": "runs/run-20261001-midimplresume-001/implementation-report.json", "id": "FACT-20261001-ANNOTATED-INSCOPE-BLOCKS-ENGINEER", "recorded_at": "2026-10-01", "source_run_id": "run-20261001-midimplresume-001", "status": "confirmed"}
+ {"content": "run-20261001-midimplresume-002 (T-MIDIMPLRESUME) reached a genuine, independently re-verified final_verdict: pass across four separate /work processes: process 1 completed Discovery/Research, process 2 restarted Implementation (fresh Engineer) and was terminated unplanned mid-Verification, process 3 restarted Verification (fresh Quality Engineer) and ended on an API 429 usage limit before its V-3 command ran, and process 4 restarted Verification again with a third fresh Quality Engineer (a989861e51b00a2c7) whose V-4/V-5 plus orchestrator ORCH-1/ORCH-2 all passed (105 unit tests). Every restart reused the checkpointed phases without redispatch.", "evidence_ref": "runs/run-20261001-midimplresume-002/checkpoint.json", "id": "FACT-20261001-FOUR-PROCESS-RESUME-PASS", "recorded_at": "2026-10-01", "source_run_id": "run-20261001-midimplresume-002", "status": "confirmed"}
++{"content": "run-20261002-obsidianlive-004 (T-OBSLIVEC) was interrupted mid-Implementation after the first Engineer (a42ce2eb00e718903) had added an uncommitted regression test to demo-repo/tests/unit/test_applicants.py and written a C-1 request that never executed. The resuming process saw that edit with git diff, disclosed it in a fresh Engineer's (aec41ef15e053825e) dispatch prompt, and told it to start command ids at C-2. The Engineer independently adopted the test. The TDD check passed (test-only change, no source change), C-2 failed for the expected DID NOT RAISE reason, and the run finished with a genuine, independently re-verified pass (ORCH-1 7 passed, ORCH-2 113 passed).", "evidence_ref": "runs/run-20261002-obsidianlive-004/logs/policy-events.jsonl", "id": "FACT-20261003-RESUME-ADOPTED-ORPHAN-TEST-EDIT", "recorded_at": "2026-10-03", "source_run_id": "run-20261002-obsidianlive-004", "status": "confirmed", "tags": ["resume", "engineer", "tdd", "evidence-audit"]}
+diff --git a/memory/lessons-learned.md b/memory/lessons-learned.md
+index d0291e9..6dc4e76 100644
+--- a/memory/lessons-learned.md
++++ b/memory/lessons-learned.md
+@@ -21,3 +21,4 @@ Format: `- [LESSON-ID] (source_run: <run_id>, evidence: <repo-relative path>, da
+ - [L-20261001-DISPATCH-IDS-AS-JSON] (source_run: run-20261001-midimplresume-002, evidence: runs/run-20261001-midimplresume-002/logs/policy-events.jsonl, date: 2026-10-01, tags: dispatch,dispatch-prompt,hooks) Write a staged subagent's dispatch inputs as a JSON object ("task_id": "...", "run_id": "...") in the Agent prompt, not as markdown bullets: the pre_dispatch_check hook extracts only JSON-quoted task_id/run_id pairs and refuses a dispatch whose identifiers it cannot find, before any precondition artifact is checked.
+ - [L-20261001-WRITE-TOOL-FOR-EVIDENCE-FILES] (source_run: run-20261001-midimplresume-002, evidence: runs/run-20261001-midimplresume-002/logs/policy-events.jsonl, date: 2026-10-01, tags: hooks,evidence-retention,orchestration) Use the Write tool, not Bash echo/heredoc redirects, for orchestrator request and attempt-source files whose content mentions the target repo directory: the skill_enforcement hook treats any Bash command whose text names that directory alongside a write as an attempted application-source edit and refuses it, even when the target file is under runs/.
+ - [L-20261001-MEMORY-APPLIED-NEEDS-CITING-EVIDENCE] (source_run: run-20261001-midimplresume-002, evidence: runs/run-20261001-midimplresume-002/logs/policy-events.jsonl, date: 2026-10-01, tags: memory,evidence-retention,validation) record_memory_applied requires its evidence_path file to literally contain the applied entry_id; a dispatch prompt that merely acts on a lesson without naming it is refused. Retain a decision policy event that names the entry id (e.g. resume_command_id_sequencing with memory_entry) first, then cite logs/policy-events.jsonl as the evidence_path.
++- [L-20261003-RESUME-DISCLOSE-ORPHAN-EDITS] (source_run: run-20261002-obsidianlive-004, evidence: runs/run-20261002-obsidianlive-004/logs/policy-events.jsonl, date: 2026-10-03, tags: resume,engineer,tdd,dispatch-prompt) Before dispatching a fresh Engineer for a restarted Implementation phase, run git status and git diff on the target repo yourself. An interrupted Engineer may have left uncommitted in-scope edits that the checkpoint does not record. Name those edits in the fresh Engineer's dispatch prompt so it reads them and decides independently whether to adopt or revise them, rather than discovering unexplained changes mid-protocol. Then apply the normal TDD orchestration check (test-only change, no source change) before mediating its pre-test. Never revert the orphaned edits through orchestrator Bash.

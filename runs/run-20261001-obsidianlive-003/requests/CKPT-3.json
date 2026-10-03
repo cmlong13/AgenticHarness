@@ -1,0 +1,17 @@
+{
+  "operation": "write_checkpoint",
+  "kind": "progress",
+  "run_id": "run-20261001-obsidianlive-003",
+  "task_id": "T-OBSLIVEB",
+  "target_repo_path": "demo-repo",
+  "completed_phases": [
+    "discovery",
+    "research",
+    "implementation"
+  ],
+  "artifact_refs": {
+    "discovery": "runs/run-20261001-obsidianlive-003/scope.json",
+    "research": "runs/run-20261001-obsidianlive-003/findings.json",
+    "implementation": "runs/run-20261001-obsidianlive-003/implementation-report.json"
+  }
+}

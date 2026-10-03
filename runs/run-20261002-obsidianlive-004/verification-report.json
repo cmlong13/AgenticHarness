@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-OBSLIVEC",
+  "run_id": "run-20261002-obsidianlive-004",
+  "created_at": "2026-10-02T17:33:34Z",
+  "scope_ref": {
+    "path": "runs/run-20261002-obsidianlive-004/scope.json"
+  },
+  "implementation_ref": {
+    "path": "runs/run-20261002-obsidianlive-004/implementation-report.json"
+  },
+  "attempts": [
+    {
+      "id": "V-1",
+      "command": "python -m pytest tests/unit/test_applicants.py -v",
+      "exit_code": 0,
+      "classification": "pass",
+      "output_ref": "runs/run-20261002-obsidianlive-004/logs/V-1.log",
+      "retried": false
+    },
+    {
+      "id": "V-2",
+      "command": "python -m pytest tests/unit -v",
+      "exit_code": 0,
+      "classification": "pass",
+      "output_ref": "runs/run-20261002-obsidianlive-004/logs/V-2.log",
+      "retried": false
+    }
+  ],
+  "retry_policy": {
+    "max_retries": 2
+  },
+  "acceptance_criteria_results": [
+    {
+      "criteria_id": "AC-1",
+      "result": "passed",
+      "attempt_refs": [
+        "V-1",
+        "V-2"
+      ],
+      "evidence_summary": "V-1 (exit 0, 7 passed) and V-2 (exit 0, 106 passed) both report test_business_rejects_non_integer_and_bool_years_in_operation PASSED. The first pytest.raises(ValidationError) block in that test constructs Business with years_in_operation=3.5. The guard is at demo-repo/src/loanflow/applicants.py:35-36. Note: the test uses business_id='BZ-000456' and legal_name='Rivera Bakery LLC', not the literal 'BZ-1'/'Acme' from the criterion. That difference cannot affect the result, because the guard only checks the type of years_in_operation."
+    },
+    {
+      "criteria_id": "AC-2",
+      "result": "passed",
+      "attempt_refs": [
+        "V-1",
+        "V-2"
+      ],
+      "evidence_summary": "The same test, test_business_rejects_non_integer_and_bool_years_in_operation, PASSED in V-1 (exit 0) and V-2 (exit 0). Its second pytest.raises(ValidationError) block constructs Business with years_in_operation=True. That case is excluded by the isinstance(self.years_in_operation, bool) branch of the guard at applicants.py:35."
+    },
+    {
+      "criteria_id": "AC-3",
+      "result": "passed",
+      "attempt_refs": [
+        "V-1",
+        "V-2"
+      ],
+      "evidence_summary": "test_valid_business_constructs, test_business_rejects_empty_legal_name and test_business_rejects_negative_years_in_operation PASSED in V-1 (exit 0) and V-2 (exit 0). diff.patch shows only lines added to test_applicants.py after line 36, so these three tests are unmodified."
+    },
+    {
+      "criteria_id": "AC-4",
+      "result": "passed",
+      "attempt_refs": [
+        "V-1",
+        "V-2"
+      ],
+      "evidence_summary": "V-1 ran demo-repo/tests/unit/test_applicants.py: exit 0, 7 passed, no failures. V-2 ran the full demo-repo tests/unit suite: exit 0, 106 passed in 4.37s, with no FAILED or ERROR lines in the log. Both logs report no persistent non-cache file mutation."
+    }
+  ],
+  "final_verdict": "pass",
+  "routed_back_to_engineer": {
+    "routed": false
+  }
+}

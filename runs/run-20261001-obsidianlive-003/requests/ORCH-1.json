@@ -1,0 +1,9 @@
+{
+  "task_id": "T-OBSLIVEB",
+  "run_id": "run-20261001-obsidianlive-003",
+  "command_id": "ORCH-1",
+  "command": "python -m pytest tests/unit/test_applicants.py -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Orchestrator's own independent re-run of the Quality Engineer's narrow V-1 command before reporting its inconclusive verdict."
+}

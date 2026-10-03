@@ -1,0 +1,40 @@
+{
+  "task_id": "T-OBSLIVEA",
+  "run_id": "run-20261001-obsidianlive-002",
+  "operation": "search_obsidian",
+  "phase": "discovery",
+  "connector": "filesystem_vault",
+  "attempted_at": "2026-10-01T22:14:12Z",
+  "vault": {
+    "configured": true,
+    "vault_path": "C:\\Users\\caleb\\Documents\\Obsidian Vault",
+    "raw_env_value": "C:\\Users\\caleb\\Documents\\Obsidian Vault"
+  },
+  "status": "found",
+  "query": "loanflow input validation convention",
+  "terms": [
+    "loanflow",
+    "input",
+    "validation",
+    "convention"
+  ],
+  "reason": "1 eligible note(s) matched; returning the top 1",
+  "returned_count": 1,
+  "total_match_count": 1,
+  "files_scanned": 3,
+  "truncated": false,
+  "matches": [
+    {
+      "note_path": "Engineering Notes/loanflow-integer-input-convention.md",
+      "score": 11,
+      "matched_terms": [
+        "loanflow",
+        "input",
+        "validation",
+        "convention"
+      ],
+      "line": 7,
+      "snippet": "...te_id: LFCONV-INTGUARD-01 origin: operator-seeded (written by hand before run-20261001-obsidianlive-002; NOT written by the harness) created: 2026-10-01 --- # loanflow integer-input convention (LFCONV-INTGUARD-01) Design note for the loanflow demo package. Any loanflow value that is semantically an integer (cents, b..."
+    }
+  ]
+}

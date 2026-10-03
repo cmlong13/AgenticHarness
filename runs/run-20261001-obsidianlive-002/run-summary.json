@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-OBSLIVEA",
+  "run_id": "run-20261001-obsidianlive-002",
+  "created_at": "2026-10-01T22:00:10Z",
+  "objective_summary": "classify_late_fee_tier in demo-repo/src/loanflow/late_fee_tier.py now rejects any days_past_due that is not a plain int (float such as 10.5, and bool True/False) with ValidationError, placed before the unchanged negative check. It uses the repository idiom isinstance(x, bool) or not isinstance(x, int) from risk_bands.py/primitives.py, which the Obsidian vault note LFCONV-INTGUARD-01 also documents and the repository corroborates. Regression test test_non_integer_and_bool_days_past_due_is_rejected was added to demo-repo/tests/unit/test_late_fee_tier.py (+2/+9 lines). The run spanned three /work processes. Process 1 did Discovery, Research and Implementation and was killed after promoting a verification report but before checkpointing Verification. Process 2 resumed and halted on a resume_canonical_collision. After a user-authorized operator rename (verification-report.json to verification-report.interrupted.json, content unchanged), process 3 (this one) reused Discovery/Research/Implementation and restarted Verification with a fresh Quality Engineer (aa5de43ce6420acbf). It passed AC-1..AC-4 via V-2 (5 passed). The orchestrator independently re-ran ORCH-3 (5 passed) and ORCH-4 (106 unit tests passed) through the test-runner Skill with matching command identity, and confirmed that git diff --stat of demo-repo matches the implementation report's changed_files.",
+  "artifact_refs": {
+    "scope": "runs/run-20261001-obsidianlive-002/scope.json",
+    "findings": "runs/run-20261001-obsidianlive-002/findings.json",
+    "implementation_report": "runs/run-20261001-obsidianlive-002/implementation-report.json",
+    "verification_report": "runs/run-20261001-obsidianlive-002/verification-report.json",
+    "checkpoint": "runs/run-20261001-obsidianlive-002/checkpoint.json"
+  },
+  "phases_completed": [
+    "discovery",
+    "research",
+    "implementation",
+    "verification"
+  ],
+  "phases_reused": [
+    "discovery",
+    "research",
+    "implementation"
+  ],
+  "phases_restarted": [
+    "verification"
+  ],
+  "lessons_learned_appended": [
+    "When a process dies after promote_artifact wrote a canonical artifact but before write_checkpoint recorded that phase, the resumed process must halt on the resulting canonical-path collision rather than overwrite it; a user-authorized rename that preserves the uncounted artifact's content (with its SHA-256 and reason logged in an operator-actions record) is a sufficient, evidence-preserving way to clear the collision so a fresh restarted-phase dispatch can promote its own artifact.",
+    "record_memory_applied refuses an evidence_path whose content does not literally contain the applied entry_id, so a decision that is only visible as an ordinary request file (e.g. a V-2 command id chosen because of a lesson) must first be retained as a policy event that names the memory entry id, and the memory_applied record then points at policy-events.jsonl."
+  ],
+  "memory_loaded": true,
+  "memory_influenced_run": true,
+  "memory_refs_used": [
+    "L-20261001-INSCOPE-BARE-PATHS",
+    "L-20260918-FRESH-DISPATCH-COMMAND-ID-COLLISION"
+  ],
+  "remaining_risks": [
+    "The interrupted process-1 Quality Engineer (a432c67dee766e169) evidence (V-1, ORCH-1 log, verification-1/2 attempts, verification-report.interrupted.json) is retained but superseded. It was never counted toward a checkpointed verdict, and its ORCH-1 had no retained identity check.",
+    "Per-agent cost is unpriced for all four subagents and orchestrator usage is not measured in-session, so full_pipeline_total is null."
+  ],
+  "follow_up_actions": [
+    "Changes in demo-repo are uncommitted; commit/push is not authorized by this run."
+  ],
+  "usage_summary_ref": "runs/run-20261001-obsidianlive-002/usage-summary.json",
+  "final_verdict": "pass"
+}

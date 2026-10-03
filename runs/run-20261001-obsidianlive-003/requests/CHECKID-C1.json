@@ -1,0 +1,22 @@
+{
+  "operation": "check_command_identity",
+  "request": {
+    "task_id": "T-OBSLIVEB",
+    "run_id": "run-20261001-obsidianlive-003",
+    "command_id": "C-1",
+    "command": "python -m pytest tests/unit/test_applicants.py -v",
+    "working_directory": "demo-repo",
+    "target_repo_path": "demo-repo",
+    "purpose": "Pre-implementation TDD failure check: confirm Applicant(years_employed=2.5/True/False) does not yet raise ValidationError, per the Engineer's pre_test_requested envelope."
+  },
+  "result": {
+    "message_type": "command_result",
+    "task_id": "T-OBSLIVEB",
+    "run_id": "run-20261001-obsidianlive-003",
+    "command_id": "C-1",
+    "command": "python -m pytest tests/unit/test_applicants.py -v",
+    "working_directory": "demo-repo",
+    "exit_code": 1,
+    "output_ref": "runs/run-20261001-obsidianlive-003/logs/C-1.log"
+  }
+}

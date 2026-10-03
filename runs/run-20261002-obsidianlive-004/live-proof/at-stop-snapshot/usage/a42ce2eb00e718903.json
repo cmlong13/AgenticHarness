@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.1",
+  "record_kind": "agent_usage",
+  "accounting_method": "per_api_message_id",
+  "agent_id": "a42ce2eb00e718903",
+  "identity": {
+    "match_status": "matched",
+    "run_id": "run-20261002-obsidianlive-004",
+    "task_id": "T-OBSLIVEC",
+    "phase": "implementation",
+    "subagent_type": "engineer",
+    "dispatch_sequence": 1,
+    "candidate_run_ids": [
+      "run-20261002-obsidianlive-004"
+    ]
+  },
+  "source": {
+    "hook_event_name": "SubagentStop",
+    "agent_transcript_path": "C:\\Users\\caleb\\.claude\\projects\\C--Users-caleb-Documents-Projects-AgenticHarness-obslive004-clean\\ee3aa403-a2d2-4db9-9eb0-a752bad5cc41\\subagents\\agent-a42ce2eb00e718903.jsonl",
+    "agent_type": "engineer"
+  },
+  "captured_at": "2026-10-02T17:41:50Z",
+  "message_count": 6,
+  "assistant_line_count": 17,
+  "lines_without_message_id": 0,
+  "synthetic_message_count": 0,
+  "models_seen": [
+    "claude-opus-5-5"
+  ],
+  "primary_model": "claude-opus-5-5",
+  "token_usage": {
+    "input_tokens": 12,
+    "output_tokens": 2186,
+    "cache_creation_input_tokens": 32969,
+    "cache_read_input_tokens": 137788,
+    "cache_creation_breakdown": {
+      "ephemeral_5m_input_tokens": 32969,
+      "ephemeral_1h_input_tokens": 0
+    }
+  },
+  "token_usage_by_model": {
+    "claude-opus-5-5": {
+      "input_tokens": 12,
+      "output_tokens": 2186,
+      "cache_creation_input_tokens": 32969,
+      "cache_read_input_tokens": 137788,
+      "cache_creation_breakdown": {
+        "ephemeral_5m_input_tokens": 32969,
+        "ephemeral_1h_input_tokens": 0
+      }
+    }
+  },
+  "skipped_transcript_lines": [],
+  "cost": {
+    "priced": false,
+    "amount": null,
+    "currency": "USD",
+    "reason": "unrecognized model 'claude-opus-5-5' -- not in pricing table",
+    "pricing_source": null,
+    "pricing_verified_date": null
+  }
+}

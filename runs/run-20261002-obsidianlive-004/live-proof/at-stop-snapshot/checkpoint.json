@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-OBSLIVEC",
+  "run_id": "run-20261002-obsidianlive-004",
+  "target_repo_path": "demo-repo",
+  "updated_at": "2026-10-02T17:39:18Z",
+  "completed_phases": [
+    "discovery",
+    "research"
+  ],
+  "current_phase": "implementation",
+  "next_phase": "verification",
+  "artifact_refs": {
+    "discovery": "runs/run-20261002-obsidianlive-004/scope.json",
+    "research": "runs/run-20261002-obsidianlive-004/findings.json"
+  },
+  "blockers": [],
+  "next_resume_action": "dispatch the implementation phase",
+  "status": "in_progress"
+}

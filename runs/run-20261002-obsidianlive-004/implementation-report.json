@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-OBSLIVEC",
+  "run_id": "run-20261002-obsidianlive-004",
+  "created_at": "2026-10-02T17:33:34Z",
+  "scope_ref": {
+    "path": "runs/run-20261002-obsidianlive-004/scope.json"
+  },
+  "findings_ref": {
+    "path": "runs/run-20261002-obsidianlive-004/findings.json",
+    "finding_ids": [
+      "F-1",
+      "F-2",
+      "F-3",
+      "F-4",
+      "F-5",
+      "F-7",
+      "F-8",
+      "F-9"
+    ]
+  },
+  "minimal_change_rung": 2,
+  "minimal_change_rationale": "Reused the repository's existing integer-guard idiom `isinstance(x, bool) or not isinstance(x, int)` raising ValidationError (primitives.py:24, primitives.py:54, risk_bands.py:46) as a two-line check in Business.__post_init__, placed before the unchanged negative check, with no new helper or dependency.",
+  "changed_files": [
+    {
+      "path": "demo-repo/src/loanflow/applicants.py",
+      "change_type": "modified",
+      "lines_added": 2,
+      "lines_removed": 0
+    },
+    {
+      "path": "demo-repo/tests/unit/test_applicants.py",
+      "change_type": "modified",
+      "lines_added": 7,
+      "lines_removed": 0
+    }
+  ],
+  "diff_ref": "runs/run-20261002-obsidianlive-004/diff.patch",
+  "commands": [
+    {
+      "id": "C-2",
+      "stage": "pre_implementation",
+      "command": "python -m pytest tests/unit/test_applicants.py::test_business_rejects_non_integer_and_bool_years_in_operation -v",
+      "exit_code": 1,
+      "output_ref": "runs/run-20261002-obsidianlive-004/logs/C-2.log"
+    },
+    {
+      "id": "C-3",
+      "stage": "post_implementation",
+      "command": "python -m pytest tests/unit -v",
+      "exit_code": 0,
+      "output_ref": "runs/run-20261002-obsidianlive-004/logs/C-3.log"
+    }
+  ],
+  "test_first_evidence": {
+    "pre_implementation_command_id": "C-2",
+    "post_implementation_command_id": "C-3"
+  },
+  "tests": [
+    {
+      "test_file": "demo-repo/tests/unit/test_applicants.py",
+      "test_name": "test_business_rejects_non_integer_and_bool_years_in_operation",
+      "status": "added"
+    }
+  ],
+  "dependency_changes": [],
+  "status": "ready_for_verification"
+}

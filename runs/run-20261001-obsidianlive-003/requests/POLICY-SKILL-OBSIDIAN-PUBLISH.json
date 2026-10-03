@@ -1,0 +1,1 @@
+{"operation":"retain_policy_event","run_id":"run-20261001-obsidianlive-003","kind":"skill_invocation","payload":{"skill":"obsidian","phase":"terminal","purpose":"run-summary publication (write-back)","invoked_via":"Skill tool"}}

@@ -1,0 +1,11 @@
+{
+  "operation": "check_command_identity",
+  "request": {
+    "task_id": "T-OBSLIVEA",
+    "run_id": "run-20261001-obsidianlive-002",
+    "command_id": "V-1",
+    "command": "python -m pytest tests/unit/test_late_fee_tier.py tests/unit/test_late_fee_tier_regression.py -v",
+    "working_directory": "demo-repo"
+  },
+  "result": {"message_type": "command_result", "task_id": "T-OBSLIVEA", "run_id": "run-20261001-obsidianlive-002", "command_id": "V-1", "command": "python -m pytest tests/unit/test_late_fee_tier.py tests/unit/test_late_fee_tier_regression.py -v", "working_directory": "demo-repo", "exit_code": 0, "output_ref": "runs/run-20261001-obsidianlive-002/logs/V-1.log"}
+}

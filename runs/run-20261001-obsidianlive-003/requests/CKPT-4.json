@@ -1,0 +1,14 @@
+{
+  "operation": "write_checkpoint",
+  "kind": "terminal_failure",
+  "run_id": "run-20261001-obsidianlive-003",
+  "task_id": "T-OBSLIVEB",
+  "target_repo_path": "demo-repo",
+  "completed_phases": ["discovery", "research", "implementation"],
+  "artifact_refs": {
+    "discovery": "runs/run-20261001-obsidianlive-003/scope.json",
+    "research": "runs/run-20261001-obsidianlive-003/findings.json",
+    "implementation": "runs/run-20261001-obsidianlive-003/implementation-report.json"
+  },
+  "reason": "Verification final_verdict inconclusive: AC-1, AC-2, AC-4 passed via V-1 (7 passed), but AC-3 was blocked because its Discovery-authored clause 'the default 0 constructs successfully' has no test anywhere in demo-repo. This is a scope-authoring gap, not a logic bug, so no route-back was eligible. Orchestrator ORCH-1 (7 passed) and ORCH-2 (107 unit tests passed) were independently confirmed with matching command identity."
+}

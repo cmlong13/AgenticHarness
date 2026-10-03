@@ -1,0 +1,73 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-OBSLIVEA",
+  "run_id": "run-20261001-obsidianlive-002",
+  "created_at": "2026-10-01T22:00:10Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "In demo-repo (task T-OBSLIVEA, run run-20261001-obsidianlive-002), loanflow.late_fee_tier.classify_late_fee_tier accepts non-integer day counts: classify_late_fee_tier(10.5) silently returns \"standard\" and classify_late_fee_tier(True) returns \"grace\" instead of failing. Make classify_late_fee_tier reject any days_past_due that is not a plain int with ValidationError, and add a regression test in demo-repo/tests/unit/test_late_fee_tier.py. Before scoping, consult the team's Obsidian vault for any documented loanflow input-validation convention and follow it if the repository corroborates it."
+  },
+  "objective": "Add a type check at the top of loanflow.late_fee_tier.classify_late_fee_tier (demo-repo/src/loanflow/late_fee_tier.py:21-28) so that any days_past_due that is not a plain int -- including bool (an int subclass) and float (e.g. 10.5) -- raises loanflow.errors.ValidationError before the existing negative check and threshold comparisons, instead of silently classifying (10.5 -> \"standard\", True -> \"grace\"). Follow the repository's established integer-guard idiom `isinstance(x, bool) or not isinstance(x, int)` already used at demo-repo/src/loanflow/risk_bands.py:46 and demo-repo/src/loanflow/primitives.py:24 and :54. This idiom is also documented in the team's Obsidian vault note 'Engineering Notes/loanflow-integer-input-convention.md' (LFCONV-INTGUARD-01, retained read evidence runs/run-20261001-obsidianlive-002/obsidian/read/read-1.json), and the repository corroborates that note. Add a pytest.raises(ValidationError) regression test in demo-repo/tests/unit/test_late_fee_tier.py.",
+  "in_scope": [
+    "demo-repo/src/loanflow/late_fee_tier.py",
+    "demo-repo/tests/unit/test_late_fee_tier.py"
+  ],
+  "out_of_scope": [
+    "demo-repo/tests/unit/test_late_fee_tier_regression.py (pre-existing disclosed fixture; must not be edited)",
+    "Any change to the late-fee tier thresholds or boundaries (grace 0-5, standard 6-29, severe 30+) or to the existing negative-value check in classify_late_fee_tier",
+    "demo-repo/src/loanflow/risk_bands.py, demo-repo/src/loanflow/primitives.py, demo-repo/src/loanflow/errors.py (reference only; already correct; not changed)",
+    "demo-repo/docs/late-fee-tier-policy.md and any other documentation",
+    "Editing the Obsidian vault note itself (read-only historical context)"
+  ],
+  "constraints": [
+    "Within demo-repo/src/loanflow/late_fee_tier.py, change only the body of classify_late_fee_tier; do not alter the module docstring's existing content beyond what is strictly necessary, and do not restructure the function",
+    "Use exactly the repository idiom `isinstance(days_past_due, bool) or not isinstance(days_past_due, int)` (as at demo-repo/src/loanflow/risk_bands.py:46), placed before the existing negative check",
+    "Raise loanflow.errors.ValidationError (already imported in late_fee_tier.py), never TypeError/ValueError",
+    "Existing tests in demo-repo/tests/unit/test_late_fee_tier.py and demo-repo/tests/unit/test_late_fee_tier_regression.py must keep passing unmodified (new tests may be added to test_late_fee_tier.py; existing ones not weakened)",
+    "No new dependency; stdlib isinstance check only",
+    "TDD: the failing regression test must be written and run before the production change"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "classify_late_fee_tier(10.5) raises loanflow.errors.ValidationError."
+    },
+    {
+      "id": "AC-2",
+      "description": "classify_late_fee_tier(True) and classify_late_fee_tier(False) each raise loanflow.errors.ValidationError (bool rejected even though it is an int subclass)."
+    },
+    {
+      "id": "AC-3",
+      "description": "Existing behavior is unchanged for plain ints: boundaries 0/5 -> grace, 6/29 -> standard, 30/31 -> severe, and classify_late_fee_tier(-1) still raises ValidationError."
+    },
+    {
+      "id": "AC-4",
+      "description": "demo-repo/tests/unit/test_late_fee_tier.py contains a new pytest.raises(ValidationError) regression test covering the non-int (float and bool) rejection, and both demo-repo/tests/unit/test_late_fee_tier.py and demo-repo/tests/unit/test_late_fee_tier_regression.py pass."
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-RESEARCH",
+      "description": "Confirm with file:line citations classify_late_fee_tier's current body, the ValidationError import, the repository integer-guard idiom at risk_bands.py/primitives.py, that no production caller passes a non-int, and assess the Obsidian note LFCONV-INTGUARD-01 as corroborated/stale/contradicted/context-only.",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-IMPLEMENT",
+      "description": "Write a failing regression test in demo-repo/tests/unit/test_late_fee_tier.py first, then add the bool/int type guard to classify_late_fee_tier.",
+      "phase": "implementation",
+      "depends_on": [
+        "N-RESEARCH"
+      ]
+    },
+    {
+      "id": "N-VERIFY",
+      "description": "Independently re-run the late-fee tier unit tests (both test files) and confirm each acceptance criterion against real command output; full unit suite as a health check.",
+      "phase": "verification",
+      "depends_on": [
+        "N-IMPLEMENT"
+      ]
+    }
+  ],
+  "status": "approved"
+}

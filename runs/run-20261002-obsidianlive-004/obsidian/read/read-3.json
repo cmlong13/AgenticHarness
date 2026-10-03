@@ -1,0 +1,23 @@
+{
+  "task_id": "T-OBSLIVEC",
+  "run_id": "run-20261002-obsidianlive-004",
+  "operation": "read_obsidian_note",
+  "phase": "discovery",
+  "connector": "filesystem_vault",
+  "attempted_at": "2026-10-02T17:34:40Z",
+  "requested_note_path": "Engineering Notes/loanflow-integer-input-convention.md",
+  "vault": {
+    "configured": true,
+    "vault_path": "C:\\Users\\caleb\\Documents\\Obsidian Vault",
+    "raw_env_value": "C:\\Users\\caleb\\Documents\\Obsidian Vault"
+  },
+  "status": "read",
+  "note_path": "Engineering Notes/loanflow-integer-input-convention.md",
+  "reason": "note read from the configured Obsidian vault",
+  "absolute_path": "C:\\Users\\caleb\\Documents\\Obsidian Vault\\Engineering Notes\\loanflow-integer-input-convention.md",
+  "content": "---\nnote_id: LFCONV-INTGUARD-01\norigin: operator-seeded (written by hand before run-20261001-obsidianlive-002; NOT written by the harness)\ncreated: 2026-10-01\n---\n\n# loanflow integer-input convention (LFCONV-INTGUARD-01)\n\nDesign note for the loanflow demo package.\n\nAny loanflow value that is semantically an integer (cents, basis points, credit\nscores, day counts) is guarded with the same two-part check, in this order:\n\n    if isinstance(value, bool) or not isinstance(value, int):\n        raise ValidationError(\"<name> must be an integer ...\")\n\nWhy the `bool` test comes first: `bool` is a subclass of `int` in Python, so\n`isinstance(True, int)` is `True` and a plain `isinstance(value, int)` check\nsilently accepts `True`/`False`. Floats such as `10.5` must also be rejected\nrather than compared against thresholds.\n\nWhere it already lives: `Money.__post_init__` and `Percentage.__post_init__` in\n`loanflow/primitives.py`, and `classify_credit_score` in `loanflow/risk_bands.py`.\nThe error type is always `loanflow.errors.ValidationError`, and the type check runs\nbefore any range/threshold check. Each guard gets a `pytest.raises(ValidationError)`\nregression test in the module's own `tests/unit/test_<module>.py`.\n",
+  "byte_count": 1221,
+  "line_count": 27,
+  "content_sha256": "ce8d5eacd9f42054685517532707ad85c3ad2f139f5c91c57b8e102474bb6334",
+  "truncated": false
+}

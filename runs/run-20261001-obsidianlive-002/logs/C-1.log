@@ -1,0 +1,34 @@
+command: python -m pytest tests/unit/test_late_fee_tier.py -k test_non_integer_and_bool_days_past_due_is_rejected -v
+executed_as: C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe -m pytest tests/unit/test_late_fee_tier.py -k test_non_integer_and_bool_days_past_due_is_rejected -v
+working_directory: demo-repo
+timeout_seconds: 300
+real_pytest_exit_code: 1
+reported_exit_code: 1
+
+--- STDOUT ---
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo
+configfile: pyproject.toml
+collecting ... collected 3 items / 2 deselected / 1 selected
+
+tests/unit/test_late_fee_tier.py::test_non_integer_and_bool_days_past_due_is_rejected FAILED [100%]
+
+================================== FAILURES ===================================
+_____________ test_non_integer_and_bool_days_past_due_is_rejected _____________
+
+    def test_non_integer_and_bool_days_past_due_is_rejected() -> None:
+>       with pytest.raises(ValidationError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValidationError
+
+tests\unit\test_late_fee_tier.py:38: Failed
+=========================== short test summary info ===========================
+FAILED tests/unit/test_late_fee_tier.py::test_non_integer_and_bool_days_past_due_is_rejected
+======================= 1 failed, 2 deselected in 0.07s =======================
+
+--- STDERR ---
+
+--- MUTATION CHECK ---
+no persistent non-cache file addition, deletion, or modification detected

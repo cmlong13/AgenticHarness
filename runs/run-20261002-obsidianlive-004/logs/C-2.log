@@ -1,0 +1,34 @@
+command: python -m pytest tests/unit/test_applicants.py::test_business_rejects_non_integer_and_bool_years_in_operation -v
+executed_as: C:\Users\caleb\Documents\Projects\AgenticHarness-obslive004-clean\.venv\Scripts\python.exe -m pytest tests/unit/test_applicants.py::test_business_rejects_non_integer_and_bool_years_in_operation -v
+working_directory: demo-repo
+timeout_seconds: 300
+real_pytest_exit_code: 1
+reported_exit_code: 1
+
+--- STDOUT ---
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness-obslive004-clean\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness-obslive004-clean\demo-repo
+configfile: pyproject.toml
+collecting ... collected 1 item
+
+tests/unit/test_applicants.py::test_business_rejects_non_integer_and_bool_years_in_operation FAILED [100%]
+
+================================== FAILURES ===================================
+________ test_business_rejects_non_integer_and_bool_years_in_operation ________
+
+    def test_business_rejects_non_integer_and_bool_years_in_operation() -> None:
+>       with pytest.raises(ValidationError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ValidationError
+
+tests\unit\test_applicants.py:40: Failed
+=========================== short test summary info ===========================
+FAILED tests/unit/test_applicants.py::test_business_rejects_non_integer_and_bool_years_in_operation
+============================== 1 failed in 0.14s ==============================
+
+--- STDERR ---
+
+--- MUTATION CHECK ---
+no persistent non-cache file addition, deletion, or modification detected

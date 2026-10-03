@@ -19,6 +19,8 @@ class Applicant:
     def __post_init__(self) -> None:
         if not self.full_name.strip():
             raise ValidationError("Applicant.full_name must not be empty")
+        if isinstance(self.years_employed, bool) or not isinstance(self.years_employed, int):
+            raise ValidationError("Applicant.years_employed must be an integer")
         if self.years_employed < 0:
             raise ValidationError("Applicant.years_employed must not be negative")
 

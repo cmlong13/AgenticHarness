@@ -1,0 +1,22 @@
+{
+  "label": "runA-resume2",
+  "launched_at": "2026-10-02T16:11:55.085842+00:00",
+  "cwd": "C:\\Users\\caleb\\Documents\\Projects\\AgenticHarness",
+  "prompt": "/work --resume run-20261001-obsidianlive-002",
+  "argv_without_prompt": [
+    "claude",
+    "--permission-mode",
+    "bypassPermissions",
+    "--output-format",
+    "stream-json",
+    "--verbose"
+  ],
+  "env_overrides": {
+    "OBSIDIAN_VAULT_PATH": "C:\\Users\\caleb\\Documents\\Obsidian Vault"
+  },
+  "parent_env_had_OBSIDIAN_VAULT_PATH": false,
+  "pid": 46348,
+  "exited_at": "2026-10-02T16:20:03.752937+00:00",
+  "returncode": 0,
+  "stderr_tail": ""
+}

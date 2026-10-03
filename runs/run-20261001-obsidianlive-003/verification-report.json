@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-OBSLIVEB",
+  "run_id": "run-20261001-obsidianlive-003",
+  "created_at": "2026-10-02T16:21:10Z",
+  "scope_ref": {
+    "path": "runs/run-20261001-obsidianlive-003/scope.json"
+  },
+  "implementation_ref": {
+    "path": "runs/run-20261001-obsidianlive-003/implementation-report.json"
+  },
+  "attempts": [
+    {
+      "id": "V-1",
+      "command": "python -m pytest tests/unit/test_applicants.py -v",
+      "exit_code": 0,
+      "classification": "pass",
+      "output_ref": "runs/run-20261001-obsidianlive-003/logs/V-1.log",
+      "retried": false
+    }
+  ],
+  "retry_policy": {
+    "max_retries": 2
+  },
+  "acceptance_criteria_results": [
+    {
+      "criteria_id": "AC-1",
+      "result": "passed",
+      "attempt_refs": [
+        "V-1"
+      ],
+      "evidence_summary": "V-1 (python -m pytest tests/unit/test_applicants.py -v, run in demo-repo) exited 0 with 7 passed. The log shows test_applicant_rejects_non_integer_and_bool_years_employed PASSED. Its first pytest.raises(ValidationError) block builds Applicant(applicant_id=\"AP-1\", full_name=\"A\", years_employed=2.5) (test_applicants.py:25-26). The guard at applicants.py:22-23 raises ValidationError for that input."
+    },
+    {
+      "criteria_id": "AC-2",
+      "result": "passed",
+      "attempt_refs": [
+        "V-1"
+      ],
+      "evidence_summary": "In V-1 (exit 0, 7 passed), test_applicant_rejects_non_integer_and_bool_years_employed PASSED. It has separate pytest.raises(ValidationError) blocks for years_employed=True and years_employed=False (test_applicants.py:27-30). The guard uses the scoped idiom `isinstance(self.years_employed, bool) or not isinstance(self.years_employed, int)` (applicants.py:22), placed before the negative check at line 24."
+    },
+    {
+      "criteria_id": "AC-3",
+      "result": "blocked",
+      "attempt_refs": [
+        "V-1"
+      ],
+      "evidence_summary": "Partly verified. In V-1 (exit 0), three tests PASSED: test_valid_applicant_constructs (years_employed=5), test_applicant_rejects_negative_years_employed (-1 raises ValidationError) and test_applicant_rejects_empty_name (blank full_name raises ValidationError). The clause 'the default 0 constructs successfully' was never exercised. No test in demo-repo builds an Applicant without passing years_employed. Every Applicant( call in tests/ and conftest.py passes it explicitly (also confirmed by findings F-5/F-6). The CLI fixtures also supply years_employed, so cli.py:30's .get default is not hit either. Under the required `python -m pytest <path>` command convention, no existing test path can verify the default-0 clause. It is therefore not credited as passed."
+    },
+    {
+      "criteria_id": "AC-4",
+      "result": "passed",
+      "attempt_refs": [
+        "V-1"
+      ],
+      "evidence_summary": "demo-repo/tests/unit/test_applicants.py:24-30 contains the new test test_applicant_rejects_non_integer_and_bool_years_employed, which uses pytest.raises(ValidationError) for the float 2.5, True and False. V-1 ran the whole file and exited 0 with '7 passed in 0.03s'. All 3 pre-existing Applicant tests and 3 Business tests passed, and the existing tests are unmodified. The log's mutation check reports no persistent file changes."
+    }
+  ],
+  "final_verdict": "inconclusive",
+  "routed_back_to_engineer": {
+    "routed": false
+  }
+}

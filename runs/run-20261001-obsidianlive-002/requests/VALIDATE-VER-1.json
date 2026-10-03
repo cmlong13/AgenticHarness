@@ -1,0 +1,8 @@
+{
+  "operation": "validate_artifact",
+  "phase": "verification",
+  "doc_ref": "runs/run-20261001-obsidianlive-002/attempts/verification-2-raw.json",
+  "context_refs": {
+    "scope": "runs/run-20261001-obsidianlive-002/scope.json"
+  }
+}

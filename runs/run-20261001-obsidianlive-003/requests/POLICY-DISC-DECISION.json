@@ -1,0 +1,12 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20261001-obsidianlive-003",
+  "kind": "discovery_decision",
+  "payload": {
+    "phase": "discovery",
+    "applied_memory_entry": "L-20261001-INSCOPE-BARE-PATHS",
+    "decision": "scope.json in_scope written as two bare paths; Applicant.__post_init__-only narrowing placed in constraints[0] and Business exclusion in out_of_scope[0], not as in_scope annotations.",
+    "visible_in": "runs/run-20261001-obsidianlive-003/scope.json (in_scope, constraints[0], out_of_scope[0])",
+    "obsidian_context": "runs/run-20261001-obsidianlive-003/obsidian/read/read-1.json (prior run summary run-20261001-obsidianlive-002) and read-2.json (LFCONV-INTGUARD-01) set the precedent of the bool-first isinstance guard before the range check plus a module-local pytest.raises regression test; corroborated by demo-repo risk_bands.py:46, primitives.py:24/:54, late_fee_tier.py:22. Informed constraints[1]; vault notes are not memory entries."
+  }
+}

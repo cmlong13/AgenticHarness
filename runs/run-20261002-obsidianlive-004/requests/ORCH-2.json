@@ -1,0 +1,1 @@
+{"task_id": "T-OBSLIVEC", "run_id": "run-20261002-obsidianlive-004", "command_id": "ORCH-2", "command": "python -m pytest tests -q", "working_directory": "demo-repo", "target_repo_path": "demo-repo", "purpose": "Orchestrator full demo-repo suite health check"}

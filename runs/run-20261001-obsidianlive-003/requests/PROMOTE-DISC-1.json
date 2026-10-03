@@ -1,0 +1,9 @@
+{
+  "operation": "promote_artifact",
+  "run_id": "run-20261001-obsidianlive-003",
+  "phase": "discovery",
+  "doc_ref": "runs/run-20261001-obsidianlive-003/attempts/discovery-1-candidate.json",
+  "expected_task_id": "T-OBSLIVEB",
+  "expected_run_id": "run-20261001-obsidianlive-003",
+  "target_repo_path": "demo-repo"
+}

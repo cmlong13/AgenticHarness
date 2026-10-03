@@ -1,0 +1,1 @@
+{"operation":"retain_policy_event","run_id":"run-20261001-obsidianlive-002","kind":"agent_dispatch","payload":{"phase":"verification","subagent_type":"quality-engineer","agent_id":"aa5de43ce6420acbf","dispatch_sequence":2,"note":"fresh dispatch for resumed (restarted) verification phase; not a continuation of a432c67dee766e169"}}

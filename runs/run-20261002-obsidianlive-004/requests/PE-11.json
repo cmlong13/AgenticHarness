@@ -1,0 +1,1 @@
+{"operation": "retain_policy_event", "run_id": "run-20261002-obsidianlive-004", "task_id": "T-OBSLIVEC", "kind": "agent_dispatch", "payload": {"phase": "verification", "subagent_type": "quality_engineer", "agent_id": "ab9e39cb1e33a8c8d", "dispatch_sequence": 1}}

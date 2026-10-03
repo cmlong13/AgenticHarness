@@ -1,0 +1,66 @@
+{
+  "task_id": "T-OBSLIVEB",
+  "run_id": "run-20261001-obsidianlive-003",
+  "operation": "search_obsidian",
+  "phase": "discovery",
+  "connector": "filesystem_vault",
+  "attempted_at": "2026-10-02T16:21:41Z",
+  "vault": {
+    "configured": true,
+    "vault_path": "C:\\Users\\caleb\\Documents\\Obsidian Vault",
+    "raw_env_value": "C:\\Users\\caleb\\Documents\\Obsidian Vault"
+  },
+  "status": "found",
+  "query": "run summary non-integer plain int ValidationError",
+  "terms": [
+    "run",
+    "summary",
+    "non-integer",
+    "plain",
+    "int",
+    "validationerror"
+  ],
+  "reason": "3 eligible note(s) matched; returning the top 3",
+  "returned_count": 3,
+  "total_match_count": 3,
+  "files_scanned": 4,
+  "truncated": false,
+  "matches": [
+    {
+      "note_path": "Harness Run Summaries/run-summary-run-20261001-obsidianlive-002.md",
+      "score": 42,
+      "matched_terms": [
+        "run",
+        "summary",
+        "plain",
+        "int",
+        "validationerror"
+      ],
+      "line": 2,
+      "snippet": "--- run_id: run-20261001-obsidianlive-002 task_id: T-OBSLIVEA final_verdict: pass generated_at: 2026-10-02T16:19:28Z harness: agentic-harness --- # Harness run sum..."
+    },
+    {
+      "note_path": "Harness Run Summaries/run-summary-run-20260908-obsidianlive-001.md",
+      "score": 27,
+      "matched_terms": [
+        "run",
+        "summary",
+        "int"
+      ],
+      "line": 2,
+      "snippet": "--- run_id: run-20260908-obsidianlive-001 task_id: OBSIDIAN-LIVE-001 final_verdict: blocked generated_at: 2026-09-08T21:50:00Z harness: agentic-harness --- # Harne..."
+    },
+    {
+      "note_path": "Engineering Notes/loanflow-integer-input-convention.md",
+      "score": 16,
+      "matched_terms": [
+        "run",
+        "plain",
+        "int",
+        "validationerror"
+      ],
+      "line": 2,
+      "snippet": "--- note_id: LFCONV-INTGUARD-01 origin: operator-seeded (written by hand before run-20261001-obsidianlive-002; NOT written by the harness) created: 2026-10-01 --- # loanflow integ..."
+    }
+  ]
+}

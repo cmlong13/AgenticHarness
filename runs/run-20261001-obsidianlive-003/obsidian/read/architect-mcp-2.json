@@ -1,0 +1,18 @@
+{
+  "run_id": "run-20261001-obsidianlive-003",
+  "task_id": "T-OBSLIVEB",
+  "phase": "research",
+  "source": "architect_direct_mcp",
+  "tool": "mcp__obsidian__read_note",
+  "query_or_note_path": "Engineering Notes/loanflow-integer-input-convention.md",
+  "status": "read",
+  "note_path": "Engineering Notes/loanflow-integer-input-convention.md",
+  "content_sha256": "ce8d5eacd9f42054685517532707ad85c3ad2f139f5c91c57b8e102474bb6334",
+  "retained_at": "2026-10-02T16:25:37Z",
+  "verification": {
+    "performed": true,
+    "result": "verified",
+    "independent_content_sha256": "ce8d5eacd9f42054685517532707ad85c3ad2f139f5c91c57b8e102474bb6334",
+    "reason": "independent orchestrator-mediated read of the same vault-relative note produced a matching SHA-256"
+  }
+}

@@ -1,0 +1,1 @@
+{"task_id": "T-OBSLIVEC", "run_id": "run-20261002-obsidianlive-004", "command_id": "C-3", "command": "python -m pytest tests/unit -v", "working_directory": "demo-repo", "target_repo_path": "demo-repo", "purpose": "Engineer post_test_requested: confirm the new regression test and the full unit suite pass after the Business.__post_init__ type guard"}

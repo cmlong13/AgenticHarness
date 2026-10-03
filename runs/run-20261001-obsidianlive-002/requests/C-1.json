@@ -1,0 +1,9 @@
+{
+  "task_id": "T-OBSLIVEA",
+  "run_id": "run-20261001-obsidianlive-002",
+  "command_id": "C-1",
+  "command": "python -m pytest tests/unit/test_late_fee_tier.py -k test_non_integer_and_bool_days_past_due_is_rejected -v",
+  "working_directory": "demo-repo",
+  "target_repo_path": "demo-repo",
+  "purpose": "Pre-implementation TDD failure check: confirm classify_late_fee_tier(10.5)/(True)/(False) do not yet raise ValidationError, per the Engineer's pre_test_requested envelope."
+}

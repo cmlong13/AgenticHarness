@@ -1,0 +1,12 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20261001-obsidianlive-002",
+  "kind": "discovery_decision",
+  "payload": {
+    "phase": "discovery",
+    "applied_memory_entry": "L-20261001-INSCOPE-BARE-PATHS",
+    "decision": "scope.json in_scope written as two bare paths; classify_late_fee_tier-only narrowing placed in constraints[0] instead of an in_scope annotation.",
+    "visible_in": "runs/run-20261001-obsidianlive-002/scope.json (in_scope, constraints[0])",
+    "obsidian_context": "runs/run-20261001-obsidianlive-002/obsidian/read/read-1.json (LFCONV-INTGUARD-01, corroborated by risk_bands.py:46, primitives.py:24/:54) informed constraints[1]; vault note is not a memory entry"
+  }
+}

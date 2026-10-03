@@ -1,0 +1,8 @@
+{
+  "operation": "search_obsidian",
+  "run_id": "run-20261001-obsidianlive-002",
+  "task_id": "T-OBSLIVEA",
+  "phase": "discovery",
+  "query": "loanflow input validation convention",
+  "filename": "search-1.json"
+}

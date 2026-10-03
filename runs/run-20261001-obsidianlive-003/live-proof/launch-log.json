@@ -1,0 +1,22 @@
+{
+  "label": "runB",
+  "launched_at": "2026-10-02T16:20:53.854763+00:00",
+  "cwd": "C:\\Users\\caleb\\Documents\\Projects\\AgenticHarness",
+  "prompt": "/work In demo-repo (task T-OBSLIVEB, run run-20261001-obsidianlive-003), loanflow.applicants.Applicant accepts a non-integer years_employed: Applicant(applicant_id=\"AP-1\", full_name=\"A\", years_employed=2.5) is constructed without error. Make Applicant reject a years_employed that is not a plain int with ValidationError, and add a regression test in demo-repo/tests/unit/test_applicants.py. Before scoping, consult the Obsidian vault for prior harness run summaries relevant to this kind of change, and follow their precedent if the repository corroborates it.",
+  "argv_without_prompt": [
+    "claude",
+    "--permission-mode",
+    "bypassPermissions",
+    "--output-format",
+    "stream-json",
+    "--verbose"
+  ],
+  "env_overrides": {
+    "OBSIDIAN_VAULT_PATH": "C:\\Users\\caleb\\Documents\\Obsidian Vault"
+  },
+  "parent_env_had_OBSIDIAN_VAULT_PATH": false,
+  "pid": 18624,
+  "exited_at": "2026-10-02T17:09:03.244253+00:00",
+  "returncode": 0,
+  "stderr_tail": ""
+}

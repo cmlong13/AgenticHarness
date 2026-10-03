@@ -1,0 +1,17 @@
+{
+  "operation": "prepare_infrastructure_retry",
+  "run_id": "run-20261001-obsidianlive-003",
+  "requested_command": {
+    "id": "V-1",
+    "command": "python -m pytest tests/unit/test_applicants.py -v",
+    "working_directory": "demo-repo",
+    "criteria_ids_targeted": [
+      "AC-1",
+      "AC-2",
+      "AC-3",
+      "AC-4"
+    ],
+    "rationale": "Runs the whole of test_applicants.py, including the new test_applicant_rejects_non_integer_and_bool_years_employed (float 2.5, True, False) and the existing tests for years_employed=5, years_employed=-1 and an empty full_name, which together cover all four acceptance criteria."
+  },
+  "prior_attempt_ids": []
+}

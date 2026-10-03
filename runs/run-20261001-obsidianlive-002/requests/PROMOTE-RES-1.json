@@ -1,0 +1,9 @@
+{
+  "operation": "promote_artifact",
+  "run_id": "run-20261001-obsidianlive-002",
+  "phase": "research",
+  "doc_ref": "runs/run-20261001-obsidianlive-002/attempts/research-1-raw.json",
+  "context_refs": {
+    "scope": "runs/run-20261001-obsidianlive-002/scope.json"
+  }
+}

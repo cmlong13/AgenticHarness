@@ -1,0 +1,29 @@
+command: python -m pytest tests/unit/test_applicants.py -v
+executed_as: C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe -m pytest tests/unit/test_applicants.py -v
+working_directory: demo-repo
+timeout_seconds: 300
+real_pytest_exit_code: 0
+reported_exit_code: 0
+
+--- STDOUT ---
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo
+configfile: pyproject.toml
+collecting ... collected 7 items
+
+tests/unit/test_applicants.py::test_valid_applicant_constructs PASSED    [ 14%]
+tests/unit/test_applicants.py::test_applicant_rejects_empty_name PASSED  [ 28%]
+tests/unit/test_applicants.py::test_applicant_rejects_negative_years_employed PASSED [ 42%]
+tests/unit/test_applicants.py::test_applicant_rejects_non_integer_and_bool_years_employed PASSED [ 57%]
+tests/unit/test_applicants.py::test_valid_business_constructs PASSED     [ 71%]
+tests/unit/test_applicants.py::test_business_rejects_empty_legal_name PASSED [ 85%]
+tests/unit/test_applicants.py::test_business_rejects_negative_years_in_operation PASSED [100%]
+
+============================== 7 passed in 0.03s ==============================
+
+--- STDERR ---
+
+--- MUTATION CHECK ---
+no persistent non-cache file addition, deletion, or modification detected

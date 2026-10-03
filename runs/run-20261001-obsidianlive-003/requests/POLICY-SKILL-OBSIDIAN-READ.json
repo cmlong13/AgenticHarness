@@ -1,0 +1,1 @@
+{"operation":"retain_policy_event","run_id":"run-20261001-obsidianlive-003","kind":"skill_invocation","payload":{"skill":"obsidian","phase":"discovery","purpose":"Discovery-phase vault read consultation (search_obsidian/read_obsidian_note)","invoked_via":"Skill tool"}}

@@ -1,0 +1,23 @@
+{
+  "task_id": "T-OBSLIVEC",
+  "run_id": "run-20261002-obsidianlive-004",
+  "operation": "read_obsidian_note",
+  "phase": "discovery",
+  "connector": "filesystem_vault",
+  "attempted_at": "2026-10-02T17:34:35Z",
+  "requested_note_path": "Harness Run Summaries/run-summary-run-20261001-obsidianlive-003.md",
+  "vault": {
+    "configured": true,
+    "vault_path": "C:\\Users\\caleb\\Documents\\Obsidian Vault",
+    "raw_env_value": "C:\\Users\\caleb\\Documents\\Obsidian Vault"
+  },
+  "status": "read",
+  "note_path": "Harness Run Summaries/run-summary-run-20261001-obsidianlive-003.md",
+  "reason": "note read from the configured Obsidian vault",
+  "absolute_path": "C:\\Users\\caleb\\Documents\\Obsidian Vault\\Harness Run Summaries\\run-summary-run-20261001-obsidianlive-003.md",
+  "content": "---\nrun_id: run-20261001-obsidianlive-003\ntask_id: T-OBSLIVEB\nfinal_verdict: inconclusive\ngenerated_at: 2026-10-02T16:32:42Z\nharness: agentic-harness\n---\n\n# Harness run summary \u2014 run-20261001-obsidianlive-003\n\n- **Run ID:** run-20261001-obsidianlive-003\n- **Task ID:** T-OBSLIVEB\n- **Source mode:** prompt\n- **Objective:** Applicant.__post_init__ in demo-repo/src/loanflow/applicants.py now rejects any years_employed that is not a plain int (float 2.5, bool True/False) with ValidationError, placed before the unchanged negative check. It uses the repository idiom isinstance(x, bool) or not isinstance(x, int), following the precedent of vault run summary run-20261001-obsidianlive-002 and vault note LFCONV-INTGUARD-01, both corroborated by the repository (findings F-8/F-9). Regression test test_applicant_rejects_non_integer_and_bool_years_employed was added to demo-repo/tests/unit/test_applicants.py (+2/+9 lines, TDD: C-1 failed as expected, C-2 passed). The Quality Engineer's V-1 (7 passed) confirmed AC-1, AC-2 and AC-4 but marked AC-3 blocked: its Discovery-authored clause 'the default 0 constructs successfully' is exercised by no test in demo-repo. final_verdict is therefore inconclusive. The orchestrator independently re-ran ORCH-1 (7 passed) and ORCH-2 (107 unit tests passed) through the test-runner Skill with matching command identity.\n- **Final verdict:** inconclusive\n- **Phases completed:** discovery, research, implementation, verification\n- **Generated at:** 2026-10-02T16:32:42Z\n\n## Pipeline artifacts\n- Discovery / scope: `runs/run-20261001-obsidianlive-003/scope.json`\n- Research / findings: `runs/run-20261001-obsidianlive-003/findings.json`\n- Implementation report: `runs/run-20261001-obsidianlive-003/implementation-report.json`\n- Verification report: `runs/run-20261001-obsidianlive-003/verification-report.json`\n- Checkpoint: `runs/run-20261001-obsidianlive-003/checkpoint.json`\n\n## Tests\n- Test commands: `` (exit 0, pass)\n- Acceptance criteria: 0/4 passed\n- Verification verdict: inconclusive\n\n## Memory\n- Memory influenced this run: yes \u2014 L-20261001-INSCOPE-BARE-PATHS\n- Lessons appended this run: 1\n\n## Usage / cost\n- Usage summary: `runs/run-20261001-obsidianlive-003/usage-summary.json`\n- Subagent subtotal: None tokens, $None (subtotal only \u2014 not full pipeline cost)\n- Coverage status: partial\n- Full pipeline total: None\n\n## Evidence gaps\n- AC-3's default-value clause (Applicant constructed without years_employed yields 0) is unverified by any test, so this run cannot be called a pass even though the full unit suite is green.\n- Per-agent cost is unpriced for all three subagents and orchestrator usage is not measured in-session, so full_pipeline_total is null.\n- Start a new /work run (new run_id) that adds a default-years_employed test in demo-repo/tests/unit/test_applicants.py, or re-scope AC-3 without the default-0 clause.\n- Changes in demo-repo are uncommitted; commit/push is not authorized by this run.\n- Orchestrator-side usage was not measured; full_pipeline_total is null.\n\n---\n_Generated 2026-10-02T16:32:42Z from retained run evidence under `runs/run-20261001-obsidianlive-003/`._\n",
+  "byte_count": 3149,
+  "line_count": 50,
+  "content_sha256": "f743b90d344a8cacbaade4aeaed437e93d07df4834fc9ccbf860910083a1ed3b",
+  "truncated": false
+}

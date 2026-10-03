@@ -1,0 +1,11 @@
+{
+  "operation": "record_memory_applied",
+  "run_id": "run-20261001-obsidianlive-002",
+  "entry_id": "L-20261001-INSCOPE-BARE-PATHS",
+  "entry_type": "lesson",
+  "source_run_id": "run-20261001-midimplresume-001",
+  "current_run_id": "run-20261001-obsidianlive-002",
+  "phase": "discovery",
+  "decision": "Wrote scope.json in_scope as bare repository-relative paths (no 'classify_late_fee_tier only' annotation) and moved the function-level narrowing into constraints, so engineer.md Step 1d exact-match cannot block Implementation.",
+  "evidence_path": "runs/run-20261001-obsidianlive-002/logs/policy-events.jsonl"
+}

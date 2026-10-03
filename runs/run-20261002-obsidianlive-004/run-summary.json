@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-OBSLIVEC",
+  "run_id": "run-20261002-obsidianlive-004",
+  "created_at": "2026-10-02T17:33:34Z",
+  "objective_summary": "loanflow.applicants.Business.__post_init__ (demo-repo/src/loanflow/applicants.py) now rejects a years_in_operation that is not a plain int (e.g. 3.5, and bool True) with ValidationError. The guard runs before the unchanged negative check and uses the repository idiom isinstance(x, bool) or not isinstance(x, int), following vault note LFCONV-INTGUARD-01, which Research marked corroborated. The regression test test_business_rejects_non_integer_and_bool_years_in_operation was added to demo-repo/tests/unit/test_applicants.py (+2/+7 lines). The run spanned two /work processes. Process 1 did Discovery (with Obsidian vault consultation) and Research, then was interrupted mid-Implementation after its Engineer (a42ce2eb00e718903) had added the test and written a C-1 request that never executed. Process 2 (this one) reused Discovery and Research and restarted Implementation with a fresh Engineer (aec41ef15e053825e). That Engineer adopted the disclosed test; C-2 failed for the expected reason (DID NOT RAISE), the guard was added, and C-3 passed (106 unit tests). A fresh Quality Engineer (ab9e39cb1e33a8c8d) passed AC-1..AC-4 via V-1 (7 passed) and V-2 (106 passed). The orchestrator independently re-ran ORCH-1 (7 passed) and ORCH-2 (full demo-repo suite, 113 passed) through the test-runner Skill with matching command identity, and confirmed the demo-repo git diff equals the reported changed_files.",
+  "artifact_refs": {
+    "scope": "runs/run-20261002-obsidianlive-004/scope.json",
+    "findings": "runs/run-20261002-obsidianlive-004/findings.json",
+    "implementation_report": "runs/run-20261002-obsidianlive-004/implementation-report.json",
+    "verification_report": "runs/run-20261002-obsidianlive-004/verification-report.json",
+    "checkpoint": "runs/run-20261002-obsidianlive-004/checkpoint.json"
+  },
+  "phases_completed": [
+    "discovery",
+    "research",
+    "implementation",
+    "verification"
+  ],
+  "phases_reused": [
+    "discovery",
+    "research"
+  ],
+  "phases_restarted": [
+    "implementation"
+  ],
+  "lessons_learned_appended": [
+    "Before dispatching a fresh Engineer for a restarted Implementation phase, run git status and git diff on the target repo yourself. An interrupted Engineer may have left uncommitted in-scope edits that the checkpoint does not record. Name those edits in the fresh Engineer's dispatch prompt so it reads them and decides independently whether to adopt or revise them, rather than discovering unexplained changes mid-protocol. Then apply the normal TDD orchestration check (test-only change, no source change) before mediating its pre-test. Never revert the orphaned edits through orchestrator Bash."
+  ],
+  "memory_loaded": true,
+  "memory_influenced_run": true,
+  "memory_refs_used": [
+    "L-20261001-INSCOPE-BARE-PATHS",
+    "L-20260918-FRESH-DISPATCH-COMMAND-ID-COLLISION"
+  ],
+  "remaining_risks": [
+    "The interrupted process's Engineer evidence (attempts/implementation-1.raw.txt, requests/C-1.json) is retained but superseded; C-1 never executed and that Engineer never produced a promoted report.",
+    "The regression test uses business_id 'BZ-000456' / legal_name 'Rivera Bakery LLC' (the file's existing convention) rather than the literal 'BZ-1'/'Acme' from the request; the guard depends only on years_in_operation's type, so this does not affect the result.",
+    "Per-agent cost is unpriced for all four subagents and orchestrator usage is not measured in-session, so full_pipeline_total is null."
+  ],
+  "follow_up_actions": [
+    "Changes in demo-repo are uncommitted; commit/push is not authorized by this run."
+  ],
+  "usage_summary_ref": "runs/run-20261002-obsidianlive-004/usage-summary.json",
+  "final_verdict": "pass"
+}

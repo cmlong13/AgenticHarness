@@ -1,0 +1,11 @@
+{
+  "operation": "write_checkpoint",
+  "kind": "progress",
+  "run_id": "run-20261001-obsidianlive-002",
+  "task_id": "T-OBSLIVEA",
+  "target_repo_path": "demo-repo",
+  "completed_phases": ["discovery"],
+  "artifact_refs": {
+    "discovery": "runs/run-20261001-obsidianlive-002/scope.json"
+  }
+}

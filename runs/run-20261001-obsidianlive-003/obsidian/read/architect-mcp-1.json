@@ -1,0 +1,18 @@
+{
+  "run_id": "run-20261001-obsidianlive-003",
+  "task_id": "T-OBSLIVEB",
+  "phase": "research",
+  "source": "architect_direct_mcp",
+  "tool": "mcp__obsidian__read_note",
+  "query_or_note_path": "Harness Run Summaries/run-summary-run-20261001-obsidianlive-002.md",
+  "status": "read",
+  "note_path": "Harness Run Summaries/run-summary-run-20261001-obsidianlive-002.md",
+  "content_sha256": "338a671b4d484ac9fbf7fb46a93db17b8a5ef2d2fa39400fdd2fa3d6e5580579",
+  "retained_at": "2026-10-02T16:25:37Z",
+  "verification": {
+    "performed": true,
+    "result": "verified",
+    "independent_content_sha256": "338a671b4d484ac9fbf7fb46a93db17b8a5ef2d2fa39400fdd2fa3d6e5580579",
+    "reason": "independent orchestrator-mediated read of the same vault-relative note produced a matching SHA-256"
+  }
+}

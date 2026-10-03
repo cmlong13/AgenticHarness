@@ -1,0 +1,1 @@
+{"operation": "retain_policy_event", "run_id": "run-20261002-obsidianlive-004", "task_id": "T-OBSLIVEC", "kind": "phase_reused", "payload": {"phase": "discovery", "artifact_ref": "runs/run-20261002-obsidianlive-004/scope.json"}}

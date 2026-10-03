@@ -1,0 +1,624 @@
+{
+  "captured_at": "2026-10-02T17:30:51.231848+00:00",
+  "clean_root": "C:\\Users\\caleb\\Documents\\Projects\\AgenticHarness-obslive004-clean",
+  "head": "681fddf85284978a1d43cb03523976c5107d9782",
+  "origin": "https://github.com/cmlong13/AgenticHarness.git",
+  "status_short": "",
+  "ignored_local_additions": [
+    "!! .claude/settings.local.json"
+  ],
+  "text_files_scanned": 1574,
+  "negative_checks": {
+    "run-20261001-obsidianlive-002": {
+      "file_count": 0,
+      "files": []
+    },
+    "obsidianlive-002": {
+      "file_count": 0,
+      "files": []
+    },
+    "obsidianlive-003": {
+      "file_count": 0,
+      "files": []
+    },
+    "T-OBSLIVEA": {
+      "file_count": 0,
+      "files": []
+    },
+    "T-OBSLIVEB": {
+      "file_count": 0,
+      "files": []
+    },
+    "LFCONV-INTGUARD-01": {
+      "file_count": 0,
+      "files": []
+    },
+    "LFCONV": {
+      "file_count": 0,
+      "files": []
+    },
+    "test_non_integer_and_bool_days_past_due_is_rejected": {
+      "file_count": 0,
+      "files": []
+    },
+    "placed before the unchanged negative check": {
+      "file_count": 0,
+      "files": []
+    },
+    "run-summary-run-20261001": {
+      "file_count": 4,
+      "files": [
+        "runs/run-20261001-midimplresume-001/logs/policy-events.jsonl",
+        "runs/run-20261001-midimplresume-001/obsidian/summary-publication.json",
+        "runs/run-20261001-midimplresume-002/logs/policy-events.jsonl",
+        "runs/run-20261001-midimplresume-002/obsidian/summary-publication.json"
+      ]
+    },
+    "loanflow-integer-input-convention": {
+      "file_count": 0,
+      "files": []
+    },
+    "Engineering Notes": {
+      "file_count": 0,
+      "files": []
+    }
+  },
+  "runs_obsidianlive_dirs": [
+    "run-20260908-obsidianlive-001"
+  ],
+  "late_fee_occurrences_all_committed_before_run_a": [
+    {
+      "file": "demo-repo/docs/late-fee-tier-policy.md",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "demo-repo/src/loanflow/late_fee_tier.py",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "demo-repo/tests/unit/test_late_fee_tier.py",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "demo-repo/tests/unit/test_late_fee_tier_regression.py",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/completion-guardrail-live-001/scope.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/attempts/discovery-1.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/attempts/implementation-1.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/attempts/implementation-2.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/attempts/implementation-3.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/attempts/research-1.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/findings.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/live_cli/01-scope-candidate.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/live_cli/06-architect-raw-attempt1.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/live_cli/12-engineer-raw-attempt1.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/live_cli/15-engineer-raw-attempt2.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/live_cli/18-check-identity-c1.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/live_cli/19-engineer-raw-attempt3.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/live_cli/23-run-summary.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/logs/C-1.log",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/requests/C-1.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/run-summary.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-004/scope.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/discovery-1.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/implementation-1.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/implementation-2.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/implementation-3.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/implementation-4.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/implementation-5.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/implementation-6.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/implementation-7.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/implementation-8.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/research-1.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/research-2.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/verification-1.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/verification-2.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/verification-3.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/verification-4.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/verification-5.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/attempts/verification-6.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/diff.patch",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/diff.repair-1.patch",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/findings.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/implementation-report.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/implementation-report.repair-1.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/01-scope-candidate.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/06-architect-raw-attempt1.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/10-architect-raw-attempt2.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/16-engineer-raw-attempt1.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/19-check-identity-c1.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/20-engineer-raw-attempt2.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/23-check-identity-c2.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/24-engineer-final-report.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/29-qe-raw-attempt1.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/32-check-identity-v1.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/33-qe-raw-attempt2.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/36-check-identity-v2.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/37-qe-final-report.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/43-engineer-repair-attempt1.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/46-check-identity-c3.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/47-engineer-repair-attempt2.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/50-check-identity-c4.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/51-engineer-raw-attempt6.txt",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/54-engineer-raw-attempt7.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/56-engineer-repair-final-report.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/61-qe-raw-attempt4.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/64-check-identity-v3.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/65-qe-raw-attempt5.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/68-check-identity-v4.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/69-qe-repair-final-report.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/73-check-identity-orch1.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/live_cli/76-run-summary.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/logs/C-1.log",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/logs/C-2.log",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/logs/C-3.log",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/logs/C-4.log",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/logs/ORCH-1.log",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/logs/V-1.log",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/logs/V-2.log",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/logs/V-3.log",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/logs/V-4.log",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/requests/C-1.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/requests/C-2.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/requests/C-3.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/requests/C-4.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/requests/ORCH-1.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/requests/V-1.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/requests/V-2.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/requests/V-3.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/requests/V-4.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/run-summary.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/scope.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/verification-report.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260805-latefee-005/verification-report.repair-1.json",
+      "tracked": true,
+      "last_commit": "2026-08-05T15:06:56-04:00"
+    },
+    {
+      "file": "runs/run-20260917-logicrepair-001/attempts/discovery-1.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-09-18T15:51:21-04:00"
+    },
+    {
+      "file": "runs/run-20260917-logicrepair-001/logs/policy-events.jsonl",
+      "tracked": true,
+      "last_commit": "2026-09-18T15:51:21-04:00"
+    },
+    {
+      "file": "runs/run-20260917-logicrepair-001/requests/MEM-1.json",
+      "tracked": true,
+      "last_commit": "2026-09-18T15:51:21-04:00"
+    },
+    {
+      "file": "runs/run-20260917-logicrepair-001/scope-candidate.json",
+      "tracked": true,
+      "last_commit": "2026-09-18T15:51:21-04:00"
+    },
+    {
+      "file": "runs/run-20260917-logicrepair-001/scope.json",
+      "tracked": true,
+      "last_commit": "2026-09-18T15:51:21-04:00"
+    },
+    {
+      "file": "runs/run-20260917-logicrepair-002/attempts/discovery-1.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-09-18T15:51:21-04:00"
+    },
+    {
+      "file": "runs/run-20260917-logicrepair-002/scope-candidate.json",
+      "tracked": true,
+      "last_commit": "2026-09-18T15:51:21-04:00"
+    },
+    {
+      "file": "runs/run-20260917-logicrepair-002/scope.json",
+      "tracked": true,
+      "last_commit": "2026-09-18T15:51:21-04:00"
+    },
+    {
+      "file": "runs/run-20260919-flaky-001/logs/ORCH-3.log",
+      "tracked": true,
+      "last_commit": "2026-09-21T12:29:32-04:00"
+    },
+    {
+      "file": "runs/run-20261001-midimplresume-001/attempts/discovery-1-candidate.json",
+      "tracked": true,
+      "last_commit": "2026-10-01T15:49:10-04:00"
+    },
+    {
+      "file": "runs/run-20261001-midimplresume-001/attempts/discovery-1.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-10-01T15:49:10-04:00"
+    },
+    {
+      "file": "runs/run-20261001-midimplresume-001/scope.json",
+      "tracked": true,
+      "last_commit": "2026-10-01T15:49:10-04:00"
+    },
+    {
+      "file": "runs/run-20261001-midimplresume-002/attempts/discovery-1-candidate.json",
+      "tracked": true,
+      "last_commit": "2026-10-01T15:49:10-04:00"
+    },
+    {
+      "file": "runs/run-20261001-midimplresume-002/attempts/discovery-1.raw.txt",
+      "tracked": true,
+      "last_commit": "2026-10-01T15:49:10-04:00"
+    },
+    {
+      "file": "runs/run-20261001-midimplresume-002/logs/V-2.log",
+      "tracked": true,
+      "last_commit": "2026-10-01T15:49:10-04:00"
+    },
+    {
+      "file": "runs/run-20261001-midimplresume-002/logs/V-5.log",
+      "tracked": true,
+      "last_commit": "2026-10-01T15:49:10-04:00"
+    },
+    {
+      "file": "runs/run-20261001-midimplresume-002/scope.json",
+      "tracked": true,
+      "last_commit": "2026-10-01T15:49:10-04:00"
+    }
+  ],
+  "run_a_started_at": "2026-10-01T22:00:10Z",
+  "late_fee_tier_has_isinstance_guard": false,
+  "memory_identical_to_head": true
+}

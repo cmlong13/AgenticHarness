@@ -1,0 +1,19 @@
+ M demo-repo/src/loanflow/applicants.py
+ M demo-repo/tests/unit/test_applicants.py
+ M memory/facts.jsonl
+ M memory/lessons-learned.md
+?? runs/_unmatched_usage/a250620eac598e417-20261003T063021Z.json
+?? runs/_unmatched_usage/a29b276bf9eac7086-20261002T173802Z.json.reconciled
+?? runs/_unmatched_usage/a2a185e60a4b4c359-20261003T063413Z.json
+?? runs/_unmatched_usage/a42ce2eb00e718903-20261002T174134Z.json.reconciled
+?? runs/_unmatched_usage/a7f2c224c1176b40c-20261003T072050Z.json
+?? runs/_unmatched_usage/aa691ad7a8d5fbbf9-20261003T063132Z.json
+?? runs/_unmatched_usage/aade02b736678f6ea-20261003T072100Z.json
+?? runs/_unmatched_usage/ab9e39cb1e33a8c8d-20261003T063327Z.json.reconciled
+?? runs/_unmatched_usage/aec41ef15e053825e-20261003T062915Z.json.reconciled
+?? runs/_unmatched_usage/afe7d555c629b07fc-20261003T063516Z.json
+?? runs/_usage_corroboration/a29b276bf9eac7086.json
+?? runs/_usage_corroboration/a42ce2eb00e718903.json
+?? runs/_usage_corroboration/ab9e39cb1e33a8c8d.json
+?? runs/_usage_corroboration/aec41ef15e053825e.json
+?? runs/run-20261002-obsidianlive-004/

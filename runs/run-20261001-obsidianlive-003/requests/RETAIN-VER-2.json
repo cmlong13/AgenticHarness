@@ -1,0 +1,8 @@
+{
+  "operation": "retain_attempt",
+  "run_id": "run-20261001-obsidianlive-003",
+  "task_id": "T-OBSLIVEB",
+  "phase": "verification",
+  "attempt_n": 2,
+  "raw_text_ref": "runs/run-20261001-obsidianlive-003/attempts/verification-2-received.txt"
+}

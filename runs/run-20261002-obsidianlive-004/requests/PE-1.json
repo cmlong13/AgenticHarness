@@ -1,0 +1,1 @@
+{"operation": "retain_policy_event", "run_id": "run-20261002-obsidianlive-004", "task_id": "T-OBSLIVEC", "kind": "skill_invocation", "payload": {"skill": "obsidian", "invoked_via": "Skill tool", "purpose": "Discovery-phase vault read consultation (search_obsidian/read_obsidian_note) for prior harness run summaries, per the user request"}}

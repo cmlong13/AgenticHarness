@@ -1,0 +1,8 @@
+{
+  "operation": "read_obsidian_note",
+  "run_id": "run-20261001-obsidianlive-002",
+  "task_id": "T-OBSLIVEA",
+  "phase": "discovery",
+  "note_path": "Engineering Notes/loanflow-integer-input-convention.md",
+  "filename": "read-1.json"
+}

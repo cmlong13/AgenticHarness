@@ -1,0 +1,11 @@
+{
+  "actions": [
+    {
+      "at": "2026-10-02T16:11:47.119212+00:00",
+      "actor": "operator (user-authorized)",
+      "action": "renamed verification-report.json -> verification-report.interrupted.json (not deleted, content unchanged)",
+      "sha256": "e6f9bb02c6e26e805f0411dcc2c40fe6c63b942ac44e36af0537bfa8828f251d",
+      "reason": "process-1 was killed (system low-memory reap) after the QE report was promoted but before a checkpoint recorded Verification; process-2 (/work --resume) halted with resume_canonical_collision and recommended this exact action. Authorized by the user on 2026-10-02."
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+diff --git a/demo-repo/src/loanflow/applicants.py b/demo-repo/src/loanflow/applicants.py
+index cd28782..eb93683 100644
+--- a/demo-repo/src/loanflow/applicants.py
++++ b/demo-repo/src/loanflow/applicants.py
+@@ -32,5 +32,7 @@ class Business:
+     def __post_init__(self) -> None:
+         if not self.legal_name.strip():
+             raise ValidationError("Business.legal_name must not be empty")
++        if isinstance(self.years_in_operation, bool) or not isinstance(self.years_in_operation, int):
++            raise ValidationError("Business.years_in_operation must be an integer")
+         if self.years_in_operation < 0:
+             raise ValidationError("Business.years_in_operation must not be negative")
+diff --git a/demo-repo/tests/unit/test_applicants.py b/demo-repo/tests/unit/test_applicants.py
+index 4718c6c..f42f300 100644
+--- a/demo-repo/tests/unit/test_applicants.py
++++ b/demo-repo/tests/unit/test_applicants.py
+@@ -34,3 +34,10 @@ def test_business_rejects_empty_legal_name() -> None:
+ def test_business_rejects_negative_years_in_operation() -> None:
+     with pytest.raises(ValidationError):
+         Business(business_id="BZ-000456", legal_name="Rivera Bakery LLC", years_in_operation=-2)
++
++
++def test_business_rejects_non_integer_and_bool_years_in_operation() -> None:
++    with pytest.raises(ValidationError):
++        Business(business_id="BZ-000456", legal_name="Rivera Bakery LLC", years_in_operation=3.5)
++    with pytest.raises(ValidationError):
++        Business(business_id="BZ-000456", legal_name="Rivera Bakery LLC", years_in_operation=True)

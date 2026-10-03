@@ -1,0 +1,8 @@
+{
+  "operation": "validate_artifact",
+  "phase": "implementation",
+  "doc_ref": "runs/run-20261001-obsidianlive-003/attempts/implementation-4-received.txt",
+  "context_refs": {
+    "findings": "runs/run-20261001-obsidianlive-003/findings.json"
+  }
+}

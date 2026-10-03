@@ -1,0 +1,1 @@
+{"task_id": "T-OBSLIVEC", "run_id": "run-20261002-obsidianlive-004", "command_id": "V-1", "command": "python -m pytest tests/unit/test_applicants.py -v", "working_directory": "demo-repo", "target_repo_path": "demo-repo", "purpose": "Quality Engineer attempt_requested: verify AC-1..AC-4 via test_applicants.py"}

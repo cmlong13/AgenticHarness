@@ -1,0 +1,11 @@
+{
+  "operation": "check_command_identity",
+  "request": {
+    "task_id": "T-OBSLIVEA",
+    "run_id": "run-20261001-obsidianlive-002",
+    "command_id": "C-1",
+    "command": "python -m pytest tests/unit/test_late_fee_tier.py -k test_non_integer_and_bool_days_past_due_is_rejected -v",
+    "working_directory": "demo-repo"
+  },
+  "result": {"message_type": "command_result", "task_id": "T-OBSLIVEA", "run_id": "run-20261001-obsidianlive-002", "command_id": "C-1", "command": "python -m pytest tests/unit/test_late_fee_tier.py -k test_non_integer_and_bool_days_past_due_is_rejected -v", "working_directory": "demo-repo", "exit_code": 1, "output_ref": "runs/run-20261001-obsidianlive-002/logs/C-1.log"}
+}

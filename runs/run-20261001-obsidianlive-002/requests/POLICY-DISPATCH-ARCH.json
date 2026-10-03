@@ -1,0 +1,11 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20261001-obsidianlive-002",
+  "kind": "agent_dispatch",
+  "payload": {
+    "phase": "research",
+    "subagent_type": "architect",
+    "agent_id": "a8dfb41f1c734e5f9",
+    "dispatch_sequence": 1
+  }
+}

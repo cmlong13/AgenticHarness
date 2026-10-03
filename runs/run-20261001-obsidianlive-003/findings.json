@@ -1,0 +1,313 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-OBSLIVEB",
+  "run_id": "run-20261001-obsidianlive-003",
+  "created_at": "2026-10-02T16:21:10Z",
+  "scope_ref": {
+    "path": "runs/run-20261001-obsidianlive-003/scope.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "Applicant.__post_init__ currently runs only two checks. It raises ValidationError when full_name.strip() is empty (line 20), and it raises ValidationError when years_employed < 0 (line 22). There is no type check on years_employed. A float such as 2.5 passes the `< 0` comparison and the instance is built without error. A bool also passes, because True/False compare as 1/0, which are not negative. years_employed is annotated `int = 0` (line 17), but a dataclass does not enforce annotations at runtime.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/applicants.py",
+          "start_line": 13,
+          "end_line": 23,
+          "evidence_tier": "executable_code",
+          "excerpt": "years_employed: int = 0 ... if not self.full_name.strip(): raise ValidationError(...) / if self.years_employed < 0: raise ValidationError(\"Applicant.years_employed must not be negative\")"
+        }
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "applicants.py already imports ValidationError from loanflow.errors at module level. ValidationError is a subclass of LoanflowError.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/applicants.py",
+          "start_line": 10,
+          "end_line": 10,
+          "evidence_tier": "executable_code",
+          "excerpt": "from loanflow.errors import ValidationError"
+        },
+        {
+          "path": "demo-repo/src/loanflow/errors.py",
+          "start_line": 14,
+          "end_line": 14,
+          "evidence_tier": "executable_code",
+          "excerpt": "class ValidationError(LoanflowError):"
+        }
+      ]
+    },
+    {
+      "id": "F-3",
+      "claim": "The integer-guard idiom `isinstance(x, bool) or not isinstance(x, int)` -> raise ValidationError appears in exactly four places under demo-repo: Money.__post_init__ (primitives.py:24), Percentage.__post_init__ (primitives.py:54), classify_credit_score (risk_bands.py:46), and classify_late_fee_tier (late_fee_tier.py:22). In every case where a range or negative check also exists (primitives.py:56, risk_bands.py:48, late_fee_tier.py:24), the type check comes before it.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/primitives.py",
+          "start_line": 23,
+          "end_line": 25,
+          "evidence_tier": "executable_code",
+          "excerpt": "if isinstance(self.cents, bool) or not isinstance(self.cents, int):"
+        },
+        {
+          "path": "demo-repo/src/loanflow/primitives.py",
+          "start_line": 53,
+          "end_line": 57,
+          "evidence_tier": "executable_code",
+          "excerpt": "if isinstance(self.basis_points, bool) or not isinstance(self.basis_points, int): ... if self.basis_points < 0:"
+        },
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 45,
+          "end_line": 49,
+          "evidence_tier": "executable_code",
+          "excerpt": "if isinstance(score, bool) or not isinstance(score, int): raise ValidationError(\"credit score must be an integer\")"
+        },
+        {
+          "path": "demo-repo/src/loanflow/late_fee_tier.py",
+          "start_line": 21,
+          "end_line": 25,
+          "evidence_tier": "executable_code",
+          "excerpt": "if isinstance(days_past_due, bool) or not isinstance(days_past_due, int): ... if days_past_due < 0:"
+        }
+      ]
+    },
+    {
+      "id": "F-4",
+      "claim": "Existing modules pair this guard with pytest.raises(ValidationError) regression tests in their own tests/unit/test_<module>.py. Percentage, classify_credit_score and classify_late_fee_tier each have a test covering a float plus True and False. Money's test (test_money_rejects_non_integer_cents) covers only a float (1.5), not bool.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_primitives.py",
+          "start_line": 21,
+          "end_line": 23,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_primitives.py",
+          "start_line": 47,
+          "end_line": 53,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 54,
+          "end_line": 62,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_late_fee_tier.py",
+          "start_line": 37,
+          "end_line": 43,
+          "evidence_tier": "test_assertion"
+        }
+      ]
+    },
+    {
+      "id": "F-5",
+      "claim": "demo-repo/tests/unit/test_applicants.py has three Applicant tests: a valid construct with years_employed=5, an empty-name rejection, and a negative years_employed rejection (-1). None of them passes a non-int or bool years_employed. The default years_employed=0 path is not tested directly by name. test_applicant_rejects_empty_name passes years_employed=0 explicitly and fails on the name check first. The file already imports pytest, Applicant and ValidationError.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_applicants.py",
+          "start_line": 1,
+          "end_line": 21,
+          "evidence_tier": "test_assertion"
+        }
+      ]
+    },
+    {
+      "id": "F-6",
+      "claim": "There are six places in demo-repo that construct an Applicant, and all of them pass a plain int literal for years_employed: conftest.py:27 (5), test_end_to_end_approve.py:13 (5), test_end_to_end_decline.py:14 (2), test_end_to_end_refer.py:14 (4), and test_applicants.py:10/16/21 (5, 0, -1). The only production caller is cli._build_pipeline_inputs. It passes payload[\"applicant\"].get(\"years_employed\", 0) straight from parsed JSON, without int() coercion. The JSON fixtures and the test_cli payload all supply integers (5, 4, 2, 5). No other src module reads years_employed.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/cli.py",
+          "start_line": 26,
+          "end_line": 31,
+          "evidence_tier": "executable_code",
+          "excerpt": "years_employed=payload[\"applicant\"].get(\"years_employed\", 0),"
+        },
+        {
+          "path": "demo-repo/tests/conftest.py",
+          "start_line": 25,
+          "end_line": 27,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "demo-repo/tests/integration/test_end_to_end_approve.py",
+          "start_line": 13,
+          "end_line": 13,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "demo-repo/tests/integration/test_end_to_end_decline.py",
+          "start_line": 14,
+          "end_line": 14,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "demo-repo/tests/integration/test_end_to_end_refer.py",
+          "start_line": 14,
+          "end_line": 14,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_cli.py",
+          "start_line": 7,
+          "end_line": 15,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "demo-repo/tests/fixtures/applicant_basic.json",
+          "start_line": 3,
+          "end_line": 3,
+          "evidence_tier": "runtime_config"
+        },
+        {
+          "path": "demo-repo/tests/fixtures/applicant_boundary.json",
+          "start_line": 3,
+          "end_line": 3,
+          "evidence_tier": "runtime_config"
+        },
+        {
+          "path": "demo-repo/tests/fixtures/applicant_high_debt.json",
+          "start_line": 3,
+          "end_line": 3,
+          "evidence_tier": "runtime_config"
+        }
+      ]
+    },
+    {
+      "id": "F-7",
+      "claim": "cli.main catches LoanflowError (the base class of ValidationError), prints 'error: ...' to stderr and returns 1.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/cli.py",
+          "start_line": 89,
+          "end_line": 99,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-8",
+      "claim": "Vault note read-1 (Harness Run Summaries/run-summary-run-20261001-obsidianlive-002.md) is CORROBORATED by the current working tree. classify_late_fee_tier rejects non-int and bool input with ValidationError, and that check comes before the unchanged negative check (late_fee_tier.py:22-25). The regression test test_non_integer_and_bool_days_past_due_is_rejected covers 10.5, True and False (test_late_fee_tier.py:37-43). The note's Tests section says 'Acceptance criteria: 0/4 passed' and gives an empty test command, which contradicts its own objective text ('passed AC-1..AC-4'). That section is internally inconsistent metadata and was not relied on.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/late_fee_tier.py",
+          "start_line": 21,
+          "end_line": 25,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_late_fee_tier.py",
+          "start_line": 37,
+          "end_line": 43,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "runs/run-20261001-obsidianlive-003/obsidian/read/read-1.json",
+          "start_line": 18,
+          "end_line": 18,
+          "evidence_tier": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "F-9",
+      "claim": "Vault note read-2 (Engineering Notes/loanflow-integer-input-convention.md, LFCONV-INTGUARD-01) is CORROBORATED for the idiom, the bool-first order, the ValidationError error type, the type-before-range order, and the three locations it lists (Money, Percentage, classify_credit_score). It is STALE in one place: it does not list classify_late_fee_tier (late_fee_tier.py:22), which now carries the guard too. It is CONTRADICTED as a description of the current state on two points. First, it says 'any loanflow value that is semantically an integer ... is guarded', but Applicant.years_employed (an integer count) is not guarded today (applicants.py:19-23); that gap is what this task addresses. Second, it says 'each guard gets a regression test', but Money's test covers only a float, not bool (test_primitives.py:21-23). Read the note as a convention to follow, not as an exhaustive description of the current code.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/primitives.py",
+          "start_line": 24,
+          "end_line": 25,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/src/loanflow/risk_bands.py",
+          "start_line": 46,
+          "end_line": 49,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/src/loanflow/applicants.py",
+          "start_line": 19,
+          "end_line": 23,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_primitives.py",
+          "start_line": 21,
+          "end_line": 23,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "runs/run-20261001-obsidianlive-003/obsidian/read/read-2.json",
+          "start_line": 18,
+          "end_line": 18,
+          "evidence_tier": "metadata"
+        }
+      ]
+    },
+    {
+      "id": "F-10",
+      "claim": "No existing test in demo-repo builds an Applicant with a float or bool years_employed, and none asserts that such an input is accepted.",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "grep",
+          "query": "years_employed",
+          "scope": "demo-repo/",
+          "result": "16 matches. Every Applicant construction and JSON fixture uses an int literal (5, 4, 2, 0, -1). No float or bool values appear."
+        },
+        {
+          "method": "grep",
+          "query": "Applicant\\(",
+          "scope": "demo-repo/",
+          "result": "8 matches: cli.py:27, conftest.py:27, three integration tests, and test_applicants.py:10/16/21. None uses a non-int."
+        }
+      ]
+    },
+    {
+      "id": "F-11",
+      "claim": "Adding the scoped guard should not break any existing caller or test. With the guard in place, a CLI payload that supplies a float or bool years_employed would end with exit code 1 and an 'error:' message, not a traceback.",
+      "classification": "inferred",
+      "supporting_finding_ids": [
+        "F-1",
+        "F-5",
+        "F-6",
+        "F-7"
+      ],
+      "reasoning": "Every current Applicant construction and fixture passes a plain int (F-5, F-6). A bool/int guard placed before the negative check therefore leaves their behavior unchanged, and -1 and the empty name are still rejected by the existing checks (F-1). The CLI passes the JSON value through without coercion (F-6), so a JSON float would reach the guard and raise ValidationError. That is a LoanflowError, which cli.main converts to exit code 1 (F-7)."
+    }
+  ],
+  "open_questions": [
+    "Implementation (writing the regression test and adding the guard to Applicant.__post_init__) is the N-IMPLEMENT node. It is outside the Architect's role and is not described here.",
+    "The late_fee_tier.py/test_late_fee_tier.py content cited in F-3, F-4 and F-8 is uncommitted working-tree state from run-20261001-obsidianlive-002 (per the orchestrator note and the session git status). It corroborates vault note read-1 only for the current working tree, not for a committed HEAD. Without a Git tool I cannot confirm this independently."
+  ],
+  "obsidian_reads": [
+    {
+      "tool": "mcp__obsidian__read_note",
+      "query_or_note_path": "Harness Run Summaries/run-summary-run-20261001-obsidianlive-002.md",
+      "status": "read",
+      "note_path": "Harness Run Summaries/run-summary-run-20261001-obsidianlive-002.md",
+      "content_sha256": "338a671b4d484ac9fbf7fb46a93db17b8a5ef2d2fa39400fdd2fa3d6e5580579"
+    },
+    {
+      "tool": "mcp__obsidian__read_note",
+      "query_or_note_path": "Engineering Notes/loanflow-integer-input-convention.md",
+      "status": "read",
+      "note_path": "Engineering Notes/loanflow-integer-input-convention.md",
+      "content_sha256": "ce8d5eacd9f42054685517532707ad85c3ad2f139f5c91c57b8e102474bb6334"
+    }
+  ]
+}

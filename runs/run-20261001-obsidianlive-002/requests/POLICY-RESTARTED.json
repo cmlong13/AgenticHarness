@@ -1,0 +1,1 @@
+{"operation":"retain_policy_event","run_id":"run-20261001-obsidianlive-002","kind":"phase_restarted","payload":{"phase":"verification","note":"fresh Quality Engineer dispatch; prior interrupted QE a432c67dee766e169 report retained as verification-report.interrupted.json (operator rename) and not reused"}}

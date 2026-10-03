@@ -1,0 +1,27 @@
+command: python -m pytest tests/unit/test_late_fee_tier.py tests/unit/test_late_fee_tier_regression.py -v
+executed_as: C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe -m pytest tests/unit/test_late_fee_tier.py tests/unit/test_late_fee_tier_regression.py -v
+working_directory: demo-repo
+timeout_seconds: 300
+real_pytest_exit_code: 0
+reported_exit_code: 0
+
+--- STDOUT ---
+============================= test session starts =============================
+platform win32 -- Python 3.14.2, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\caleb\Documents\Projects\AgenticHarness\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\caleb\Documents\Projects\AgenticHarness\demo-repo
+configfile: pyproject.toml
+collecting ... collected 5 items
+
+tests/unit/test_late_fee_tier.py::test_late_fee_tier_boundaries PASSED   [ 20%]
+tests/unit/test_late_fee_tier.py::test_negative_days_past_due_is_rejected PASSED [ 40%]
+tests/unit/test_late_fee_tier.py::test_non_integer_and_bool_days_past_due_is_rejected PASSED [ 60%]
+tests/unit/test_late_fee_tier_regression.py::test_day_30_is_severe_not_standard PASSED [ 80%]
+tests/unit/test_late_fee_tier_regression.py::test_day_29_is_still_standard PASSED [100%]
+
+============================== 5 passed in 0.09s ==============================
+
+--- STDERR ---
+
+--- MUTATION CHECK ---
+no persistent non-cache file addition, deletion, or modification detected

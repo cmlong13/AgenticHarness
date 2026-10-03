@@ -19,6 +19,8 @@ from loanflow.errors import ValidationError
 
 
 def classify_late_fee_tier(days_past_due: int) -> str:
+    if isinstance(days_past_due, bool) or not isinstance(days_past_due, int):
+        raise ValidationError("days_past_due must be an integer")
     if days_past_due < 0:
         raise ValidationError("days_past_due must not be negative")
     if days_past_due <= 5:

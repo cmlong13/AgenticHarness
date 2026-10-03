@@ -32,3 +32,12 @@ def test_late_fee_tier_boundaries() -> None:
 def test_negative_days_past_due_is_rejected() -> None:
     with pytest.raises(ValidationError):
         classify_late_fee_tier(-1)
+
+
+def test_non_integer_and_bool_days_past_due_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        classify_late_fee_tier(10.5)  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        classify_late_fee_tier(True)  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        classify_late_fee_tier(False)  # type: ignore[arg-type]

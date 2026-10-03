@@ -330,16 +330,18 @@ class TestRenderRunSummaryNote:
         vr = {
             "final_verdict": "pass",
             "attempts": [
-                {"requested_command": {"command": "python -m pytest tests/unit/test_x.py -q"},
-                 "exit_code": 0, "classification": None},
+                {"id": "V-1", "command": "python -m pytest tests/unit/test_x.py -q",
+                 "exit_code": 0, "classification": "pass"},
             ],
             "acceptance_criteria_results": [
-                {"id": "AC-1", "status": "pass"}, {"id": "AC-2", "status": "pass"},
+                {"criteria_id": "AC-1", "result": "passed"}, {"criteria_id": "AC-2", "result": "passed"},
+                {"criteria_id": "AC-3", "result": "blocked"},
             ],
         }
         note = self._render(verification_report=vr)
         assert "python -m pytest tests/unit/test_x.py -q" in note
-        assert "2/2 passed" in note
+        assert "`python -m pytest tests/unit/test_x.py -q` (exit 0, pass)" in note
+        assert "2/3 passed" in note
         assert "Verification verdict: pass" in note
 
     def test_jira_section_only_for_resolved_ticket_runs(self):
@@ -363,15 +365,34 @@ class TestRenderRunSummaryNote:
         note = self._render(
             run_summary={**_RUN_SUMMARY, "usage_summary_ref": "runs/run-1/usage-summary.json"},
             usage_summary={
-                "subagent_subtotal": {"total_tokens": 12345, "cost_usd": "0.0421"},
+                "subagent_subtotal": {
+                    "agent_count": 2,
+                    "token_usage": {
+                        "input_tokens": 45, "output_tokens": 300,
+                        "cache_creation_input_tokens": 2000, "cache_read_input_tokens": 10000,
+                        "cache_creation_breakdown": {"ephemeral_5m_input_tokens": 2000, "ephemeral_1h_input_tokens": 0},
+                    },
+                    "cost": {"priced": True, "amount": "0.0421", "currency": "USD"},
+                },
                 "coverage_status": "partial", "full_pipeline_total": None,
             },
         )
         assert "runs/run-1/usage-summary.json" in note
-        assert "12345 tokens" in note
+        assert "Subagent subtotal: 12345 tokens, $0.0421 (subtotal only" in note
         assert "subtotal only" in note
         assert "Full pipeline total: None" in note
         assert "Orchestrator-side usage was not measured" in note
+
+    def test_usage_section_unpriced_and_partially_priced_subtotals(self):
+        def render(cost):
+            return self._render(usage_summary={
+                "subagent_subtotal": {"token_usage": {"input_tokens": 1, "output_tokens": 2}, "cost": cost},
+                "coverage_status": "partial", "full_pipeline_total": None,
+            })
+        assert "Subagent subtotal: 3 tokens, cost unpriced (subtotal only" in render(
+            {"priced": False, "amount": None, "currency": "USD"})
+        assert "Subagent subtotal: 3 tokens, $0.50 (partial — some agents unpriced) (subtotal only" in render(
+            {"priced": False, "amount": "0.50", "currency": "USD"})
 
     def test_memory_influence_reported_from_summary_fields(self):
         note = self._render(

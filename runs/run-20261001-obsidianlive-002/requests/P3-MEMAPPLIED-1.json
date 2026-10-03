@@ -1,0 +1,11 @@
+{
+  "operation": "record_memory_applied",
+  "run_id": "run-20261001-obsidianlive-002",
+  "entry_id": "L-20260918-FRESH-DISPATCH-COMMAND-ID-COLLISION",
+  "entry_type": "lesson",
+  "source_run_id": "run-20260917-logicrepair-002",
+  "current_run_id": "run-20261001-obsidianlive-002",
+  "phase": "verification",
+  "decision": "Instructed the fresh resumed-phase Quality Engineer to start its command_id sequence at V-2 (V-1 request/log already retained by the interrupted process), so no prior evidence is overwritten; the QE requested V-2 accordingly.",
+  "evidence_path": "runs/run-20261001-obsidianlive-002/logs/policy-events.jsonl"
+}

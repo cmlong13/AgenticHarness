@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-OBSLIVEA",
+  "run_id": "run-20261001-obsidianlive-002",
+  "created_at": "2026-10-01T22:00:10Z",
+  "scope_ref": {
+    "path": "runs/run-20261001-obsidianlive-002/scope.json"
+  },
+  "implementation_ref": {
+    "path": "runs/run-20261001-obsidianlive-002/implementation-report.json"
+  },
+  "attempts": [
+    {
+      "id": "V-1",
+      "command": "python -m pytest tests/unit/test_late_fee_tier.py tests/unit/test_late_fee_tier_regression.py -v",
+      "exit_code": 0,
+      "classification": "pass",
+      "output_ref": "runs/run-20261001-obsidianlive-002/logs/V-1.log",
+      "retried": false
+    }
+  ],
+  "retry_policy": {
+    "max_retries": 2
+  },
+  "acceptance_criteria_results": [
+    {
+      "criteria_id": "AC-1",
+      "result": "passed",
+      "attempt_refs": [
+        "V-1"
+      ],
+      "evidence_summary": "V-1 exited 0 and its log shows test_non_integer_and_bool_days_past_due_is_rejected PASSED. Its first pytest.raises(ValidationError) block calls classify_late_fee_tier(10.5) (test_late_fee_tier.py:38-39). The guard isinstance(days_past_due, bool) or not isinstance(days_past_due, int) at late_fee_tier.py:22-23 raises ValidationError."
+    },
+    {
+      "criteria_id": "AC-2",
+      "result": "passed",
+      "attempt_refs": [
+        "V-1"
+      ],
+      "evidence_summary": "V-1 exited 0 and test_non_integer_and_bool_days_past_due_is_rejected PASSED. That test asserts pytest.raises(ValidationError) separately for classify_late_fee_tier(True) and classify_late_fee_tier(False) (test_late_fee_tier.py:40-43). The bool check comes before the int check at late_fee_tier.py:22."
+    },
+    {
+      "criteria_id": "AC-3",
+      "result": "passed",
+      "attempt_refs": [
+        "V-1"
+      ],
+      "evidence_summary": "V-1 exited 0 and these tests PASSED: test_late_fee_tier_boundaries (0/5 grace, 6/29 standard, 30/31 severe), test_negative_days_past_due_is_rejected (-1 raises ValidationError), and the regression fixture's test_day_30_is_severe_not_standard and test_day_29_is_still_standard. The negative check and thresholds at late_fee_tier.py:24-30 are unchanged."
+    },
+    {
+      "criteria_id": "AC-4",
+      "result": "passed",
+      "attempt_refs": [
+        "V-1"
+      ],
+      "evidence_summary": "test_late_fee_tier.py contains the new test_non_integer_and_bool_days_past_due_is_rejected, which has three pytest.raises(ValidationError) blocks covering float 10.5 and bools True/False. V-1 collected 5 items across test_late_fee_tier.py and test_late_fee_tier_regression.py, and all 5 passed (exit 0). The log's mutation check reports no persistent file changes."
+    }
+  ],
+  "final_verdict": "pass",
+  "routed_back_to_engineer": {
+    "routed": false
+  }
+}

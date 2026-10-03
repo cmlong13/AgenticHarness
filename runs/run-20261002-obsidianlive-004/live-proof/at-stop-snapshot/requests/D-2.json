@@ -1,0 +1,1 @@
+{"operation": "validate_scope", "candidate_ref": "runs/run-20261002-obsidianlive-004/drafts/scope-candidate.json", "expected_task_id": "T-OBSLIVEC", "expected_run_id": "run-20261002-obsidianlive-004", "target_repo_path": "demo-repo"}

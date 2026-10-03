@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-OBSLIVEC",
+  "run_id": "run-20261002-obsidianlive-004",
+  "created_at": "2026-10-02T17:33:34Z",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "In demo-repo (task T-OBSLIVEC, run run-20261002-obsidianlive-004), loanflow.applicants.Business accepts a non-integer years_in_operation: Business(business_id=\"BZ-1\", legal_name=\"Acme\", years_in_operation=3.5) is constructed without error. Make Business reject a years_in_operation that is not a plain int with ValidationError, and add a regression test in demo-repo/tests/unit/test_applicants.py. Before scoping, consult the Obsidian vault for prior harness run summaries relevant to this kind of change, read each relevant one, and follow their precedent if the repository corroborates it."
+  },
+  "objective": "Make loanflow.applicants.Business.__post_init__ (demo-repo/src/loanflow/applicants.py:32-36) reject any years_in_operation that is not a plain int -- including float (e.g. 3.5, which currently constructs without error) and bool -- by raising loanflow.errors.ValidationError before the existing negative check, using the isinstance(x, bool) or not isinstance(x, int) idiom already in the repository at demo-repo/src/loanflow/primitives.py:24, primitives.py:54 and risk_bands.py:46, and add a regression test in demo-repo/tests/unit/test_applicants.py. This follows the precedent of the Obsidian vault note LFCONV-INTGUARD-01 and the vault run summaries run-20261001-obsidianlive-002/-003 (retained at runs/run-20261002-obsidianlive-004/obsidian/read/read-1.json, read-2.json, read-3.json). The repository corroborates the idiom and its order. The two run summaries are stale as a record of current repository state, because their Applicant/late_fee_tier changes are not present in this checkout.",
+  "in_scope": [
+    "demo-repo/src/loanflow/applicants.py",
+    "demo-repo/tests/unit/test_applicants.py"
+  ],
+  "out_of_scope": [
+    "The Applicant class in demo-repo/src/loanflow/applicants.py (years_employed validation is a separate change, not requested here)",
+    "demo-repo/src/loanflow/primitives.py and demo-repo/src/loanflow/risk_bands.py (the convention to follow, not to change)",
+    "demo-repo/src/loanflow/late_fee_tier.py and any caller of Business",
+    "Changing the years_in_operation default, the negative-value check, or the legal_name check",
+    "Adding a new dependency or a shared validation helper"
+  ],
+  "constraints": [
+    "In demo-repo/src/loanflow/applicants.py, modify only Business.__post_init__",
+    "In demo-repo/tests/unit/test_applicants.py, only add a regression test for non-int years_in_operation rejection following the existing test_business_rejects_negative_years_in_operation pattern; do not modify existing tests",
+    "Reuse the existing repository idiom exactly: isinstance(self.years_in_operation, bool) or not isinstance(self.years_in_operation, int)",
+    "Raise loanflow.errors.ValidationError (already imported in applicants.py), never TypeError or ValueError",
+    "The type check must run before the negative check; existing negative and empty-legal_name behavior must be preserved unchanged",
+    "Follow TDD: add the failing regression test before the source change",
+    "No new dependency for a change this small"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "Business(business_id=\"BZ-1\", legal_name=\"Acme\", years_in_operation=3.5) raises loanflow.errors.ValidationError, asserted by a new regression test in demo-repo/tests/unit/test_applicants.py"
+    },
+    {
+      "id": "AC-2",
+      "description": "Business constructed with years_in_operation=True raises loanflow.errors.ValidationError (bool is an int subclass and must be explicitly excluded), asserted by the same new regression test"
+    },
+    {
+      "id": "AC-3",
+      "description": "The pre-existing tests test_valid_business_constructs, test_business_rejects_empty_legal_name and test_business_rejects_negative_years_in_operation in demo-repo/tests/unit/test_applicants.py still pass unmodified"
+    },
+    {
+      "id": "AC-4",
+      "description": "demo-repo/tests/unit/test_applicants.py passes as a whole, and the full demo-repo unit suite (tests/unit) remains green"
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-RESEARCH",
+      "description": "Confirm the current Business.__post_init__ body, the exact repository integer-guard idiom (file:line), the existing test conventions in test_applicants.py, and whether any in-repo caller constructs Business with a non-int years_in_operation; record whether each consulted vault note is corroborated, stale, contradicted or context-only.",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-IMPLEMENT",
+      "description": "Add a failing regression test for float and bool years_in_operation, then add the type guard at the top of the years_in_operation checks in Business.__post_init__.",
+      "phase": "implementation",
+      "depends_on": [
+        "N-RESEARCH"
+      ]
+    },
+    {
+      "id": "N-VERIFY",
+      "description": "Independently re-run the narrow test file and the full unit suite and confirm every acceptance criterion.",
+      "phase": "verification",
+      "depends_on": [
+        "N-IMPLEMENT"
+      ]
+    }
+  ],
+  "status": "approved"
+}

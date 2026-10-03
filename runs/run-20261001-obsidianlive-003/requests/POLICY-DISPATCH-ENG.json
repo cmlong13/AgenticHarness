@@ -1,0 +1,1 @@
+{"operation":"retain_policy_event","run_id":"run-20261001-obsidianlive-003","kind":"agent_dispatch","payload":{"phase":"implementation","subagent_type":"engineer","agent_id":"a0e7267d0354e3879","dispatch_sequence":1,"dispatch_prompt_memory_entries":["L-20260917-DISPATCH-RELATIVE-WORKDIR","L-20261001-DISPATCH-IDS-AS-JSON","L-20260929-EXPLICIT-CONTRACT-REMINDER-PER-TURN"]}}

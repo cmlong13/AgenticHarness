@@ -1,0 +1,27 @@
+{
+  "label": "runC",
+  "launched_at": "2026-10-02T17:33:09.358192+00:00",
+  "cwd": "C:\\Users\\caleb\\Documents\\Projects\\AgenticHarness-obslive004-clean",
+  "prompt": "/work In demo-repo (task T-OBSLIVEC, run run-20261002-obsidianlive-004), loanflow.applicants.Business accepts a non-integer years_in_operation: Business(business_id=\"BZ-1\", legal_name=\"Acme\", years_in_operation=3.5) is constructed without error. Make Business reject a years_in_operation that is not a plain int with ValidationError, and add a regression test in demo-repo/tests/unit/test_applicants.py. Before scoping, consult the Obsidian vault for prior harness run summaries relevant to this kind of change, read each relevant one, and follow their precedent if the repository corroborates it.",
+  "argv_without_prompt": [
+    "claude",
+    "--permission-mode",
+    "bypassPermissions",
+    "--output-format",
+    "stream-json",
+    "--verbose"
+  ],
+  "env_overrides": {
+    "OBSIDIAN_VAULT_PATH": "C:\\Users\\caleb\\Documents\\Obsidian Vault",
+    "VIRTUAL_ENV": "C:\\Users\\caleb\\Documents\\Projects\\AgenticHarness-obslive004-clean\\.venv",
+    "PATH_prepended": "C:\\Users\\caleb\\Documents\\Projects\\AgenticHarness-obslive004-clean\\.venv\\Scripts"
+  },
+  "PATH_entries_removed_main_repo": [
+    "C:\\Users\\caleb\\Documents\\Projects\\AgenticHarness\\.venv\\Scripts"
+  ],
+  "child_env_mentions_main_repo": [],
+  "pid": 18628,
+  "exited_at": "2026-10-02T17:41:57.904591+00:00",
+  "returncode": 1,
+  "stderr_tail": ""
+}

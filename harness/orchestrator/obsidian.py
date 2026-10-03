@@ -350,8 +350,7 @@ def _tests_line(verification_report: dict | None) -> list[str]:
         for att in attempts:
             if not isinstance(att, dict):
                 continue
-            rc = att.get("requested_command") or {}
-            cmd = rc.get("command") if isinstance(rc, dict) else None
+            cmd = att.get("command")
             exit_code = att.get("exit_code")
             classification = att.get("classification")
             piece = f"`{_md_escape(cmd)}` (exit {exit_code}"
@@ -362,7 +361,7 @@ def _tests_line(verification_report: dict | None) -> list[str]:
         if cmds:
             lines.append(f"- Test commands: {'; '.join(cmds)}")
     if isinstance(ac_results, list) and ac_results:
-        passed = sum(1 for r in ac_results if isinstance(r, dict) and r.get("status") == "pass")
+        passed = sum(1 for r in ac_results if isinstance(r, dict) and r.get("result") == "passed")
         lines.append(f"- Acceptance criteria: {passed}/{len(ac_results)} passed")
     lines.append(f"- Verification verdict: {_md_escape(verdict) or 'unknown'}")
     return lines
@@ -453,9 +452,20 @@ def render_run_summary_note(
     if isinstance(usage_summary, dict):
         subtotal = usage_summary.get("subagent_subtotal") or {}
         if isinstance(subtotal, dict):
-            cost = subtotal.get("cost_usd")
-            tokens = subtotal.get("total_tokens")
-            out.append(f"- Subagent subtotal: {tokens} tokens, ${cost} (subtotal only — not full pipeline cost)")
+            usage = subtotal.get("token_usage") or {}
+            tokens = sum(
+                int(usage.get(key) or 0)
+                for key in ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
+            )
+            cost_doc = subtotal.get("cost") or {}
+            amount = cost_doc.get("amount")
+            if amount is None:
+                cost = "cost unpriced"
+            elif cost_doc.get("priced"):
+                cost = f"${amount}"
+            else:
+                cost = f"${amount} (partial — some agents unpriced)"
+            out.append(f"- Subagent subtotal: {tokens} tokens, {cost} (subtotal only — not full pipeline cost)")
         out.append(f"- Coverage status: {_md_escape(usage_summary.get('coverage_status')) or 'unknown'}")
         out.append(f"- Full pipeline total: {usage_summary.get('full_pipeline_total')}")
     elif not run_summary.get("usage_summary_ref"):

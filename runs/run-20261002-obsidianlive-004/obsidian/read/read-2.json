@@ -1,0 +1,23 @@
+{
+  "task_id": "T-OBSLIVEC",
+  "run_id": "run-20261002-obsidianlive-004",
+  "operation": "read_obsidian_note",
+  "phase": "discovery",
+  "connector": "filesystem_vault",
+  "attempted_at": "2026-10-02T17:34:37Z",
+  "requested_note_path": "Harness Run Summaries/run-summary-run-20261001-obsidianlive-002.md",
+  "vault": {
+    "configured": true,
+    "vault_path": "C:\\Users\\caleb\\Documents\\Obsidian Vault",
+    "raw_env_value": "C:\\Users\\caleb\\Documents\\Obsidian Vault"
+  },
+  "status": "read",
+  "note_path": "Harness Run Summaries/run-summary-run-20261001-obsidianlive-002.md",
+  "reason": "note read from the configured Obsidian vault",
+  "absolute_path": "C:\\Users\\caleb\\Documents\\Obsidian Vault\\Harness Run Summaries\\run-summary-run-20261001-obsidianlive-002.md",
+  "content": "---\nrun_id: run-20261001-obsidianlive-002\ntask_id: T-OBSLIVEA\nfinal_verdict: pass\ngenerated_at: 2026-10-02T16:19:28Z\nharness: agentic-harness\n---\n\n# Harness run summary \u2014 run-20261001-obsidianlive-002\n\n- **Run ID:** run-20261001-obsidianlive-002\n- **Task ID:** T-OBSLIVEA\n- **Source mode:** prompt\n- **Objective:** classify_late_fee_tier in demo-repo/src/loanflow/late_fee_tier.py now rejects any days_past_due that is not a plain int (float such as 10.5, and bool True/False) with ValidationError, placed before the unchanged negative check. It uses the repository idiom isinstance(x, bool) or not isinstance(x, int) from risk_bands.py/primitives.py, which the Obsidian vault note LFCONV-INTGUARD-01 also documents and the repository corroborates. Regression test test_non_integer_and_bool_days_past_due_is_rejected was added to demo-repo/tests/unit/test_late_fee_tier.py (+2/+9 lines). The run spanned three /work processes. Process 1 did Discovery, Research and Implementation and was killed after promoting a verification report but before checkpointing Verification. Process 2 resumed and halted on a resume_canonical_collision. After a user-authorized operator rename (verification-report.json to verification-report.interrupted.json, content unchanged), process 3 (this one) reused Discovery/Research/Implementation and restarted Verification with a fresh Quality Engineer (aa5de43ce6420acbf). It passed AC-1..AC-4 via V-2 (5 passed). The orchestrator independently re-ran ORCH-3 (5 passed) and ORCH-4 (106 unit tests passed) through the test-runner Skill with matching command identity, and confirmed that git diff --stat of demo-repo matches the implementation report's changed_files.\n- **Final verdict:** pass\n- **Phases completed:** discovery, research, implementation, verification\n- **Phases reused (resume):** discovery, research, implementation\n- **Generated at:** 2026-10-02T16:19:28Z\n\n## Pipeline artifacts\n- Discovery / scope: `runs/run-20261001-obsidianlive-002/scope.json`\n- Research / findings: `runs/run-20261001-obsidianlive-002/findings.json`\n- Implementation report: `runs/run-20261001-obsidianlive-002/implementation-report.json`\n- Verification report: `runs/run-20261001-obsidianlive-002/verification-report.json`\n- Checkpoint: `runs/run-20261001-obsidianlive-002/checkpoint.json`\n\n## Tests\n- Test commands: `` (exit 0, pass)\n- Acceptance criteria: 0/4 passed\n- Verification verdict: pass\n\n## Memory\n- Memory influenced this run: yes \u2014 L-20261001-INSCOPE-BARE-PATHS, L-20260918-FRESH-DISPATCH-COMMAND-ID-COLLISION\n- Lessons appended this run: 2\n\n## Usage / cost\n- Usage summary: `runs/run-20261001-obsidianlive-002/usage-summary.json`\n- Subagent subtotal: None tokens, $None (subtotal only \u2014 not full pipeline cost)\n- Coverage status: partial\n- Full pipeline total: None\n\n## Evidence gaps\n- The interrupted process-1 Quality Engineer (a432c67dee766e169) evidence (V-1, ORCH-1 log, verification-1/2 attempts, verification-report.interrupted.json) is retained but superseded. It was never counted toward a checkpointed verdict, and its ORCH-1 had no retained identity check.\n- Per-agent cost is unpriced for all four subagents and orchestrator usage is not measured in-session, so full_pipeline_total is null.\n- Changes in demo-repo are uncommitted; commit/push is not authorized by this run.\n- Orchestrator-side usage was not measured; full_pipeline_total is null.\n\n---\n_Generated 2026-10-02T16:19:28Z from retained run evidence under `runs/run-20261001-obsidianlive-002/`._\n",
+  "byte_count": 3507,
+  "line_count": 50,
+  "content_sha256": "338a671b4d484ac9fbf7fb46a93db17b8a5ef2d2fa39400fdd2fa3d6e5580579",
+  "truncated": false
+}

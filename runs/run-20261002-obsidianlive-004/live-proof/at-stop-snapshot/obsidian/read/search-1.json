@@ -1,0 +1,59 @@
+{
+  "task_id": "T-OBSLIVEC",
+  "run_id": "run-20261002-obsidianlive-004",
+  "operation": "search_obsidian",
+  "phase": "discovery",
+  "connector": "filesystem_vault",
+  "attempted_at": "2026-10-02T17:34:20Z",
+  "vault": {
+    "configured": true,
+    "vault_path": "C:\\Users\\caleb\\Documents\\Obsidian Vault",
+    "raw_env_value": "C:\\Users\\caleb\\Documents\\Obsidian Vault"
+  },
+  "status": "found",
+  "query": "applicants Business validation ValidationError",
+  "terms": [
+    "applicants",
+    "business",
+    "validation",
+    "validationerror"
+  ],
+  "reason": "3 eligible note(s) matched; returning the top 3",
+  "returned_count": 3,
+  "total_match_count": 3,
+  "files_scanned": 5,
+  "truncated": false,
+  "matches": [
+    {
+      "note_path": "Engineering Notes/loanflow-integer-input-convention.md",
+      "score": 6,
+      "matched_terms": [
+        "validation",
+        "validationerror"
+      ],
+      "line": 15,
+      "snippet": "...credit scores, day counts) is guarded with the same two-part check, in this order: if isinstance(value, bool) or not isinstance(value, int): raise ValidationError(\"<name> must be an integer ...\") Why the `bool` test comes first: `bool` is a subclass of `int` in Python, so `isinstance(True, int)` is `True`..."
+    },
+    {
+      "note_path": "Harness Run Summaries/run-summary-run-20261001-obsidianlive-003.md",
+      "score": 5,
+      "matched_terms": [
+        "applicants",
+        "validation",
+        "validationerror"
+      ],
+      "line": 14,
+      "snippet": "...*Run ID:** run-20261001-obsidianlive-003 - **Task ID:** T-OBSLIVEB - **Source mode:** prompt - **Objective:** Applicant.__post_init__ in demo-repo/src/loanflow/applicants.py now rejects any years_employed that is not a plain int (float 2.5, bool True/False) with ValidationError, placed before the unchanged negative che..."
+    },
+    {
+      "note_path": "Harness Run Summaries/run-summary-run-20261001-obsidianlive-002.md",
+      "score": 2,
+      "matched_terms": [
+        "validation",
+        "validationerror"
+      ],
+      "line": 14,
+      "snippet": "...y_late_fee_tier in demo-repo/src/loanflow/late_fee_tier.py now rejects any days_past_due that is not a plain int (float such as 10.5, and bool True/False) with ValidationError, placed before the unchanged negative check. It uses the repository idiom isinstance(x, bool) or not isinstance(x, int) from risk_bands.py/primi..."
+    }
+  ]
+}
