@@ -1,0 +1,32 @@
+{
+  "operation": "write_run_summary",
+  "run_id": "run-20260929-percentage-001",
+  "summary": {
+    "schema_version": "1.0",
+    "task_id": "T-PERCENTAGE",
+    "run_id": "run-20260929-percentage-001",
+    "created_at": "2026-09-29T12:46:53.238529+00:00",
+    "objective_summary": "Task: make loanflow.primitives.Percentage reject non-integer/bool basis_points at construction time with ValidationError, mirroring Money.__post_init__'s existing pattern in demo-repo/src/loanflow/primitives.py. Discovery and Research completed cleanly and were promoted (scope.json approved; findings.json with 6 found / 1 not_found / 1 inferred claims, all file:line cited). The Implementation phase blocked: the dispatched Engineer's first staged reply (pre_test_requested) was wrapped in a Markdown code fence, which was corrected via the one transport-repair attempt permitted per phase; its very next reply (post_test_requested) carried leading prose plus another Markdown fence, a second independent transport-contract violation, and the phase's one-correction budget was already spent, so per work/SKILL.md's Engineer transport repair protocol no second correction was sent and the phase was blocked. Independent inspection of the working tree (git diff) shows the Engineer's in-progress edit to demo-repo/src/loanflow/primitives.py's Percentage.__post_init__ is minimal and mirrors Money's pattern correctly, and the pre-test command (C-1, mediated through the real test-runner Skill) genuinely failed for the expected reason (DID NOT RAISE ValidationError) -- but no valid ready_for_verification implementation-report.json was ever produced, so this cannot be promoted or verified, and Verification was never dispatched.",
+    "artifact_refs": {
+      "scope": "runs/run-20260929-percentage-001/scope.json",
+      "findings": "runs/run-20260929-percentage-001/findings.json",
+      "checkpoint": "runs/run-20260929-percentage-001/checkpoint.json"
+    },
+    "final_verdict": "blocked",
+    "phases_completed": ["discovery", "research"],
+    "lessons_learned_appended": [
+      "The Engineer/Quality-Engineer transport-repair budget is one correction per phase, not one per turn: once it is spent correcting an early staged turn's fenced/prose-wrapped reply, a later, independent transport violation on a *different* turn from the same agent (e.g. post_test_requested after pre_test_requested was already repaired) cannot receive a second correction and must block the phase immediately -- even when the visible source diff looks minimal and correct on inspection. Do not be tempted to grant a second correction just because the underlying work looks fine; the protocol's whole point is that a subagent's self-reported correctness is never trusted over its own contract compliance."
+    ],
+    "memory_loaded": true,
+    "memory_influenced_run": false,
+    "memory_refs_used": [],
+    "remaining_risks": [
+      "The approved implementation (Percentage.__post_init__ type check) has not been independently verified end-to-end by a Quality Engineer, and its implementation-report was never promoted -- a future run resuming this checkpoint must restart Implementation with a fresh Engineer dispatch, not treat the current working-tree edit as accepted.",
+      "The demo-repo working tree currently has an uncommitted, unverified edit to demo-repo/src/loanflow/primitives.py and demo-repo/tests/unit/test_primitives.py from the blocked Engineer dispatch; it was left in place as evidence of the blocked attempt rather than reverted."
+    ],
+    "follow_up_actions": [
+      "Resume this run (`/work --resume run-20260929-percentage-001`) to restart the Implementation phase with a fresh Engineer dispatch, reusing the already-promoted scope.json and findings.json."
+    ],
+    "usage_summary_ref": "runs/run-20260929-percentage-001/usage-summary.json"
+  }
+}

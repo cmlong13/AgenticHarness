@@ -1,0 +1,10 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260929-percentage-001",
+  "kind": "transport_parse_failure",
+  "payload": {
+    "phase": "implementation",
+    "attempt_ref": "runs/run-20260929-percentage-001/attempts/implementation-1.raw.txt",
+    "description": "Engineer's pre_test_requested reply was wrapped in a Markdown ```json code fence (opening and closing triple-backtick fence lines), violating engineer.md's 'no fence, no prose' output contract. The JSON content itself was otherwise well-formed."
+  }
+}

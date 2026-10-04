@@ -1,0 +1,11 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260929-percentage-001",
+  "kind": "transport_repair_exhausted",
+  "payload": {
+    "phase": "implementation",
+    "description": "This Implementation phase's single permitted transport-only correction attempt was already used on the first turn (pre_test_requested, attempt 1 -> attempt 2), which succeeded. A second, independent transport violation then occurred on the following turn (post_test_requested, attempt 3: leading prose plus a Markdown fence). Per work/SKILL.md's Engineer transport repair protocol, the one-correction budget is shared across the whole phase, not reset per turn, so no second correction request was sent. The phase is blocked.",
+    "budget_used_on": "implementation attempt 1 -> attempt 2 (pre_test_requested)",
+    "exhausting_failure": "implementation attempt 3 (post_test_requested)"
+  }
+}

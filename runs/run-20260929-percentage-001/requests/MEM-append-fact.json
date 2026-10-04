@@ -1,0 +1,13 @@
+{
+  "operation": "append_memory",
+  "kind": "fact",
+  "run_id": "run-20260929-percentage-001",
+  "fact": {
+    "id": "FACT-20260929-ENGINEER-DOUBLE-TRANSPORT-FAILURE",
+    "content": "A single real Engineer dispatch (run-20260929-percentage-001, agent_id ad83b17a223d91a03) produced two independent transport-contract violations within one Implementation phase: its first pre_test_requested reply was wrapped in a Markdown code fence (corrected via the one permitted transport repair), and its very next post_test_requested reply -- from the same agent, same turn sequence -- carried leading prose plus another Markdown fence. The underlying implementation edit itself (demo-repo/src/loanflow/primitives.py's Percentage.__post_init__ type check) was correct and minimal on inspection, but the phase still blocked because the one-correction-per-phase transport-repair budget was already spent on the first turn.",
+    "evidence_ref": "runs/run-20260929-percentage-001/logs/policy-events.jsonl",
+    "source_run_id": "run-20260929-percentage-001",
+    "recorded_at": "2026-09-29",
+    "status": "confirmed"
+  }
+}

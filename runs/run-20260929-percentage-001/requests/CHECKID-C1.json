@@ -1,0 +1,17 @@
+{
+  "operation": "check_command_identity",
+  "request": {
+    "task_id": "T-PERCENTAGE",
+    "run_id": "run-20260929-percentage-001",
+    "command_id": "C-1",
+    "command": "python -m pytest tests/unit/test_primitives.py -k test_percentage_rejects_non_integer_basis_points -v",
+    "working_directory": "demo-repo"
+  },
+  "result": {
+    "task_id": "T-PERCENTAGE",
+    "run_id": "run-20260929-percentage-001",
+    "command_id": "C-1",
+    "command": "python -m pytest tests/unit/test_primitives.py -k test_percentage_rejects_non_integer_basis_points -v",
+    "working_directory": "demo-repo"
+  }
+}

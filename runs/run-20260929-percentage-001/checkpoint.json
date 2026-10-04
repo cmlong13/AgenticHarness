@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-PERCENTAGE",
+  "run_id": "run-20260929-percentage-001",
+  "target_repo_path": "demo-repo",
+  "updated_at": "2026-09-29T12:55:42Z",
+  "completed_phases": [
+    "discovery",
+    "research"
+  ],
+  "current_phase": "implementation",
+  "next_phase": "verification",
+  "artifact_refs": {
+    "discovery": "runs/run-20260929-percentage-001/scope.json",
+    "research": "runs/run-20260929-percentage-001/findings.json"
+  },
+  "blockers": [
+    {
+      "description": "Implementation phase blocked: the Engineer's single permitted transport-only correction attempt was used on its first staged turn (pre_test_requested, a Markdown-fenced reply successfully corrected). A second, independent transport violation (leading prose plus a Markdown fence) then occurred on the following turn (post_test_requested), and the phase's one-correction-per-phase budget was already spent, so no second correction was sent per work/SKILL.md's Engineer transport repair protocol. The underlying source edit visible in the working tree (demo-repo/src/loanflow/primitives.py) appears correct and minimal, but no valid ready_for_verification implementation-report.json was ever produced, so Implementation cannot be promoted and Verification was never dispatched.",
+      "phase": "implementation"
+    }
+  ],
+  "next_resume_action": "none: run terminated during implementation (Implementation phase blocked: the Engineer's single permitted transport-only correction attempt was used on its first staged turn (pre_test_requested, a Markdown-fenced reply successfully corrected). A second, independent transport violation (leading prose plus a Markdown fence) then occurred on the following turn (post_test_requested), and the phase's one-correction-per-phase budget was already spent, so no second correction was sent per work/SKILL.md's Engineer transport repair protocol. The underlying source edit visible in the working tree (demo-repo/src/loanflow/primitives.py) appears correct and minimal, but no valid ready_for_verification implementation-report.json was ever produced, so Implementation cannot be promoted and Verification was never dispatched.); not resumable",
+  "status": "failed"
+}

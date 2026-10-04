@@ -1,0 +1,15 @@
+{
+  "operation": "append_memory",
+  "kind": "lesson",
+  "run_id": "run-20260929-percentage-001",
+  "candidates": [
+    {
+      "id": "L-20260929-TRANSPORT-BUDGET-PER-PHASE-NOT-PER-TURN",
+      "text": "The Engineer/Quality-Engineer transport-repair budget is one correction per phase, not one per turn: once it is spent correcting an early staged turn's fenced/prose-wrapped reply, a later, independent transport violation on a *different* turn from the same agent (e.g. post_test_requested after pre_test_requested was already repaired) cannot receive a second correction and must block the phase immediately -- even when the visible source diff looks minimal and correct on inspection. Do not be tempted to grant a second correction just because the underlying work looks fine; the protocol's whole point is that a subagent's self-reported correctness is never trusted over its own contract compliance.",
+      "source_run_id": "run-20260929-percentage-001",
+      "evidence_ref": "runs/run-20260929-percentage-001/logs/policy-events.jsonl",
+      "date": "2026-09-29",
+      "tags": ["transport", "validation", "engineer", "correction-budget"]
+    }
+  ]
+}

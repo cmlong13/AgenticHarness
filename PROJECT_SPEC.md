@@ -1,22 +1,45 @@
 # Project Spec: Agentic Coding Harness
 
 See `docs/assignment-audit.md` for the independently-audited requirement-by-requirement
-status (last audit 2026-10-01) — treat that document as the authoritative current status.
+status (last audit 2026-10-03) — treat that document as the authoritative current status.
+The §5 write-up is `docs/final-writeup.md`.
 
-Current status (2026-10-01): every component §3 lists is implemented — the four-phase
-`/work` pipeline (Research is skipped only when Discovery declares `research_skip_reason`),
-the three restricted subagents, all four skill packs (`github/` with its five procedures,
-`jira/` with read/create/edit + `FIELD_REFERENCE.md`, test-runner, code-craftsmanship, which
-the Engineer reads before its first edit), all four hooks (registered from
-`${CLAUDE_PROJECT_DIR}`), the memory loop, checkpoint/resume, and QE infrastructure-retry
-backoff (2 s / 4 s, at most 3 executions). Live acceptance proofs are retained for the
-planted logic bug (`run-20260918-logicrepair-003`), the planted flaky test
-(`run-20260919-flaky-001`), the completion-guardrail block (`completion-guardrail-live-001`),
-the false-push rejection (`run-20260929-falsepush-001`), the full-pipeline cost
-(`run-20260929-costproof-001`, $9.5721282), and the mid-Implementation kill and resume
-(`run-20261001-midimplresume-002`). Still not live-proven: a real Jira ticket (no
-credentials), and Obsidian write-back from inside a `/work` run. Jira status transitions and
-completion comments are not implemented. The 1–2 page write-up (§5) is not yet written.
+Current status (2026-10-03, final closeout): every component §3 lists is implemented — the
+four-phase `/work` pipeline, the three restricted subagents, all four skill packs (`github/`
+with its five procedures, `jira/` with read/create/edit + `FIELD_REFERENCE.md`, test-runner,
+code-craftsmanship), all four hooks, the memory loop, checkpoint/resume, and QE
+infrastructure-retry backoff. Proof status:
+
+- **Live acceptance proofs retained:** planted logic bug routed back and fixed in the same run
+  (`run-20260918-logicrepair-003`); planted flaky test classified and retried
+  (`run-20260919-flaky-001`); completion-guardrail block (`completion-guardrail-live-001`);
+  false-push rejection via `git ls-remote` (`run-20260929-falsepush-001`); full-pipeline cost,
+  $9.5721282 (`run-20260929-costproof-001`); mid-Implementation kill and resume
+  (`run-20261001-midimplresume-002`).
+- **Obsidian live read and write-back from real `/work` runs: proven.** Runs A, B and C
+  (`run-20261001-obsidianlive-002`, `-003`, `run-20261002-obsidianlive-004`) each published a
+  run summary whose on-disk hash matches its retained publication record.
+- **Cross-run Obsidian retrieval and application: proven** via `run-20261001-obsidianlive-003`
+  (Run B) → `run-20261002-obsidianlive-004` (Run C). Run B ended `inconclusive` (an AC clause
+  authored in Discovery had no test), but its published note recorded that failure as useful
+  context. Run C ran from an isolated clean clone at committed HEAD, retrieved Run B's exact
+  vault note by search (identical SHA-256), applied the "every AC clause needs a test" lesson
+  in its Discovery reasoning before writing scope, and ultimately passed after a checkpoint
+  resume. Run A → Run C is not claimed as applied memory.
+- **Code-craftsmanship: live invocation proven.** A real Engineer `Read` the skill before its
+  first edit in each of obsidianlive-002, -003 and -004.
+- **Research skip: implemented and test-proven** (`tests/test_research_skip.py`), not live
+  `/work`-proven.
+- **Root-anchored hooks: proven.** All hooks are registered as
+  `${CLAUDE_PROJECT_DIR}/.claude/hooks/<x>.py` and tested from a nested cwd
+  (`tests/test_hook_registration.py`).
+- **QE retry backoff (2 s / 4 s, at most 3 executions): implemented and test-proven**
+  (`tests/test_infrastructure_retry_backoff.py`). The live flaky proof
+  (`run-20260919-flaky-001`) predates the backoff wait, so no live run shows the wait itself.
+- **Not live-proven / not implemented (documented caveats):** a real Jira ticket (no
+  credentials); Jira status transitions and completion comments (deliberately not
+  implemented); coverage numbers in QE verdicts; GitHub issue reading; memory as one file per
+  fact with an index. See the audit for the full list.
 
 Historical status as of 2026-08-04 (kept for the record; superseded by the paragraph above):
 **Implementation in progress — artifact contracts, validation, all three phase
@@ -4130,6 +4153,8 @@ also complete — see the memory-loop milestone notes above. **Update (2026-08-1
 post-agent cost/token-usage-accounting hook is now also complete and live-demonstrated —
 see the "Milestone update (2026-08-14)" note above. A live demonstration of
 route-back/hooks against a real, full four-phase `/work` run remains open.
+**Update (2026-10-03):** superseded by the current-status summary at the top of this file;
+all milestones above are closed except the caveats listed there.
 
 ### Eight-day MVP planning target
 

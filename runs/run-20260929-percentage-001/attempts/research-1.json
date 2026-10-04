@@ -1,0 +1,179 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-PERCENTAGE",
+  "run_id": "run-20260929-percentage-001",
+  "created_at": "2026-09-29T12:46:53.238529+00:00",
+  "scope_ref": {
+    "path": "runs/run-20260929-percentage-001/scope.json"
+  },
+  "findings": [
+    {
+      "id": "F-1",
+      "claim": "Money.__post_init__ (demo-repo/src/loanflow/primitives.py:23-25) validates Money.cents by explicitly rejecting bool first, then rejecting any non-int, raising loanflow.errors.ValidationError: `if isinstance(self.cents, bool) or not isinstance(self.cents, int): raise ValidationError(\"Money.cents must be an integer number of cents\")`.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/primitives.py",
+          "start_line": 23,
+          "end_line": 25,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-2",
+      "claim": "Percentage.__post_init__ (demo-repo/src/loanflow/primitives.py:53-55) today only checks `self.basis_points < 0` and raises ValidationError on negative values; it performs no isinstance/type check at all, so a float or bool basis_points passes construction unchecked.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/primitives.py",
+          "start_line": 53,
+          "end_line": 55,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-3",
+      "claim": "For a float basis_points such as Percentage(1.5), the negative check at primitives.py:54 passes trivially (1.5 is not < 0), so construction succeeds silently. The failure surfaces later inside as_percent_string (primitives.py:62-64): `divmod(self.basis_points, 100)` at line 63 returns a float remainder when basis_points is a float (e.g. divmod(1.5, 100) == (0.0, 1.5)), and the f-string's integer format specifier `{frac:02d}` at line 64 cannot format that float remainder, raising a raw stdlib ValueError (\"Unknown format code 'd' for object of type 'float'\") rather than a domain ValidationError -- and this happens only when as_percent_string() is later called, not at construction time.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/primitives.py",
+          "start_line": 62,
+          "end_line": 64,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/src/loanflow/primitives.py",
+          "start_line": 53,
+          "end_line": 55,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-4",
+      "claim": "loanflow.errors.ValidationError is defined at demo-repo/src/loanflow/errors.py:14-15 as a subclass of LoanflowError, and it is already imported into primitives.py at line 16 (`from loanflow.errors import ValidationError`), so no new import is needed to raise it from Percentage.__post_init__.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/errors.py",
+          "start_line": 14,
+          "end_line": 15,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/src/loanflow/primitives.py",
+          "start_line": 16,
+          "end_line": 16,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-5",
+      "claim": "Every direct `Percentage(...)` call site found in demo-repo (src and tests) already passes an int argument, so tightening Percentage.__post_init__ to reject non-int/bool would not break any existing caller. Sites: demo-repo/src/loanflow/dti.py:37 passes `int(ratio * 10_000)`; demo-repo/src/loanflow/collateral.py:30 passes `int(ratio * 10_000)`; demo-repo/tests/unit/test_primitives.py:44 passes the literal int `-1` (already expected to raise ValidationError for negativity, unaffected by the new type check); demo-repo/tests/unit/test_risk_bands.py:15, :24, and :33 each pass `<Percentage>.basis_points + 1`, where `.basis_points` is the dataclass's declared `int` field and `+ 1` on an int yields an int.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/src/loanflow/dti.py",
+          "start_line": 33,
+          "end_line": 37,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/src/loanflow/collateral.py",
+          "start_line": 24,
+          "end_line": 30,
+          "evidence_tier": "executable_code"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_primitives.py",
+          "start_line": 42,
+          "end_line": 44,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 14,
+          "end_line": 16,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 23,
+          "end_line": 25,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_risk_bands.py",
+          "start_line": 32,
+          "end_line": 34,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "demo-repo/src/loanflow/primitives.py",
+          "start_line": 51,
+          "end_line": 51,
+          "evidence_tier": "executable_code"
+        }
+      ]
+    },
+    {
+      "id": "F-6",
+      "claim": "demo-repo/tests/unit/test_primitives.py is the existing test file covering Money/Percentage validation. It already contains test_money_rejects_non_integer_cents (lines 21-23), which asserts `Money(1.5)` raises ValidationError -- this is the float-rejection pattern the Engineer should mirror for Percentage. It also already contains test_percentage_rejects_negative_basis_points (lines 42-44), asserting `Percentage(-1)` raises ValidationError, which AC-3 requires to keep passing unchanged.",
+      "classification": "found",
+      "evidence": [
+        {
+          "path": "demo-repo/tests/unit/test_primitives.py",
+          "start_line": 21,
+          "end_line": 23,
+          "evidence_tier": "test_assertion"
+        },
+        {
+          "path": "demo-repo/tests/unit/test_primitives.py",
+          "start_line": 42,
+          "end_line": 44,
+          "evidence_tier": "test_assertion"
+        }
+      ]
+    },
+    {
+      "id": "F-7",
+      "claim": "There is no existing test in demo-repo/tests/unit/test_primitives.py (or elsewhere in demo-repo/tests) that specifically exercises Money's bool-rejection branch (e.g. no test asserting `Money(True)` raises ValidationError). Only the non-integer/float branch is covered by test_money_rejects_non_integer_cents (F-6); the bool-specific half of Money's existing pattern is untested, so there is no in-repo bool-rejection test to mirror verbatim for Percentage beyond the source pattern itself (F-1).",
+      "classification": "not_found",
+      "search_attempts": [
+        {
+          "method": "grep",
+          "query": "bool",
+          "scope": "demo-repo/tests/unit/test_primitives.py",
+          "result": "no matches"
+        },
+        {
+          "method": "grep",
+          "query": "True\\)",
+          "scope": "demo-repo/tests",
+          "result": "no matches -- no test constructs Money(True) or Percentage(True) anywhere in the test suite"
+        },
+        {
+          "method": "read",
+          "query": "full contents of demo-repo/tests/unit/test_primitives.py",
+          "scope": "demo-repo/tests/unit/test_primitives.py",
+          "result": "file has 50 lines / 8 test functions; none named or asserting bool rejection for Money or Percentage"
+        }
+      ]
+    },
+    {
+      "id": "F-8",
+      "claim": "Because Percentage.__post_init__ currently performs no type check (F-2) and bool arithmetic in Python coerces to plain int (True % 100 and True // 100 both evaluate to the int 1 and int 0 respectively, not bool), constructing Percentage(True) today does not raise even the incidental ValueError that Percentage(1.5) triggers (F-3) -- it silently succeeds and as_percent_string() would format it as a plain (wrong) percentage string, making the bool case a silent-corruption bug rather than a crash, which strengthens rather than weakens the case for the proposed construction-time type check.",
+      "classification": "inferred",
+      "supporting_finding_ids": ["F-2", "F-3"],
+      "reasoning": "F-2 establishes Percentage.__post_init__ has no isinstance/type check, only a negative check that a bool (True==1, False==0) always passes. F-3 establishes the only current failure path is the divmod/format-spec ValueError inside as_percent_string, which occurs specifically because a float remainder cannot satisfy an integer format code. Applying standard Python semantics (arithmetic operators on bool operands return plain int, not bool) to the same divmod/format-spec code path in F-3 shows that a bool remainder would format cleanly as an int, so that failure path does not trigger for Percentage(True); no direct test or executed trace of Percentage(True) exists in the repository to cite as found evidence, so this specific behavioral consequence is inferred from the two found findings rather than observed directly."
+    }
+  ],
+  "open_questions": [
+    "Implementation of the fix itself (adding the isinstance(bool)/isinstance(int) check to Percentage.__post_init__ mirroring Money's pattern, and writing the corresponding regression tests in test_primitives.py) is implementation work and outside the Architect's research-only role; it is left for the Engineer per task_graph node N-2.",
+    "A vault check was not performed for this task per the orchestrator's explicit instruction that no Obsidian consultation was needed (small, self-contained validation-pattern fix with no prior design/calibration context to look up)."
+  ]
+}

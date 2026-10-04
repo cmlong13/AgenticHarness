@@ -1,0 +1,10 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260929-percentage-001",
+  "kind": "skill_invocation",
+  "payload": {
+    "skill": "obsidian",
+    "invoked_via": "Skill tool",
+    "purpose": "publish terminal run-summary note"
+  }
+}

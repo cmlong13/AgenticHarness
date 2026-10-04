@@ -1,0 +1,10 @@
+{
+  "operation": "retain_policy_event",
+  "run_id": "run-20260929-percentage-001",
+  "kind": "transport_parse_failure",
+  "payload": {
+    "phase": "implementation",
+    "attempt_ref": "runs/run-20260929-percentage-001/attempts/implementation-3.raw.txt",
+    "description": "Engineer's post_test_requested reply carried leading prose ('Now requesting post-implementation evidence.') and wrapped its JSON content in a Markdown ```json code fence, violating engineer.md's 'no fence, no prose' output contract for a second time this phase. The JSON content itself was otherwise well-formed."
+  }
+}

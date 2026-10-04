@@ -1,0 +1,13 @@
+{
+  "operation": "write_checkpoint",
+  "kind": "terminal_failure",
+  "run_id": "run-20260929-percentage-001",
+  "task_id": "T-PERCENTAGE",
+  "target_repo_path": "demo-repo",
+  "completed_phases": ["discovery", "research"],
+  "artifact_refs": {
+    "discovery": "runs/run-20260929-percentage-001/scope.json",
+    "research": "runs/run-20260929-percentage-001/findings.json"
+  },
+  "reason": "Implementation phase blocked: the Engineer's single permitted transport-only correction attempt was used on its first staged turn (pre_test_requested, a Markdown-fenced reply successfully corrected). A second, independent transport violation (leading prose plus a Markdown fence) then occurred on the following turn (post_test_requested), and the phase's one-correction-per-phase budget was already spent, so no second correction was sent per work/SKILL.md's Engineer transport repair protocol. The underlying source edit visible in the working tree (demo-repo/src/loanflow/primitives.py) appears correct and minimal, but no valid ready_for_verification implementation-report.json was ever produced, so Implementation cannot be promoted and Verification was never dispatched."
+}

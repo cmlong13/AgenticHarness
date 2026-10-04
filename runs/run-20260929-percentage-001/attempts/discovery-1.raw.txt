@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "task_id": "T-PERCENTAGE",
+  "run_id": "run-20260929-percentage-001",
+  "created_at": "2026-09-29T12:46:53.238529+00:00",
+  "source": {
+    "type": "prompt",
+    "raw_prompt": "In demo-repo, loanflow.primitives.Percentage accepts non-integer basis_points (for example Percentage(1.5) or Percentage(True)) and only fails later inside as_percent_string with a raw ValueError. Make Percentage reject non-integer basis_points, including bool, at construction time with ValidationError, the same way Money.__post_init__ already validates Money.cents."
+  },
+  "objective": "Percentage.__post_init__ (demo-repo/src/loanflow/primitives.py:53-55) currently only checks self.basis_points < 0, so a non-int basis_points (a float like 1.5, or a bool -- bool is a subclass of int in Python) is silently accepted at construction time. The failure only surfaces later and incidentally, inside as_percent_string's divmod call (demo-repo/src/loanflow/primitives.py:62-64), as a raw ValueError rather than the domain-specific loanflow.errors.ValidationError. Money.__post_init__ (demo-repo/src/loanflow/primitives.py:23-25) already validates this exact same failure mode for Money.cents with 'isinstance(self.cents, bool) or not isinstance(self.cents, int)'. Extend Percentage.__post_init__ with the identical type check (bool rejected explicitly, non-int rejected) so a bad basis_points value is rejected at construction time with a clear ValidationError, mirroring the existing Money pattern in the same file.",
+  "in_scope": [
+    "demo-repo/src/loanflow/primitives.py",
+    "demo-repo/tests/unit/test_primitives.py"
+  ],
+  "out_of_scope": [
+    "Any change to Money's own validation behavior (already correct)",
+    "Any change to Percentage.from_ratio, as_percent_string, or any other Percentage/Money method beyond the __post_init__ validation itself",
+    "Any change to callers of Percentage(...) in demo-repo/src/loanflow/collateral.py or demo-repo/src/loanflow/dti.py -- both already construct Percentage from int(ratio * 10_000), so they are unaffected by tightening validation",
+    "Any change to demo-repo/tests/unit/test_risk_bands.py -- its Percentage(...) calls already pass int basis_points"
+  ],
+  "constraints": [
+    "Mirror Money.__post_init__'s existing pattern exactly: reject bool explicitly (isinstance(x, bool)) before the general isinstance(x, int) check, since bool is a subclass of int in Python and would otherwise pass a bare isinstance(x, int) check",
+    "Raise loanflow.errors.ValidationError, not the stdlib ValueError currently raised incidentally by as_percent_string",
+    "Preserve the existing negative-value check (self.basis_points < 0) -- add the type check alongside it, do not replace it",
+    "Minimal change: only demo-repo/src/loanflow/primitives.py's Percentage.__post_init__ and its test coverage in demo-repo/tests/unit/test_primitives.py should change",
+    "No new dependency; the fix is a pure stdlib isinstance check, identical in shape to the existing Money validation a few lines above it in the same file"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "Percentage(1.5) raises loanflow.errors.ValidationError at construction time (not later inside as_percent_string, and not a raw ValueError)"
+    },
+    {
+      "id": "AC-2",
+      "description": "Percentage(True) raises loanflow.errors.ValidationError at construction time (bool must be explicitly rejected, mirroring Money's own bool check)"
+    },
+    {
+      "id": "AC-3",
+      "description": "Percentage(-1) still raises loanflow.errors.ValidationError as before (existing negative-value validation is preserved, not regressed)"
+    },
+    {
+      "id": "AC-4",
+      "description": "Valid construction (e.g. Percentage(3650), Percentage.from_ratio(0.365)) continues to work exactly as before, with as_percent_string() producing the same output"
+    },
+    {
+      "id": "AC-5",
+      "description": "The full demo-repo/tests/unit/test_primitives.py file, and the full demo-repo test suite, pass after the change"
+    }
+  ],
+  "task_graph": [
+    {
+      "id": "N-1",
+      "description": "Architect confirms Money.__post_init__'s exact validation pattern and every existing Percentage(...) call site in demo-repo, citing file:line for each, and confirms no in-repo caller currently relies on passing a non-int basis_points",
+      "phase": "research",
+      "depends_on": []
+    },
+    {
+      "id": "N-2",
+      "description": "Engineer writes a failing regression test for Percentage(1.5)/Percentage(True) first, then extends Percentage.__post_init__ with the same isinstance/bool check Money.__post_init__ already uses, raising ValidationError",
+      "phase": "implementation",
+      "depends_on": ["N-1"]
+    },
+    {
+      "id": "N-3",
+      "description": "Quality Engineer independently re-runs the narrow test file (and the full demo-repo suite as a health check) and confirms all five acceptance criteria",
+      "phase": "verification",
+      "depends_on": ["N-2"]
+    }
+  ],
+  "status": "approved"
+}

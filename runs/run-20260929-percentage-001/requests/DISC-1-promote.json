@@ -1,0 +1,9 @@
+{
+  "operation": "promote_artifact",
+  "phase": "discovery",
+  "run_id": "run-20260929-percentage-001",
+  "doc_ref": "runs/run-20260929-percentage-001/attempts/discovery-1.json",
+  "expected_task_id": "T-PERCENTAGE",
+  "expected_run_id": "run-20260929-percentage-001",
+  "target_repo_path": "demo-repo"
+}
