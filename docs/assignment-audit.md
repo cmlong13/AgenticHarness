@@ -4,11 +4,15 @@ Audit date: **2026-10-03** (replaces the 2026-10-01 audit). Every row was re-eva
 scratch against code, tests and retained run evidence; old statuses were not carried over.
 
 Repository state audited: `main` at `681fddf` ("fix: harden research skip and workflow
-contracts"), in sync with `origin/main` (`0 0`). The working tree also holds **staged but
-uncommitted** changes made before this audit (the Obsidian renderer fix, the Run A/B
-demo-repo changes, three Obsidian proof run directories, and memory lines) and unstaged
-historical leftovers. They are listed under "Exact test and repository results". Where a
-row depends on an uncommitted file, the row says so.
+contracts"), with the Obsidian renderer fix, the Run A/B demo-repo changes, three Obsidian
+proof run directories and memory lines staged but not yet committed.
+
+**Final submitted state (2026-10-04).** All of those changes are now committed and pushed:
+`794f909` (renderer fix, Run A/B diffs, obsidianlive run directories, memory lines) and
+`ef29367` (this audit, `docs/final-writeup.md`, `PROJECT_SPEC.md`, and the retained
+`runs/run-20260929-percentage-001/`). `main` is in sync with `origin/main` and the working
+tree is clean. Nothing in the submission depends on an uncommitted file. See "Exact test and
+repository results" for the final numbers.
 
 Sources, in order of authority:
 
@@ -68,8 +72,9 @@ re-evaluated and the totals above were recomputed from the matrix:
 
 Since this audit was first written, the previously staged changes have been committed as
 `794f909`: the Obsidian renderer fix and its test, the Run A/B `demo-repo` diffs, the staged
-memory lines, and the three obsidianlive run directories. Their "staged but not committed"
-caveats below therefore describe the state at `681fddf`.
+memory lines, and the three obsidianlive run directories. The closeout documents and
+`percentage-001` followed in `ef29367`. Rows below have been updated to refer to the committed
+files.
 
 **Acceptance criteria (§4): 11 PROVEN, 1 PARTIAL (AC-1, live Jira), 0 MISSING.**
 
@@ -132,7 +137,7 @@ None. Rows 78 and 79 were MISSING until `docs/final-writeup.md` was written (clo
 | 24 | §2.2 | Engineer verifies the architect's claims before coding | PROVEN | `engineer.md` Step 1–3. live: `findings_ref.finding_ids` in `implementation-report.json` of `costproof-001` and `midimplresume-002` | |
 | 25 | §2.2, §3.3 | Minimal-change ladder | PROVEN | `engineer.md` Step 5 (5 rungs). live: `minimal_change_rung` recorded in each sampled report | |
 | 26 | §2.2 | One failing test first (TDD) | PROVEN | `engineer.md` Step 6. live: `runs/run-20261001-midimplresume-002/interruption-proof/pre-kill/demo-repo-git-diff.patch` (test only, no source yet). In obsidianlive-002/003/004 the Engineer's first `Edit` targets a test file (stream records 372, 252, 360) | |
-| 27 | §2.2 | Extend rather than replace working code | PROVEN | impl: `engineer.md:175-185` (Step 5: "extend rather than replace working code, and make no drive-by edits"), plus `code-craftsmanship/SKILL.md` checklist item 4. live: sampled diffs add guards without rewriting, e.g. the staged `demo-repo/src/loanflow/applicants.py` diff (+2 lines) | Closed since the last audit: the rule is now in the Engineer contract. |
+| 27 | §2.2 | Extend rather than replace working code | PROVEN | impl: `engineer.md:175-185` (Step 5: "extend rather than replace working code, and make no drive-by edits"), plus `code-craftsmanship/SKILL.md` checklist item 4. live: sampled diffs add guards without rewriting, e.g. the `demo-repo/src/loanflow/applicants.py` diff in `794f909` (+2 lines) | Closed since the last audit: the rule is now in the Engineer contract. |
 | 28 | §2.2, §4 | No new dependency without written justification | PROVEN | `engineer.md` Step 4. live: `dependency_changes: []` in every sampled report | The justification path has never been exercised; no task needed a dependency. |
 | 29 | §2.2 | `quality-engineer.md` frontmatter | PROVEN | `.claude/agents/quality-engineer.md:1-6` | |
 | 30 | §2.2 | QE cannot modify source | PROVEN | `quality-engineer.md:4` = `Read, Grep, Glob` | QE has no write-capable tool at all. |
@@ -158,8 +163,8 @@ None. Rows 78 and 79 were MISSING until `docs/final-writeup.md` was written (clo
 | 50 | §2.5, §4 | Guardrail demonstrably blocks a run with deleted verification evidence | PROVEN | live: `runs/completion-guardrail-live-001/STOP-HOOK-LIVE-BLOCK-EVIDENCE.md` (the real registered `Stop` hook blocked: "verification-report.json is missing") | |
 | 51 | §2.5 | Post-agent hook extracting usage | PROVEN | `.claude/hooks/record_agent_usage.py` (`PostToolUse` / `Agent` and `SubagentStop`). live: `runs/run-20260929-costproof-001/usage/*.json`; `runs/run-20261002-obsidianlive-004/usage/*.json` (4 records) | |
 | 52 | §2.6 | Read `lessons-learned.md` before every run | PROVEN | row 5 | |
-| 53 | §2.6 | At most 5 bullets appended per run; capped | PROVEN | `harness/orchestrator/memory.py` `MAX_LESSONS_PER_RUN = 5`. live: Run B and Run C each appended 1 (`run-summary.json` `lessons_learned_appended`); `midimplresume-002` appended 4 | **No absolute file cap.** `memory/lessons-learned.md` has 17 bullets at HEAD and 21 in the working tree (3 staged, 1 unstaged). |
-| 54 | §2.6 | Persistent memory directory of **small single-fact files with an index** | **PARTIAL** | `memory/facts.jsonl` (10 facts at HEAD, 12 in the working tree) and `memory/lessons-learned.md`. Each entry has an id, evidence path, absolute date and source run, and is schema-checked on load | The structure is two aggregate files, one fact per line, not one file per fact with an index. The intent (small, durable, dated, evidence-backed facts) is met; the literal shape is not. |
+| 53 | §2.6 | At most 5 bullets appended per run; capped | PROVEN | `harness/orchestrator/memory.py` `MAX_LESSONS_PER_RUN = 5`. live: Run B and Run C each appended 1 (`run-summary.json` `lessons_learned_appended`); `midimplresume-002` appended 4 | **No absolute file cap.** `memory/lessons-learned.md` has 20 bullets at `ef29367`. |
+| 54 | §2.6 | Persistent memory directory of **small single-fact files with an index** | **PARTIAL** | `memory/facts.jsonl` (11 facts at `ef29367`) and `memory/lessons-learned.md`. Each entry has an id, evidence path, absolute date and source run, and is schema-checked on load | The structure is two aggregate files, one fact per line, not one file per fact with an index. The intent (small, durable, dated, evidence-backed facts) is met; the literal shape is not. |
 | 55 | §2.6 | Convert relative dates to absolute | PROVEN | `work/SKILL.md` memory-append step; every entry uses `YYYY-MM-DD` | |
 | 56 | §2.6, §4 | A second run visibly uses a lesson from the first | PROVEN | live (repository memory): `runs/run-20261001-midimplresume-002/run-summary.json` `memory_refs_used` includes `L-20261001-INSCOPE-BARE-PATHS` (written by `-001`), with a `memory_applied` event. Earlier: `runs/run-20260918-logicrepair-003`. live (vault memory): Run B → Run C, see AC-9 | |
 | 57 | §2.6 | Checkpoint state so interrupted runs auto-resume | PROVEN | `live_cli.py::op_write_checkpoint`, `op_evaluate_resume`; `harness/evidence.py` checkpoint semantics; `tests/test_orchestrator_checkpoint.py`, `tests/test_research_skip.py` | |
@@ -168,10 +173,10 @@ None. Rows 78 and 79 were MISSING until `docs/final-writeup.md` was written (clo
 | 60 | §3.1 | Evidence over assertion | PROVEN | schemas plus `harness/evidence.py` validators; consistent across runs | |
 | 61 | §3.2 | Distrust completion claims | PROVEN | rows 11 and 62 | |
 | 62 | §1, §4 | Catch a simulated false "pushed" claim via `git ls-remote` | PROVEN | live: `runs/run-20260929-falsepush-001/`; see AC-8 | |
-| 63 | §3.3 | Minimal diff | PROVEN | `runs/run-20261001-midimplresume-002/logs/implementation.diff`; staged Run A/B diffs (+2 source lines, +9 test lines each); `runs/run-20261002-obsidianlive-004/diff.patch`; `code-craftsmanship-ab-test` | |
+| 63 | §3.3 | Minimal diff | PROVEN | `runs/run-20261001-midimplresume-002/logs/implementation.diff`; Run A/B diffs in `794f909` (+2 source lines, +9 test lines each); `runs/run-20261002-obsidianlive-004/diff.patch`; `code-craftsmanship-ab-test` | |
 | 64 | §3.4 | Health signal for formula/config/data-path changes | PROVEN | `demo-repo/src/loanflow/health.py`. live: `run-20260919-flaky-001` added `check_batch_size` | The newest runs changed input validation, not a formula, config or data path. |
 | 65 | §3.5 | Exactly one canonical `.claude/`; config referenced by absolute path | PROVEN | `find . -name .claude -type d` (excluding `.venv`) gives only `./.claude`. All 5 hook commands in `.claude/settings.json` are `python "${CLAUDE_PROJECT_DIR}/.claude/hooks/<x>.py"`. test: `tests/test_hook_registration.py` runs the registered command strings through Git Bash from a nested `runs/run-x/deep` directory. It shows they allow and block correctly there, that an unresolved project dir fails closed, and that the old relative form reproduces the "can't open file" defect. These tests ran (not skipped) in this audit. | **Previous cwd caveat closed.** The 2026-10-01 audit saw a hook fail from a nested cwd. In this audit, Bash calls made from `runs/` and `runs/run-20261002-obsidianlive-004/` passed through the registered `PreToolUse` hook without error (audit-time observation, not retained). The clean clone used by Run C is a sibling directory outside this repository. |
-| 66 | §3.6 | Cut, don't gate | PROVEN | `code-craftsmanship` is wired (row 41). Repository cleanup done 2026-10-03: no `.obsidian/` directory remains anywhere in the tree; `runs/_unmatched_usage/` and `runs/_usage_corroboration/` contain only their two tracked files; `runs/run-20260929-percentage-002/` is gone; the stale unstaged September `memory/*` lines were reverted (`memory/` is clean). `git status --short` shows only the intended closeout changes. Documented in `docs/final-writeup.md` §4 | `runs/run-20260929-percentage-001/` (54 files, about 0.10 MB) is deliberately retained and will be committed: it is a genuine failed Engineer transport-contract incident that committed `costproof-001` evidence and lesson `L-20260929-EXPLICIT-CONTRACT-REMINDER-PER-TURN` cite. `runs/run-20260914-mcpaudit-001` is already-committed history and was left as is. The external clean clone `AgenticHarness-obslive004-clean` lives outside the repository and is not part of it. |
+| 66 | §3.6 | Cut, don't gate | PROVEN | `code-craftsmanship` is wired (row 41). Repository cleanup done 2026-10-03: no `.obsidian/` directory remains anywhere in the tree; `runs/_unmatched_usage/` and `runs/_usage_corroboration/` contain only their two tracked files; `runs/run-20260929-percentage-002/` is gone; the stale unstaged September `memory/*` lines were reverted (`memory/` is clean). The closeout changes were committed in `ef29367`; `git status` is clean. Documented in `docs/final-writeup.md` §4 | `runs/run-20260929-percentage-001/` (54 files, about 0.10 MB) is deliberately retained and was committed in `ef29367`: it is a genuine failed Engineer transport-contract incident that committed `costproof-001` evidence and lesson `L-20260929-EXPLICIT-CONTRACT-REMINDER-PER-TURN` cite. `runs/run-20260914-mcpaudit-001` is already-committed history and was left as is. The external clean clone `AgenticHarness-obslive004-clean` lives outside the repository and is not part of it. |
 | 67 | §3.7 | Verification issues loop back in the same run | PROVEN | live: `runs/run-20260918-logicrepair-003` | |
 | 68 | §4 | Planted flaky test retried; planted logic bug routed back and fixed in the same run | PROVEN | AC-5 and AC-6 | |
 | 69 | §4 | Obsidian vault receives a run summary | PROVEN | row 44; AC-9 | |
@@ -239,8 +244,7 @@ recomputed by this audit from the files currently on disk in
      `obsidianlive-003`, `T-OBSLIVEA`, `T-OBSLIVEB` and the seed-note id;
    - `runs_obsidianlive_dirs` contains only the September fixture;
    - the clone's `memory/` equals HEAD. HEAD's `lessons-learned.md` has no
-     untested-AC lesson (Run B's lesson exists only as an uncommitted staged line in this
-     working tree);
+     untested-AC lesson (Run B's lesson was not committed until later, in `794f909`);
    - `launch-log.json` records `child_env_mentions_main_repo: []`, and no transcript
      record references the main repository path.
 5. **Run C retrieved Run B's exact note from the real vault.** In Discovery,
@@ -290,8 +294,8 @@ recomputed by this audit from the files currently on disk in
   published notes.
 - **Status of the fix.** The fix in `harness/orchestrator/obsidian.py` and
   `tests/test_orchestrator_obsidian.py` (new `2/3 passed` and unpriced/partial-cost
-  cases) is **staged but not committed**. Committed HEAD `681fddf` still has the
-  defect (`obsidian.py:365` `r.get("status") == "pass"`).
+  cases) is **committed in `794f909`** (`obsidian.py:364` now checks
+  `r.get("result") == "passed"`). `681fddf` and earlier still had the defect.
 - **Historical notes were intentionally not rewritten**, so the published hashes stay
   valid live evidence.
 - **Impact on AC-9.** The defect affected only the rendered Tests and Usage lines. Run B's
@@ -390,25 +394,18 @@ ticket mode are complete. This is an honest PARTIAL, not a hidden gap.
 |---|---|---|
 | **Implementation gaps** | 35 (coverage numbers never produced); 42 (no GitHub issue reading; PR/code-search not wired into phases); 45 (Jira status transitions and completion comments not implemented); 54 (memory is two aggregate files, not single-fact files plus an index); 6, part (checklist questions not encoded in `/work`) | Each is small and none affects pipeline correctness. Row 35 and row 45 are explicit assignment wording, so a strict grader can deduct for them. Row 45 is a deliberate design decision documented in `jira/SKILL.md:122-130`. |
 | **Proof / evidence gaps** | AC-1 / row 45 (no live Jira); 6 (refusal never exercised live); 3 (Research skip has no live run; still PROVEN); 33 (no live backoff wait; still PROVEN) | Only AC-1 touches an acceptance criterion. |
-| **Deliverable** | 79 (write-up §5.4) | **Closeout update:** `docs/final-writeup.md` now exists, and rows 77 and 78 are PROVEN. The §5.4 deletion list must be finalized after the row 66 cleanup. |
-| **Optional / polish** | 66 (repository hygiene) | Cleanup decision needed before submission. It also feeds row 79. |
+| **Deliverable** | 79 (write-up §5.4) | Done: `docs/final-writeup.md` exists and rows 77–79 are PROVEN. |
+| **Optional / polish** | 66 (repository hygiene) | Done: cleanup performed and committed (row 66). |
 
-**Additional items found in this audit (documented, not fixed):**
+**Additional items found in this audit:**
 
-1. **The Obsidian renderer fix is staged but not committed.** HEAD still renders `0/4 passed`
-   on a passing run. Commit it, or the defect ships.
-2. **Staged index state.** Before this audit, the index already held staged changes:
-   - `harness/orchestrator/obsidian.py` and `tests/test_orchestrator_obsidian.py`;
-   - the Run A/B `demo-repo` diffs;
-   - one fact and three lessons in `memory/`;
-   - every file of `runs/run-20261001-obsidianlive-002/`, `-003/` and
-     `runs/run-20261002-obsidianlive-004/`.
-
-   This audit did not stage, unstage or modify any of them. Their inclusion in the
-   submission is a pending decision.
-3. **`PROJECT_SPEC.md:16-17` is stale.** It still says "Still not live-proven: … Obsidian
-   write-back from inside a `/work` run" and points to the 2026-10-01 audit.
-4. **`github.py:92` encoding defect** (row 36) is still present.
+1. ~~**The Obsidian renderer fix is staged but not committed.**~~ Resolved: committed in
+   `794f909`.
+2. ~~**Staged index state.**~~ Resolved: the renderer fix, Run A/B `demo-repo` diffs, memory
+   lines and the three obsidianlive run directories were committed in `794f909`.
+3. ~~**`PROJECT_SPEC.md:16-17` is stale.**~~ Resolved in `ef29367`: the status block now
+   records Obsidian write-back as live-proven and points to this audit.
+4. **`github.py:92` encoding defect** (row 36) is still present (documented, not fixed).
 5. **The skill-enforcement hook has a false positive** (row 47) on `runs/` writes that
    mention `demo-repo`.
 
@@ -416,37 +413,30 @@ ticket mode are complete. This is an honest PARTIAL, not a hidden gap.
 
 - ~~finalize `docs/final-writeup.md` §4 after cleanup~~ (done 2026-10-03, row 79);
 - ~~make the row 66 cleanup decisions~~ (done 2026-10-03, row 66);
-- commit (or deliberately drop) the staged renderer fix and proof runs;
+- ~~commit (or deliberately drop) the staged renderer fix and proof runs~~ (committed in
+  `794f909`);
 - state AC-1 plainly as proven by implementation and tests only, for lack of credentials.
 
 ---
 
-## Exact test and repository results (run 2026-10-03 during this audit)
+## Exact test and repository results
+
+### Final submitted state (re-run 2026-10-04 at `ef29367`)
 
 | Command | Result |
 |---|---|
-| `python -m pytest tests -q` | **1616 passed, 2 skipped** in 180.07 s, exit 0. Both skips are `tests/test_orchestrator_obsidian_reader.py:142,167`, "symlinks not permitted in this environment". |
-| `python -m pytest demo-repo/tests -q` | **114 passed** in 4.75 s, exit 0. Two more than at HEAD: the staged Run A/B regression tests are included. |
-| `git diff --check` | no output, exit 0 (`git diff --cached --check`: also clean) |
-| `git rev-list --left-right --count origin/main...main` | `0	0` (in sync at `681fddf`) |
-| `git status --short` | 508 entries; breakdown below |
+| `python -m pytest -q` | **1616 passed, 2 skipped** in 197.74 s, exit 0. Both skips are `tests/test_orchestrator_obsidian_reader.py:142,167`, "symlinks not permitted in this environment". |
+| `python -m pytest demo-repo/tests -q` | **114 passed** in 5.10 s, exit 0 (includes the Run A/B regression tests committed in `794f909`). |
+| `git status -sb` | `## main...origin/main`: in sync, working tree clean. |
 
-`git status --short` breakdown:
+### Original audit run (2026-10-03 at `681fddf`)
 
-- **Staged, pre-existing before this audit:**
-  - `M demo-repo/src/loanflow/applicants.py`, `M demo-repo/src/loanflow/late_fee_tier.py`,
-    `M demo-repo/tests/unit/test_applicants.py`, `M demo-repo/tests/unit/test_late_fee_tier.py`;
-  - `M harness/orchestrator/obsidian.py`, `M tests/test_orchestrator_obsidian.py`;
-  - `MM memory/facts.jsonl`, `MM memory/lessons-learned.md`. These are staged lines for
-    the obsidianlive runs, plus unstaged lines citing `percentage-001`;
-  - 428 × `A runs/run-20261001-obsidianlive-002/…`, `runs/run-20261001-obsidianlive-003/…`,
-    `runs/run-20261002-obsidianlive-004/…`.
-- **Unstaged:** ` M docs/assignment-audit.md` (this audit).
-- **Untracked:**
-  - `?? .obsidian/`, `?? runs/.obsidian/`, `?? runs/completion-guardrail-live-001/.obsidian/`,
-    `?? runs/run-20260803-riskband-001/live_cli/.obsidian/`;
-  - `?? runs/run-20260929-percentage-001/`, `?? runs/run-20260929-percentage-002/`;
-  - `runs/_unmatched_usage/*` and `runs/_usage_corroboration/*` quarantine files.
+At audit time the suite gave the same 1616 passed / 2 skipped (180.07 s), `git diff --check`
+was clean, and `main` was in sync at `681fddf`. `git status --short` showed 508 entries: the
+staged changes later committed in `794f909`, this audit (unstaged), and untracked
+`.obsidian/` metadata, `percentage-001`/`-002` and usage quarantine files. The cleanup
+recorded in row 66 removed the `.obsidian/` metadata, `percentage-002` and the unreferenced
+quarantine files; `percentage-001` was committed in `ef29367`.
 
 ### Audit-time read-only checks (not retained under `runs/`)
 
