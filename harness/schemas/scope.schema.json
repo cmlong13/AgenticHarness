@@ -16,6 +16,7 @@
     "constraints",
     "acceptance_criteria",
     "task_graph",
+    "pre_dispatch_checklist",
     "status"
   ],
   "properties": {
@@ -56,6 +57,7 @@
       "minItems": 1,
       "items": { "$ref": "#/$defs/taskGraphNode" }
     },
+    "pre_dispatch_checklist": { "$ref": "#/$defs/preDispatchChecklist" },
     "status": { "enum": ["approved", "refused"] },
     "refusal_reason": { "type": "string", "minLength": 1 },
     "research_skip_reason": { "type": "string", "minLength": 1 }
@@ -68,6 +70,23 @@
     "required": ["refusal_reason"]
   },
   "$defs": {
+    "preDispatchChecklist": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "core_product_change",
+        "touches_protected_path",
+        "changes_formula_config_or_data_path",
+        "notes"
+      ],
+      "properties": {
+        "core_product_change": { "type": "boolean" },
+        "touches_protected_path": { "type": "boolean" },
+        "changes_formula_config_or_data_path": { "type": "boolean" },
+        "health_signal_path": { "type": "string", "minLength": 1 },
+        "notes": { "type": "string", "minLength": 1 }
+      }
+    },
     "acceptanceCriterion": {
       "type": "object",
       "additionalProperties": false,

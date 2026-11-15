@@ -194,6 +194,12 @@ Then stop at the first rung of the ladder that holds:
 
 Record the rung and a one-sentence rationale.
 
+**Health signal.** If `scope.json`'s `pre_dispatch_checklist.changes_formula_config_or_data_path`
+is `true`, your diff must also add or extend the check at `pre_dispatch_checklist.health_signal_path`
+so that a later silent regression of this formula, config value, or data path is caught
+(a distribution, sanity, or freshness check, not just a test that passes today). Leaving it
+untouched is not a minimal change; it is an incomplete one, and the orchestrator will reject it.
+
 # Step 6: Write the failing test first (TDD)
 
 For every new or changed behavior, write or extend one test at a path that passes every check

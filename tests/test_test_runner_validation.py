@@ -476,6 +476,14 @@ class TestValidateArgs:
             rc.validate_args([r"C:\Windows\System32"], wd, target)
         assert exc.value.category == "positional_path_escape"
 
+    def test_rejects_backslash_traversal_positional(self, rc, tmp_path) -> None:
+        target = tmp_path / "target"
+        wd = target / "src"
+        wd.mkdir(parents=True)
+        with pytest.raises(rc.Rejected) as exc:
+            rc.validate_args([r"..\..\outside\test_x.py"], wd, target)
+        assert exc.value.category == "positional_path_escape"
+
     def test_rejects_positional_resolving_to_repo_root_including_dot(self, rc, tmp_path) -> None:
         target = tmp_path / "target"
         target.mkdir(parents=True)

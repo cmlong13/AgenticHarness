@@ -32,6 +32,7 @@ def _valid_draft(*, task_id="T-1", run_id="run-1", target_repo_path="fixture-rep
             {"id": "N-2", "description": "implement", "phase": "implementation", "depends_on": ["N-1"]},
             {"id": "N-3", "description": "verify", "phase": "verification", "depends_on": ["N-2"]},
         ],
+        "pre_dispatch_checklist": {"core_product_change": True, "touches_protected_path": False, "changes_formula_config_or_data_path": False, "notes": "fixture"},
         "status": "approved",
     }
 

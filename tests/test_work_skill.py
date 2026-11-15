@@ -1092,3 +1092,24 @@ class TestConnectorRouting:
         assert "Connector routing, whenever this run called `resolve_jira_issue_routed`" in reporting
         assert "REST is the kept production route" in reporting
         assert "never masked an `unauthorized`/`identity_mismatch`" in reporting
+
+
+class TestPreDispatchChecklistAndHealthSignal:
+    """ASSIGNMENT.md §2.1 checklist questions and §3.4 health signals must be spelled out
+    where the orchestrator and Engineer actually read them, not only in ASSIGNMENT.md."""
+
+    def test_work_skill_states_each_checklist_question(self) -> None:
+        text = SKILL_PATH.read_text(encoding="utf-8")
+        for key in (
+            "pre_dispatch_checklist",
+            "core_product_change",
+            "touches_protected_path",
+            "changes_formula_config_or_data_path",
+            "health_signal_path",
+        ):
+            assert key in text, f"work/SKILL.md must name checklist field {key!r}"
+        assert "decoration" in text
+
+    def test_engineer_must_leave_the_health_signal_behind(self) -> None:
+        engineer = (REPO_ROOT / ".claude" / "agents" / "engineer.md").read_text(encoding="utf-8")
+        assert "health_signal_path" in engineer

@@ -59,6 +59,7 @@ def _scope_dict(*, status="approved", refusal_reason=None, acceptance_criteria=N
             {"id": "N-2", "description": "Fix off-by-one", "phase": "implementation", "depends_on": ["N-1"]},
             {"id": "N-3", "description": "Verify fix", "phase": "verification", "depends_on": ["N-2"]},
         ],
+        "pre_dispatch_checklist": {"core_product_change": True, "touches_protected_path": False, "changes_formula_config_or_data_path": False, "notes": "fixture"},
         "status": status,
     }
     if refusal_reason is not None:

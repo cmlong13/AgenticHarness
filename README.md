@@ -12,8 +12,8 @@ it is believed.
 **Complete and submitted.** Every component the assignment lists is implemented, and the
 pipeline has been exercised end to end in live `/work` runs against `demo-repo/`.
 
-- Test suite: **1616 passed, 2 skipped** (`python -m pytest -q`); `demo-repo` suite: 114 passed.
-- Assignment audit: 71 PROVEN, 5 PARTIAL, 0 MISSING, 3 N/A; acceptance criteria 11 PROVEN,
+- Test suite: **1628 passed** (`python -m pytest -q`); `demo-repo` suite: 114 passed.
+- Assignment audit: 72 PROVEN, 4 PARTIAL, 0 MISSING, 3 N/A; acceptance criteria 11 PROVEN,
   1 PARTIAL. The one partial acceptance criterion (AC-1) is pulling a real Jira ticket: ticket
   mode is implemented and tested, but no Jira credentials were available.
 

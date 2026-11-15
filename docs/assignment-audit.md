@@ -51,8 +51,8 @@ only file intentionally modified is this one.
 | Status | Count |
 |---|---|
 | **Total audited rows** | **79** |
-| PROVEN | **71** |
-| PARTIAL | **5** |
+| PROVEN | **72** |
+| PARTIAL | **4** |
 | MISSING | **0** |
 | N/A | **3** |
 
@@ -76,13 +76,26 @@ memory lines, and the three obsidianlive run directories. The closeout documents
 `percentage-001` followed in `ef29367`. Rows below have been updated to refer to the committed
 files.
 
+**Review update (2026-11-15).** Row 6 is now PROVEN by implementation and tests (was
+PARTIAL). `scope.schema.json` requires a `pre_dispatch_checklist` on every scope
+(`core_product_change`, `touches_protected_path`, `changes_formula_config_or_data_path`,
+`health_signal_path`, `notes`); `validate_scope_semantics` rejects an approved scope that is
+decoration, touches a Protected Path, or changes a formula/config/data path without naming an
+in-scope health-signal file; `work/SKILL.md` states each question and re-checks after
+Verification that the health-signal file actually changed; `engineer.md` Step 5 requires the
+Engineer to extend it. Tests: `tests/test_artifact_contracts.py` (checklist cases) and
+`tests/test_work_skill.py::TestPreDispatchChecklistAndHealthSignal`. Still no live `refused` run.
+Scopes retained before this change lack the field and would fail re-validation on `--resume`;
+all of them are terminal. Separately, `run_command.py` now rejects Windows-style absolute and
+backslash-traversal positionals on every OS (`test_rejects_absolute_positional` failed on
+Linux/macOS before).
+
 **Acceptance criteria (§4): 11 PROVEN, 1 PARTIAL (AC-1, live Jira), 0 MISSING.**
 
-### Remaining PARTIAL rows (5)
+### Remaining PARTIAL rows (4)
 
 | Row | Requirement | Gap type | Gap |
 |---|---|---|---|
-| 6 | Pre-dispatch checklist and refusal | implementation (small) + proof | Refusal is implemented and tested, but `/work` never spells out the §2.1 checklist questions ("core product or decoration?", "health signal?"), and no retained run is `refused`. |
 | 35 | QE verdicts include coverage numbers | implementation | The `coverage` field exists in the schema, but no verification report has ever contained one. |
 | 42 | GitHub connector: read issues/PRs, search code, verify pushes | implementation (small) | There is no issue-read procedure. PR read and code search exist but are not wired into any phase. |
 | 45 | Jira: intake, status transitions, completion comment | implementation + external proof | Transitions and comments are deliberately not implemented. No live Jira credentials exist. |
@@ -116,7 +129,7 @@ None. Rows 78 and 79 were MISSING until `docs/final-writeup.md` was written (clo
 | 3 | §2.1 | Decompose into a task graph and decide which phases are needed, explicitly skipping unneeded ones (typo fix: no Research) | PROVEN | impl: `harness/evidence.py:200-218`. `research_skip_reason` is valid only on an approved scope, must be non-blank, and the task graph must omit any research node. `evidence.py:222-228`: the implementation report must omit `findings_ref` when Research was skipped. `evidence.py:449-526`: checkpoint `skipped_phases` satisfies phase ordering, must not also be completed, current or next, and `complete` needs only the three remaining phases. `harness/orchestrator/checkpoint.py:100-104` `skipped_phases_for` (a single source), `:417-425` resume refuses a checkpoint skip the scope never declared. `core.py:1110-1118` emits a `phase_skipped` event. `core.py:876-877` writes `phases_skipped` to the run summary. `.claude/hooks/pre_dispatch_check.py:117-127` admits the Engineer on an approved skip scope and refuses an Architect dispatch for a skipped run. `work/SKILL.md:753-759,790-793,1417-1423`. **Implementation is never skippable**: only `research` can appear in `skipped_phases`. test: `tests/test_research_skip.py` (scope declaration, report, checkpoint, core run, resume, live validation context, pre-dispatch hook) | **No dedicated live `/work` skip run.** No retained `scope.json` declares `research_skip_reason`, and no `policy-events.jsonl` contains `phase_skipped`. This is proven by implementation and tests only. The assignment does not list the skip as a live acceptance criterion. |
 | 4 | §2.1 | Orchestrator runs in the main session, not as a subagent | PROVEN | impl: `work/SKILL.md:8-15`. live: `runs/run-20260929-costproof-001/session-result.json` `subagent_stats` (`max_depth: 1`, `spawned_by_subagents: 0`) | |
 | 5 | §2.1, §2.6 | Read `lessons-learned.md` before dispatching anything | PROVEN | impl: `work/SKILL.md` Phase 0, `live_cli.py::op_load_memory`. live: `memory_loaded` is the first event in `runs/run-20261001-midimplresume-002/logs/policy-events.jsonl`, and every resume re-loads | |
-| 6 | §2.1 | Pre-dispatch checklist; the orchestrator may refuse work, with reasons | **PARTIAL** | impl: `work/SKILL.md:767-784` (`status: "refused"` + `refusal_reason`, `state: "discovery_refused"`, no Architect dispatch, no checkpoint). `evidence.py:194-198` (no `refusal_reason` on an approved scope). test: refusal cases in `tests/` (13 references to `refused` / `discovery_refused`) | **Checklist content is not encoded.** `/work` defers to "the pre-dispatch checklist in `ASSIGNMENT.md` §2.1" with only "Protected Path / not a real product change" as examples. It never states the health-signal question, and `scope.schema.json` records no checklist result. **Never exercised live:** no retained `scope.json` is `refused`. |
+| 6 | §2.1 | Pre-dispatch checklist; the orchestrator may refuse work, with reasons | PROVEN | impl: `scope.schema.json` `preDispatchChecklist` (required); `evidence.py` `validate_scope_semantics` checklist rules; `work/SKILL.md` Phase 1 step 2 (each question) and post-Verification health-signal diff check; refusal path unchanged (`status: "refused"` + `refusal_reason`, `state: "discovery_refused"`). test: `tests/test_artifact_contracts.py` checklist cases, `tests/test_work_skill.py::TestPreDispatchChecklistAndHealthSignal` | No retained live run is `refused`. |
 | 7 | §2.5 | Architect dispatch gated on an approved scope | PROVEN | impl: `pre_dispatch_check.py` `PRECONDITIONS["architect"]`, registered at `.claude/settings.json` (`PreToolUse` / `Agent`). live: refusal in `runs/run-20261001-midimplresume-002/logs/policy-events.jsonl` event 62 | |
 | 8 | §2.5 | Engineer dispatch gated on Architect output (or a declared skip) | PROVEN | impl: `pre_dispatch_check.py` (findings, or an approved identity-matching skip scope). test: `tests/test_research_skip.py::TestPreDispatchHook`, `tests/test_hooks.py` | |
 | 9 | §2.5 | QE dispatch gated on `ready_for_verification` | PROVEN | impl: `pre_dispatch_check.py` `PRECONDITIONS["quality-engineer"]` | |
@@ -174,7 +187,7 @@ None. Rows 78 and 79 were MISSING until `docs/final-writeup.md` was written (clo
 | 61 | §3.2 | Distrust completion claims | PROVEN | rows 11 and 62 | |
 | 62 | §1, §4 | Catch a simulated false "pushed" claim via `git ls-remote` | PROVEN | live: `runs/run-20260929-falsepush-001/`; see AC-8 | |
 | 63 | §3.3 | Minimal diff | PROVEN | `runs/run-20261001-midimplresume-002/logs/implementation.diff`; Run A/B diffs in `794f909` (+2 source lines, +9 test lines each); `runs/run-20261002-obsidianlive-004/diff.patch`; `code-craftsmanship-ab-test` | |
-| 64 | §3.4 | Health signal for formula/config/data-path changes | PROVEN | `demo-repo/src/loanflow/health.py`. live: `run-20260919-flaky-001` added `check_batch_size` | The newest runs changed input validation, not a formula, config or data path. |
+| 64 | §3.4 | Health signal for formula/config/data-path changes | PROVEN | harness: Discovery must name `pre_dispatch_checklist.health_signal_path` for any formula/config/data-path change (row 6). target: `demo-repo/src/loanflow/health.py`. live: `run-20260919-flaky-001` added `check_batch_size` | The newest runs changed input validation, not a formula, config or data path. |
 | 65 | §3.5 | Exactly one canonical `.claude/`; config referenced by absolute path | PROVEN | `find . -name .claude -type d` (excluding `.venv`) gives only `./.claude`. All 5 hook commands in `.claude/settings.json` are `python "${CLAUDE_PROJECT_DIR}/.claude/hooks/<x>.py"`. test: `tests/test_hook_registration.py` runs the registered command strings through Git Bash from a nested `runs/run-x/deep` directory. It shows they allow and block correctly there, that an unresolved project dir fails closed, and that the old relative form reproduces the "can't open file" defect. These tests ran (not skipped) in this audit. | **Previous cwd caveat closed.** The 2026-10-01 audit saw a hook fail from a nested cwd. In this audit, Bash calls made from `runs/` and `runs/run-20261002-obsidianlive-004/` passed through the registered `PreToolUse` hook without error (audit-time observation, not retained). The clean clone used by Run C is a sibling directory outside this repository. |
 | 66 | §3.6 | Cut, don't gate | PROVEN | `code-craftsmanship` is wired (row 41). Repository cleanup done 2026-10-03: no `.obsidian/` directory remains anywhere in the tree; `runs/_unmatched_usage/` and `runs/_usage_corroboration/` contain only their two tracked files; `runs/run-20260929-percentage-002/` is gone; the stale unstaged September `memory/*` lines were reverted (`memory/` is clean). The closeout changes were committed in `ef29367`; `git status` is clean. Documented in `docs/final-writeup.md` §4 | `runs/run-20260929-percentage-001/` (54 files, about 0.10 MB) is deliberately retained and was committed in `ef29367`: it is a genuine failed Engineer transport-contract incident that committed `costproof-001` evidence and lesson `L-20260929-EXPLICIT-CONTRACT-REMINDER-PER-TURN` cite. `runs/run-20260914-mcpaudit-001` is already-committed history and was left as is. The external clean clone `AgenticHarness-obslive004-clean` lives outside the repository and is not part of it. |
 | 67 | §3.7 | Verification issues loop back in the same run | PROVEN | live: `runs/run-20260918-logicrepair-003` | |
