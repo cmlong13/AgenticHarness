@@ -197,6 +197,47 @@ def validate_scope_semantics(doc: dict, *, artifact: str = "scope") -> list[Vali
     if doc.get("status") == "approved" and "refusal_reason" in doc:
         errors.append(ValidationError(artifact, "$.refusal_reason", "must not be present when status is 'approved'"))
 
+    # ASSIGNMENT.md §2.1 pre-dispatch checklist and §3.4 health signals. An approved scope
+    # must be a core product change, must not touch a Protected Path, and -- when it changes
+    # a formula, config value, or data path -- must name an in-scope health-signal file the
+    # Engineer will add or extend. A failing checklist is only legitimate on a refusal.
+    checklist = doc.get("pre_dispatch_checklist")
+    if doc.get("status") == "approved" and isinstance(checklist, dict):
+        base = "$.pre_dispatch_checklist"
+        if checklist.get("core_product_change") is False:
+            errors.append(
+                ValidationError(
+                    artifact,
+                    f"{base}.core_product_change",
+                    "an approved scope must be a core product change; refuse decoration-only work",
+                )
+            )
+        if checklist.get("touches_protected_path") is True:
+            errors.append(
+                ValidationError(
+                    artifact, f"{base}.touches_protected_path", "an approved scope must not touch a Protected Path"
+                )
+            )
+        if checklist.get("changes_formula_config_or_data_path") is True:
+            signal = checklist.get("health_signal_path")
+            if not signal:
+                errors.append(
+                    ValidationError(
+                        artifact,
+                        f"{base}.health_signal_path",
+                        "a formula/config/data-path change must name the health-signal file that "
+                        "will catch it silently breaking later",
+                    )
+                )
+            elif signal not in doc.get("in_scope", []):
+                errors.append(
+                    ValidationError(
+                        artifact,
+                        f"{base}.health_signal_path",
+                        f"health_signal_path {signal!r} must also be an in_scope entry so the Engineer may edit it",
+                    )
+                )
+
     # ASSIGNMENT.md §2.1: Discovery decides which phases are needed and says so explicitly
     # when it skips one. Research is the only skippable phase; the skip is declared once,
     # here, with a reason, and the task graph must then actually omit Research.

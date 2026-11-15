@@ -1139,3 +1139,72 @@ def test_scope_annotated_in_scope_entry_is_caught():
     errors = validate_scope_semantics(doc, artifact="scope")
 
     assert any(e.json_path == "$.in_scope[0]" and "bare repository-relative path" in e.message for e in errors)
+
+
+# --- ASSIGNMENT.md §2.1 pre-dispatch checklist / §3.4 health signals ---------------------
+
+
+def test_scope_missing_pre_dispatch_checklist_fails_schema():
+    schema = load_json(SCHEMA_DIR / "scope.schema.json")
+    doc = copy.deepcopy(_load("scope"))
+    del doc["pre_dispatch_checklist"]
+
+    errors = validate_against_schema(doc, schema, artifact="scope")
+
+    assert any("pre_dispatch_checklist" in e.message for e in errors)
+
+
+def test_approved_scope_that_is_decoration_is_caught():
+    doc = copy.deepcopy(_load("scope"))
+    doc["pre_dispatch_checklist"]["core_product_change"] = False
+
+    errors = validate_scope_semantics(doc, artifact="scope")
+
+    assert any(e.json_path == "$.pre_dispatch_checklist.core_product_change" for e in errors)
+
+
+def test_approved_scope_touching_protected_path_is_caught():
+    doc = copy.deepcopy(_load("scope"))
+    doc["pre_dispatch_checklist"]["touches_protected_path"] = True
+
+    errors = validate_scope_semantics(doc, artifact="scope")
+
+    assert any(e.json_path == "$.pre_dispatch_checklist.touches_protected_path" for e in errors)
+
+
+def test_formula_change_without_health_signal_is_caught():
+    doc = copy.deepcopy(_load("scope"))
+    doc["pre_dispatch_checklist"]["changes_formula_config_or_data_path"] = True
+
+    errors = validate_scope_semantics(doc, artifact="scope")
+
+    assert any(e.json_path == "$.pre_dispatch_checklist.health_signal_path" for e in errors)
+
+
+def test_health_signal_path_must_be_in_scope():
+    doc = copy.deepcopy(_load("scope"))
+    doc["pre_dispatch_checklist"]["changes_formula_config_or_data_path"] = True
+    doc["pre_dispatch_checklist"]["health_signal_path"] = "demo-repo/tests/test_health.py"
+
+    errors = validate_scope_semantics(doc, artifact="scope")
+
+    assert any(
+        e.json_path == "$.pre_dispatch_checklist.health_signal_path" and "in_scope" in e.message for e in errors
+    )
+
+
+def test_formula_change_with_in_scope_health_signal_is_valid():
+    doc = copy.deepcopy(_load("scope"))
+    doc["pre_dispatch_checklist"]["changes_formula_config_or_data_path"] = True
+    doc["pre_dispatch_checklist"]["health_signal_path"] = doc["in_scope"][1]
+
+    assert validate_scope_semantics(doc, artifact="scope") == []
+
+
+def test_refused_scope_may_record_a_failing_checklist():
+    doc = copy.deepcopy(_load("scope"))
+    doc["status"] = "refused"
+    doc["refusal_reason"] = "decoration, not a core product change"
+    doc["pre_dispatch_checklist"]["core_product_change"] = False
+
+    assert validate_scope_semantics(doc, artifact="scope") == []

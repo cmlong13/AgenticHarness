@@ -766,8 +766,19 @@ behavioral claim) or notes it in `open_questions`.
    (standing rule 20).
 2. Author the scope candidate as a `scope.schema.json`-shaped object with
    `status: "approved"` (or `"refused"` with a `refusal_reason`, if the pre-dispatch
-   checklist in `ASSIGNMENT.md` §2.1 fails -- e.g. the request targets a Protected Path
-   or isn't a real product change). Every `in_scope` entry must be a bare
+   checklist fails). Answer the checklist from repository evidence and record it in
+   `pre_dispatch_checklist` (required on every scope, approved or refused):
+   - `core_product_change` -- does this change the core product, or is it decoration?
+     `false` means refuse.
+   - `touches_protected_path` -- would any edit land on a Protected Path (`paths.py`)?
+     `true` means refuse.
+   - `changes_formula_config_or_data_path` -- does it change a formula, config value, or
+     data path? If `true`, set `health_signal_path` to the test or health-check file that
+     will catch it silently breaking later (a distribution check, a sanity test, a
+     freshness timestamp -- ASSIGNMENT.md §3.4), and list that file in `in_scope`. If no
+     such check can be named, refuse.
+   - `notes` -- one line of evidence behind the answers.
+   `validate_scope` rejects an approved scope whose checklist fails. Every `in_scope` entry must be a bare
    repository-relative file path exactly as the Engineer will edit it (it is matched
    character-for-character, `engineer.md` Step 1d) -- put any per-file restriction
    (e.g. "only `classify_credit_score`") in `constraints` or `out_of_scope`, never as an
@@ -1101,7 +1112,10 @@ call `check_command_identity` between the request you built and the result the S
 returned, exactly as you already do for `C-1`/`C-2`/`V-1`. A mismatch on an ORCH-*
 command blocks completion honestly rather than being silently accepted. Also run
 `git status`/`git diff --stat -- demo-repo` to confirm `changed_files` matches reality.
-Never report "verification passed" solely because the Quality Engineer said so.
+If `scope.json`'s `pre_dispatch_checklist.changes_formula_config_or_data_path` is `true`,
+confirm from that same diff that `health_signal_path` actually changed; if it did not, the
+health signal was never left behind, so do not report success -- route back to the Engineer
+in this same run. Never report "verification passed" solely because the Quality Engineer said so.
 
 Once you have promoted `verification-report.json` and independently confirmed its
 verdict, write the run's terminal checkpoint per "Checkpointing and resume" below --

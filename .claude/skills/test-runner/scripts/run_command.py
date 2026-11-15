@@ -275,8 +275,11 @@ def validate_grammar(tokens: list[str]) -> list[str]:
 
 def validate_positional_path(token: str, wd: Path, target: Path) -> None:
     path_part = token.split("::", 1)[0]
-    p = Path(path_part)
-    if p.is_absolute():
+    # Normalize separators so a Windows-style absolute or traversal path is rejected on
+    # every host OS, not only on Windows (pathlib treats "C:\x" as relative on POSIX).
+    normalized = path_part.replace("\\", "/")
+    p = Path(normalized)
+    if p.is_absolute() or normalized.startswith("/") or re.match(r"^[A-Za-z]:", normalized):
         fail(f"positional {token!r} is absolute", "positional_path_escape")
     if ".." in p.parts:
         fail(f"positional {token!r} contains '..'", "positional_path_escape")

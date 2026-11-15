@@ -62,6 +62,7 @@ _SCOPE_BASE = {
     "constraints": [],
     "acceptance_criteria": [{"id": "AC-1", "description": "criterion"}],
     "task_graph": [{"id": "N-1", "description": "node", "phase": "research", "depends_on": []}],
+    "pre_dispatch_checklist": {"core_product_change": True, "touches_protected_path": False, "changes_formula_config_or_data_path": False, "notes": "fixture"},
     "status": "approved",
 }
 

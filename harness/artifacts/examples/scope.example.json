@@ -44,5 +44,11 @@
       "depends_on": ["N-2"]
     }
   ],
+  "pre_dispatch_checklist": {
+    "core_product_change": true,
+    "touches_protected_path": false,
+    "changes_formula_config_or_data_path": false,
+    "notes": "Bug fix to an existing pagination helper; no formula, config value, or data path changes, so no new health signal is required."
+  },
   "status": "approved"
 }
